@@ -8,9 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"io/fs"
+	"path/filepath"
+
 	"github.com/rapportlabs/sttdb/pkg/config"
 	"github.com/rapportlabs/sttdb/pkg/daemon"
 	"github.com/rapportlabs/sttdb/pkg/pipeline"
+	"github.com/rapportlabs/sttdb/skills"
 )
 
 func main() {
@@ -25,6 +29,8 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "setup":
+		cmdSetup()
 	case "process":
 		cmdProcess(cfg)
 	case "start":
@@ -44,11 +50,56 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `sttdb - STT Knowledge DB
 
 Usage:
+  sttdb setup                  Install Claude Code skill for knowledge base
   sttdb process <audio-file>   Process an audio file into a knowledge entry
   sttdb start                  Start the voice capture daemon (foreground)
   sttdb stop                   Stop the voice capture daemon
   sttdb status                 Check daemon status
 `)
+}
+
+// cmdSetup installs the Claude Code skill from the embedded files.
+func cmdSetup() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Failed to get home directory: %v", err)
+	}
+
+	skillsDir := filepath.Join(home, ".claude", "skills")
+
+	err = fs.WalkDir(skills.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		dest := filepath.Join(skillsDir, path)
+
+		if d.IsDir() {
+			return os.MkdirAll(dest, 0755)
+		}
+
+		data, err := skills.FS.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading embedded %s: %w", path, err)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(dest, data, 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", dest, err)
+		}
+
+		fmt.Printf("Installed: %s\n", dest)
+		return nil
+	})
+
+	if err != nil {
+		log.Fatalf("Setup failed: %v", err)
+	}
+
+	fmt.Println("Setup complete.")
 }
 
 // cmdProcess handles the "process" subcommand: audio file → knowledge entry.
