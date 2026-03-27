@@ -281,12 +281,13 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 
 	// 3. Classify with Claude Code CLI
 	log.Printf("Classifying with Claude Code CLI...")
+	classifyStart := time.Now()
 	existingCategories := listExistingCategories(p.baseDir)
 	classified, err := process.Classify(ctx, text, existingCategories, p.cfg.ClaudeModel)
 	if err != nil {
 		return "", fmt.Errorf("classify: %w", err)
 	}
-	log.Printf("Classified: title=%q, category=%q", classified.Title, classified.Category)
+	log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
 
 	// 4. Save as markdown
 	entry := &storage.KnowledgeEntry{

@@ -15,9 +15,9 @@ type ClassifyResult struct {
 	Category string `json:"category"`
 }
 
-const jsonSchema = `{"type":"object","properties":{"title":{"type":"string","description":"지식 제목 (한국어, 50자 이내)"},"summary":{"type":"string","description":"1-2문장 요약 (한국어)"},"category":{"type":"string","description":"카테고리 경로 (예: 개발/에러처리, 잡담). 최대 2단계."}},"required":["title","summary","category"]}`
+const singleSystemPrompt = `STT→JSON만. {"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}만출력`
 
-const batchJsonSchema = `{"type":"object","properties":{"results":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string","description":"지식 제목 (한국어, 50자 이내)"},"summary":{"type":"string","description":"1-2문장 요약 (한국어)"},"category":{"type":"string","description":"카테고리 경로 (예: 개발/에러처리, 잡담). 최대 2단계."}},"required":["title","summary","category"]}}},"required":["results"]}`
+const batchSystemPrompt = `STT텍스트들→JSON만. {"results":[{"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}]}만출력. 순서유지`
 
 // Classify invokes Claude Code CLI to generate title, summary, and category
 // for the given STT text. existingCategories provides context about current
@@ -32,15 +32,19 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 	}
 
 	prompt := buildPrompt(sttText, existingCategories)
+	systemPrompt := singleSystemPrompt
 
 	cmd := exec.CommandContext(ctx, "claude", "-p",
-		"--output-format", "json",
-		"--json-schema", jsonSchema,
+		"--output-format", "text",
+		"--system-prompt", systemPrompt,
 		"--model", model,
 		"--no-session-persistence",
 		"--strict-mcp-config",
 		"--mcp-config", `{"mcpServers":{}}`,
 		"--tools", "",
+		"--effort", "low",
+		"--setting-sources", "user",
+		"--disable-slash-commands",
 	)
 	cmd.Stdin = strings.NewReader(prompt)
 
@@ -52,22 +56,12 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 		return nil, fmt.Errorf("claude CLI failed: %w", err)
 	}
 
-	// Parse the JSON response from claude --output-format json
-	// Format: {"result":"...", "structured_output": {"title":"...", "summary":"...", "category":"..."}, ...}
-	var response struct {
-		StructuredOutput *ClassifyResult `json:"structured_output"`
-		Result           string          `json:"result"`
-	}
-	if err := json.Unmarshal(output, &response); err != nil {
+	var result ClassifyResult
+	if err := parseJSONFromText(output, &result); err != nil {
 		return nil, fmt.Errorf("parse claude output: %w, raw: %s", err, truncate(string(output), 200))
 	}
 
-	// Use structured_output if available (preferred)
-	if response.StructuredOutput != nil {
-		return response.StructuredOutput, nil
-	}
-
-	return nil, fmt.Errorf("no structured_output in claude response, raw result: %s", truncate(response.Result, 200))
+	return &result, nil
 }
 
 // ClassifyBatch invokes Claude Code CLI once to classify multiple STT texts.
@@ -89,15 +83,19 @@ func ClassifyBatch(ctx context.Context, texts []string, existingCategories []str
 	}
 
 	prompt := buildBatchPrompt(texts, existingCategories)
+	systemPrompt := batchSystemPrompt
 
 	cmd := exec.CommandContext(ctx, "claude", "-p",
-		"--output-format", "json",
-		"--json-schema", batchJsonSchema,
+		"--output-format", "text",
+		"--system-prompt", systemPrompt,
 		"--model", model,
 		"--no-session-persistence",
 		"--strict-mcp-config",
 		"--mcp-config", `{"mcpServers":{}}`,
 		"--tools", "",
+		"--effort", "low",
+		"--setting-sources", "user",
+		"--disable-slash-commands",
 	)
 	cmd.Stdin = strings.NewReader(prompt)
 
@@ -110,20 +108,37 @@ func ClassifyBatch(ctx context.Context, texts []string, existingCategories []str
 	}
 
 	var response struct {
-		StructuredOutput *struct {
-			Results []*ClassifyResult `json:"results"`
-		} `json:"structured_output"`
-		Result string `json:"result"`
+		Results []*ClassifyResult `json:"results"`
 	}
-	if err := json.Unmarshal(output, &response); err != nil {
+	if err := parseJSONFromText(output, &response); err != nil {
 		return nil, fmt.Errorf("parse batch output: %w, raw: %s", err, truncate(string(output), 200))
 	}
 
-	if response.StructuredOutput != nil && len(response.StructuredOutput.Results) > 0 {
-		return response.StructuredOutput.Results, nil
+	if len(response.Results) == 0 {
+		return nil, fmt.Errorf("empty results in batch response, raw: %s", truncate(string(output), 200))
 	}
 
-	return nil, fmt.Errorf("no structured_output in batch response, raw: %s", truncate(response.Result, 200))
+	return response.Results, nil
+}
+
+// parseJSONFromText extracts and parses JSON from Claude text output,
+// stripping markdown code fences if present.
+func parseJSONFromText(data []byte, v interface{}) error {
+	text := strings.TrimSpace(string(data))
+
+	// Strip markdown code fences: ```json ... ``` or ``` ... ```
+	if strings.HasPrefix(text, "```") {
+		lines := strings.SplitN(text, "\n", 2)
+		if len(lines) == 2 {
+			text = lines[1]
+		}
+		if idx := strings.LastIndex(text, "```"); idx >= 0 {
+			text = text[:idx]
+		}
+		text = strings.TrimSpace(text)
+	}
+
+	return json.Unmarshal([]byte(text), v)
 }
 
 func truncate(s string, maxLen int) string {
@@ -135,7 +150,6 @@ func truncate(s string, maxLen int) string {
 
 func buildPrompt(sttText string, existingCategories []string) string {
 	var sb strings.Builder
-	sb.WriteString("STT 텍스트를 분석하여 제목, 요약, 카테고리를 생성하세요.\n")
 	writeCategories(&sb, existingCategories)
 	sb.WriteString("\nSTT 텍스트:\n")
 	sb.WriteString(sttText)
@@ -144,7 +158,6 @@ func buildPrompt(sttText string, existingCategories []string) string {
 
 func buildBatchPrompt(texts []string, existingCategories []string) string {
 	var sb strings.Builder
-	sb.WriteString("다음 STT 텍스트들을 각각 분석하여 제목, 요약, 카테고리를 생성하세요. 입력 순서대로 results 배열에 넣어주세요.\n")
 	writeCategories(&sb, existingCategories)
 	for i, text := range texts {
 		fmt.Fprintf(&sb, "\n--- 텍스트 %d ---\n%s\n", i+1, text)
