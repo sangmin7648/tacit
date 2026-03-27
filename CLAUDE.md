@@ -26,10 +26,15 @@ third_party/   — Vendored C dependencies (whisper.cpp submodule, ten-vad frame
 ## Commands
 
 ```bash
-make build     # Build whisper.cpp + Go binary
-make test      # Run all tests
-make clean     # Clean build artifacts
+make build          # Build whisper.cpp + Go binary
+make test           # Run all tests
+make e2e-test   # Build + process test audio file (testdata/test_voice_recording.m4a)
+make clean          # Clean build artifacts
 ```
+
+## Workflow
+
+- 코드 수정 후 반드시 `make e2e-test`를 실행하여 파이프라인 동작을 확인할 것
 
 ## Code Style
 

@@ -1,4 +1,4 @@
-.PHONY: build clean whisper-lib test
+.PHONY: build clean whisper-lib test e2e-test
 
 WHISPER_DIR  := third_party/whisper.cpp
 WHISPER_BUILD := $(WHISPER_DIR)/build
@@ -48,6 +48,9 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 		-DWHISPER_BUILD_SERVER=OFF \
 		-DCMAKE_BUILD_TYPE=Release
 	cmake --build $(WHISPER_BUILD) --config Release -j
+
+e2e-test: build
+	./sttdb process testdata/test_voice_recording.m4a
 
 clean:
 	rm -rf $(WHISPER_BUILD)

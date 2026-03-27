@@ -17,6 +17,8 @@ type ClassifyResult struct {
 
 const jsonSchema = `{"type":"object","properties":{"title":{"type":"string","description":"지식 제목 (한국어, 50자 이내)"},"summary":{"type":"string","description":"1-2문장 요약 (한국어)"},"category":{"type":"string","description":"카테고리 경로 (예: 개발/에러처리, 잡담). 최대 2단계."}},"required":["title","summary","category"]}`
 
+const batchJsonSchema = `{"type":"object","properties":{"results":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string","description":"지식 제목 (한국어, 50자 이내)"},"summary":{"type":"string","description":"1-2문장 요약 (한국어)"},"category":{"type":"string","description":"카테고리 경로 (예: 개발/에러처리, 잡담). 최대 2단계."}},"required":["title","summary","category"]}}},"required":["results"]}`
+
 // Classify invokes Claude Code CLI to generate title, summary, and category
 // for the given STT text. existingCategories provides context about current
 // directory structure for consistent categorization.
@@ -35,7 +37,6 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 		"--output-format", "json",
 		"--json-schema", jsonSchema,
 		"--model", model,
-		"--tools", "",
 		"--no-session-persistence",
 	)
 	cmd.Stdin = strings.NewReader(prompt)
@@ -66,6 +67,59 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 	return nil, fmt.Errorf("no structured_output in claude response, raw result: %s", truncate(response.Result, 200))
 }
 
+// ClassifyBatch invokes Claude Code CLI once to classify multiple STT texts.
+// This amortizes the CLI startup cost when multiple segments are queued.
+func ClassifyBatch(ctx context.Context, texts []string, existingCategories []string, model string) ([]*ClassifyResult, error) {
+	if len(texts) == 0 {
+		return nil, fmt.Errorf("empty texts")
+	}
+	if len(texts) == 1 {
+		r, err := Classify(ctx, texts[0], existingCategories, model)
+		if err != nil {
+			return nil, err
+		}
+		return []*ClassifyResult{r}, nil
+	}
+
+	if model == "" {
+		model = "haiku"
+	}
+
+	prompt := buildBatchPrompt(texts, existingCategories)
+
+	cmd := exec.CommandContext(ctx, "claude", "-p",
+		"--output-format", "json",
+		"--json-schema", batchJsonSchema,
+		"--model", model,
+		"--no-session-persistence",
+	)
+	cmd.Stdin = strings.NewReader(prompt)
+
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("claude CLI batch failed: %w, stderr: %s", err, string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("claude CLI batch failed: %w", err)
+	}
+
+	var response struct {
+		StructuredOutput *struct {
+			Results []*ClassifyResult `json:"results"`
+		} `json:"structured_output"`
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal(output, &response); err != nil {
+		return nil, fmt.Errorf("parse batch output: %w, raw: %s", err, truncate(string(output), 200))
+	}
+
+	if response.StructuredOutput != nil && len(response.StructuredOutput.Results) > 0 {
+		return response.StructuredOutput.Results, nil
+	}
+
+	return nil, fmt.Errorf("no structured_output in batch response, raw: %s", truncate(response.Result, 200))
+}
+
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -75,24 +129,29 @@ func truncate(s string, maxLen int) string {
 
 func buildPrompt(sttText string, existingCategories []string) string {
 	var sb strings.Builder
-	sb.WriteString("다음은 음성 인식(STT)으로 변환된 텍스트입니다. 이 텍스트를 분석하여 지식 DB에 저장할 메타데이터를 생성해주세요.\n\n")
-
-	if len(existingCategories) > 0 {
-		sb.WriteString("현재 지식 DB에 존재하는 카테고리 목록:\n")
-		for _, cat := range existingCategories {
-			sb.WriteString("- ")
-			sb.WriteString(cat)
-			sb.WriteString("\n")
-		}
-		sb.WriteString("\n가능하면 기존 카테고리를 사용하고, 적절한 카테고리가 없으면 새로 만들어주세요.\n")
-		sb.WriteString("업무와 무관한 일상 대화, 잡담은 '잡담' 카테고리로 분류해주세요.\n\n")
-	} else {
-		sb.WriteString("아직 카테고리가 없습니다. 적절한 카테고리를 새로 만들어주세요.\n")
-		sb.WriteString("업무와 무관한 일상 대화, 잡담은 '잡담' 카테고리로 분류해주세요.\n\n")
-	}
-
-	sb.WriteString("STT 텍스트:\n")
+	sb.WriteString("STT 텍스트를 분석하여 제목, 요약, 카테고리를 생성하세요.\n")
+	writeCategories(&sb, existingCategories)
+	sb.WriteString("\nSTT 텍스트:\n")
 	sb.WriteString(sttText)
-
 	return sb.String()
+}
+
+func buildBatchPrompt(texts []string, existingCategories []string) string {
+	var sb strings.Builder
+	sb.WriteString("다음 STT 텍스트들을 각각 분석하여 제목, 요약, 카테고리를 생성하세요. 입력 순서대로 results 배열에 넣어주세요.\n")
+	writeCategories(&sb, existingCategories)
+	for i, text := range texts {
+		fmt.Fprintf(&sb, "\n--- 텍스트 %d ---\n%s\n", i+1, text)
+	}
+	return sb.String()
+}
+
+func writeCategories(sb *strings.Builder, existingCategories []string) {
+	if len(existingCategories) > 0 {
+		sb.WriteString("기존 카테고리: ")
+		sb.WriteString(strings.Join(existingCategories, ", "))
+		sb.WriteString("\n기존 카테고리 우선 사용. 일상/잡담→'잡담'.")
+	} else {
+		sb.WriteString("카테고리 새로 생성. 일상/잡담→'잡담'.")
+	}
 }

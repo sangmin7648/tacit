@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rapportlabs/sttdb/pkg/audio"
@@ -54,7 +55,15 @@ func (p *Pipeline) Close() {
 	}
 }
 
+// classifyItem holds STT text waiting for async classification.
+type classifyItem struct {
+	text      string
+	timestamp time.Time
+}
+
 // Run starts the real-time capture→VAD→STT→classify→store loop.
+// STT runs synchronously; classification runs asynchronously in background
+// with batching to amortize CLI startup cost.
 // It blocks until ctx is cancelled.
 func (p *Pipeline) Run(ctx context.Context) error {
 	// Init VAD (256 samples = 16ms at 16kHz)
@@ -77,6 +86,15 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("start capture stream: %w", err)
 	}
+
+	// Start async classify worker
+	classifyCh := make(chan classifyItem, 32)
+	var classifyWg sync.WaitGroup
+	classifyWg.Add(1)
+	go func() {
+		defer classifyWg.Done()
+		p.classifyLoop(ctx, classifyCh)
+	}()
 
 	// Segment buffer for accumulating speech audio
 	segBuf := audio.NewSegmentBuffer(capture.SampleRate, p.cfg.MinSpeechDur)
@@ -119,7 +137,8 @@ func (p *Pipeline) Run(ctx context.Context) error {
 					seg, ok := segBuf.Finish()
 					silenceFrames = 0
 					if ok {
-						p.processSegment(ctx, seg)
+						// STT runs synchronously (fast, ~1-2s)
+						p.transcribeAndQueue(ctx, seg, classifyCh)
 					} else {
 						log.Printf("Segment too short, discarding")
 					}
@@ -128,11 +147,13 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		}
 	}
 
+	close(classifyCh)
+	classifyWg.Wait()
 	return nil
 }
 
-// processSegment runs STT→classify→store on a speech segment.
-func (p *Pipeline) processSegment(ctx context.Context, seg *audio.AudioSegment) {
+// transcribeAndQueue runs STT synchronously and queues the text for async classification.
+func (p *Pipeline) transcribeAndQueue(ctx context.Context, seg *audio.AudioSegment, ch chan<- classifyItem) {
 	log.Printf("Processing segment: %.1fs of audio", seg.Duration.Seconds())
 
 	text, err := p.whisper.Transcribe(ctx, seg.Samples)
@@ -146,21 +167,81 @@ func (p *Pipeline) processSegment(ctx context.Context, seg *audio.AudioSegment) 
 	}
 	log.Printf("STT: %s", text)
 
-	existingCategories := listExistingCategories(p.baseDir)
-	classified, err := process.Classify(ctx, text, existingCategories, p.cfg.ClaudeModel)
-	if err != nil {
-		log.Printf("Classify error: %v", err)
-		return
-	}
+	ch <- classifyItem{text: text, timestamp: time.Now()}
+}
 
+// classifyLoop processes classify items from the channel, batching when multiple
+// items are queued up (e.g. during a long classification call).
+func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
+	for {
+		// Block waiting for first item
+		item, ok := <-ch
+		if !ok {
+			return
+		}
+
+		// Drain any additional queued items for batching
+		batch := []classifyItem{item}
+	drain:
+		for {
+			select {
+			case more, ok := <-ch:
+				if !ok {
+					break drain
+				}
+				batch = append(batch, more)
+			default:
+				break drain
+			}
+		}
+
+		existingCategories := listExistingCategories(p.baseDir)
+
+		if len(batch) == 1 {
+			log.Printf("Classifying 1 segment...")
+			classified, err := process.Classify(ctx, batch[0].text, existingCategories, p.cfg.ClaudeModel)
+			if err != nil {
+				log.Printf("Classify error: %v", err)
+				continue
+			}
+			p.storeEntry(classified, batch[0])
+		} else {
+			log.Printf("Batch classifying %d segments in one CLI call...", len(batch))
+			texts := make([]string, len(batch))
+			for i, b := range batch {
+				texts[i] = b.text
+			}
+			results, err := process.ClassifyBatch(ctx, texts, existingCategories, p.cfg.ClaudeModel)
+			if err != nil {
+				log.Printf("Batch classify error, falling back to individual: %v", err)
+				for _, b := range batch {
+					classified, err := process.Classify(ctx, b.text, existingCategories, p.cfg.ClaudeModel)
+					if err != nil {
+						log.Printf("Classify error: %v", err)
+						continue
+					}
+					p.storeEntry(classified, b)
+				}
+				continue
+			}
+			for i, classified := range results {
+				if i < len(batch) {
+					p.storeEntry(classified, batch[i])
+				}
+			}
+		}
+	}
+}
+
+// storeEntry saves a classified item as a knowledge entry.
+func (p *Pipeline) storeEntry(classified *process.ClassifyResult, item classifyItem) {
 	entry := &storage.KnowledgeEntry{
 		Title:     classified.Title,
 		Category:  classified.Category,
-		CreatedAt: time.Now(),
+		CreatedAt: item.timestamp,
 		Summary:   classified.Summary,
-		Content:   text,
+		Content:   item.text,
 	}
-
 	filePath, err := storage.Write(p.baseDir, entry)
 	if err != nil {
 		log.Printf("Write error: %v", err)
