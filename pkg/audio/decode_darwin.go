@@ -95,8 +95,6 @@ import (
 	"unsafe"
 )
 
-const targetSampleRate = 16000
-
 // DecodeFile reads an audio file and returns 16kHz mono float32 PCM samples
 // using macOS AudioToolbox. Supports m4a, mp3, wav, flac, aiff, alac, etc.
 func DecodeFile(path string) ([]float32, error) {

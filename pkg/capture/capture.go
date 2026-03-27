@@ -5,16 +5,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gen2brain/malgo"
+	"github.com/rapportlabs/sttdb/pkg/audio"
 )
 
-const (
-	SampleRate = 16000
-	Channels   = 1
-)
+const Channels = 1
 
 // Mic captures audio from the default microphone at 16kHz mono.
 type Mic struct {
@@ -47,7 +45,7 @@ func (m *Mic) Start(onSamples func([]int16)) error {
 	deviceConfig := malgo.DefaultDeviceConfig(malgo.Capture)
 	deviceConfig.Capture.Format = malgo.FormatS16
 	deviceConfig.Capture.Channels = Channels
-	deviceConfig.SampleRate = SampleRate
+	deviceConfig.SampleRate = audio.SampleRate
 
 	callbacks := malgo.DeviceCallbacks{
 		Data: func(_, pInput []byte, frameCount uint32) {
@@ -72,7 +70,7 @@ func (m *Mic) Start(onSamples func([]int16)) error {
 
 	m.device = device
 	m.started = true
-	log.Printf("Microphone capture started: %dHz mono", SampleRate)
+	log.Printf("Microphone capture started: %dHz mono", audio.SampleRate)
 	return nil
 }
 
@@ -100,25 +98,19 @@ func (m *Mic) Close() {
 	}
 }
 
-// Int16ToFloat32 converts int16 PCM samples to float32 [-1.0, 1.0].
-func Int16ToFloat32(in []int16) []float32 {
-	out := make([]float32, len(in))
-	for i, s := range in {
-		out[i] = float32(s) / float32(math.MaxInt16)
-	}
-	return out
-}
-
 // Stream starts capture and sends int16 sample chunks to the returned channel.
 // The channel is closed when ctx is cancelled.
 func (m *Mic) Stream(ctx context.Context) (<-chan []int16, error) {
 	ch := make(chan []int16, 64)
+	var stopped atomic.Bool
 
 	err := m.Start(func(samples []int16) {
+		if stopped.Load() {
+			return
+		}
 		select {
 		case ch <- samples:
 		default:
-			// drop frame if consumer is too slow
 		}
 	})
 	if err != nil {
@@ -128,6 +120,7 @@ func (m *Mic) Stream(ctx context.Context) (<-chan []int16, error) {
 
 	go func() {
 		<-ctx.Done()
+		stopped.Store(true)
 		m.Stop()
 		close(ch)
 	}()

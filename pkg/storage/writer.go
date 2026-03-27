@@ -37,12 +37,7 @@ func Write(baseDir string, entry *KnowledgeEntry) (string, error) {
 		return "", fmt.Errorf("writing file: %w", err)
 	}
 
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		return "", fmt.Errorf("resolving file path: %w", err)
-	}
-
-	return absPath, nil
+	return filePath, nil
 }
 
 func validateEntry(entry *KnowledgeEntry) error {

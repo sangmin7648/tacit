@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/rapportlabs/sttdb/pkg/config"
@@ -165,7 +164,7 @@ func cmdStatus() {
 	}
 
 	if daemon.IsRunning(pid) {
-		fmt.Printf("sttdb is running (PID: %s)\n", strconv.Itoa(pid))
+		fmt.Printf("sttdb is running (PID: %d)\n", pid)
 	} else {
 		daemon.RemovePID(pidPath)
 		fmt.Println("sttdb is not running (stale PID cleaned)")

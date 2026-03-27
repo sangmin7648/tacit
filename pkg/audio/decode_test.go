@@ -27,7 +27,7 @@ func TestDecodeFile_M4A(t *testing.T) {
 		t.Fatalf("expected at least %d samples, got %d", expectedMinSamples, len(samples))
 	}
 
-	t.Logf("Decoded %d samples (%.2f seconds)", len(samples), float64(len(samples))/float64(targetSampleRate))
+	t.Logf("Decoded %d samples (%.2f seconds)", len(samples), float64(len(samples))/float64(SampleRate))
 }
 
 func TestDecodeFile_NotFound(t *testing.T) {

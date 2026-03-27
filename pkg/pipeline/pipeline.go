@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -97,22 +94,22 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	}()
 
 	// Segment buffer for accumulating speech audio
-	segBuf := audio.NewSegmentBuffer(capture.SampleRate, p.cfg.MinSpeechDur)
+	segBuf := audio.NewSegmentBuffer(audio.SampleRate, p.cfg.MinSpeechDur)
 
 	// VAD frame buffer: accumulate samples until we have hopSize
 	var frameBuf []int16
 	silenceFrames := 0
-	silenceLimit := int(p.cfg.SilenceDuration.Seconds() * float64(capture.SampleRate) / float64(hopSize))
+	silenceLimit := int(p.cfg.SilenceDuration.Seconds() * float64(audio.SampleRate) / float64(hopSize))
 
 	log.Printf("Listening for speech... (silence timeout: %v, min speech: %v)", p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
 
 	for chunk := range stream {
 		frameBuf = append(frameBuf, chunk...)
 
-		// Process all complete frames in the buffer
-		for len(frameBuf) >= hopSize {
-			frame := frameBuf[:hopSize]
-			frameBuf = frameBuf[hopSize:]
+		processed := 0
+		for processed+hopSize <= len(frameBuf) {
+			frame := frameBuf[processed : processed+hopSize]
+			processed += hopSize
 
 			_, isSpeech, err := v.Process(frame)
 			if err != nil {
@@ -126,10 +123,9 @@ func (p *Pipeline) Run(ctx context.Context) error {
 					segBuf.Start()
 					log.Printf("Speech started")
 				}
-				segBuf.Append(capture.Int16ToFloat32(frame))
+				segBuf.Append(audio.Int16ToFloat32(frame))
 			} else if segBuf.IsActive() {
-				// Still append during silence gap (captures trailing audio)
-				segBuf.Append(capture.Int16ToFloat32(frame))
+				segBuf.Append(audio.Int16ToFloat32(frame))
 				silenceFrames++
 
 				if silenceFrames >= silenceLimit {
@@ -137,7 +133,6 @@ func (p *Pipeline) Run(ctx context.Context) error {
 					seg, ok := segBuf.Finish()
 					silenceFrames = 0
 					if ok {
-						// STT runs synchronously (fast, ~1-2s)
 						p.transcribeAndQueue(ctx, seg, classifyCh)
 					} else {
 						log.Printf("Segment too short, discarding")
@@ -145,6 +140,9 @@ func (p *Pipeline) Run(ctx context.Context) error {
 				}
 			}
 		}
+		// Compact: move unprocessed samples to front to prevent memory leak
+		n := copy(frameBuf, frameBuf[processed:])
+		frameBuf = frameBuf[:n]
 	}
 
 	close(classifyCh)
@@ -195,7 +193,7 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 			}
 		}
 
-		existingCategories := listExistingCategories(p.baseDir)
+		existingCategories := storage.ListCategories(p.baseDir)
 
 		if len(batch) == 1 {
 			log.Printf("Classifying 1 segment...")
@@ -235,13 +233,7 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 
 // storeEntry saves a classified item as a knowledge entry.
 func (p *Pipeline) storeEntry(classified *process.ClassifyResult, item classifyItem) {
-	entry := &storage.KnowledgeEntry{
-		Title:     classified.Title,
-		Category:  classified.Category,
-		CreatedAt: item.timestamp,
-		Summary:   classified.Summary,
-		Content:   item.text,
-	}
+	entry := newKnowledgeEntry(classified, item.text, item.timestamp)
 	filePath, err := storage.Write(p.baseDir, entry)
 	if err != nil {
 		log.Printf("Write error: %v", err)
@@ -250,25 +242,32 @@ func (p *Pipeline) storeEntry(classified *process.ClassifyResult, item classifyI
 	log.Printf("Knowledge entry saved: %s", filePath)
 }
 
+func newKnowledgeEntry(classified *process.ClassifyResult, content string, ts time.Time) *storage.KnowledgeEntry {
+	return &storage.KnowledgeEntry{
+		Title:     classified.Title,
+		Category:  classified.Category,
+		CreatedAt: ts,
+		Summary:   classified.Summary,
+		Content:   content,
+	}
+}
+
 // ProcessFile processes an audio file through the full pipeline:
 // decode → STT → classify → save as markdown knowledge entry.
 // Returns the path to the created knowledge file.
 func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, error) {
-	// 1. Decode audio file to PCM
 	log.Printf("Decoding audio file: %s", audioPath)
 	samples, err := audio.DecodeFile(audioPath)
 	if err != nil {
 		return "", fmt.Errorf("decode audio: %w", err)
 	}
-	log.Printf("Decoded %d samples (%.2f seconds)", len(samples), float64(len(samples))/16000.0)
+	duration := audio.DurationFromSamples(len(samples), audio.SampleRate)
+	log.Printf("Decoded %d samples (%.2f seconds)", len(samples), duration.Seconds())
 
-	// Check minimum duration
-	duration := time.Duration(float64(len(samples)) / 16000.0 * float64(time.Second))
 	if duration < p.cfg.MinSpeechDur {
 		return "", fmt.Errorf("audio too short: %v (minimum: %v)", duration, p.cfg.MinSpeechDur)
 	}
 
-	// 2. STT
 	log.Printf("Running STT...")
 	text, err := p.whisper.Transcribe(ctx, samples)
 	if err != nil {
@@ -279,24 +278,16 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 	}
 	log.Printf("STT result: %s", text)
 
-	// 3. Classify with Claude Code CLI
 	log.Printf("Classifying with Claude Code CLI...")
 	classifyStart := time.Now()
-	existingCategories := listExistingCategories(p.baseDir)
+	existingCategories := storage.ListCategories(p.baseDir)
 	classified, err := process.Classify(ctx, text, existingCategories, p.cfg.ClaudeModel)
 	if err != nil {
 		return "", fmt.Errorf("classify: %w", err)
 	}
 	log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
 
-	// 4. Save as markdown
-	entry := &storage.KnowledgeEntry{
-		Title:     classified.Title,
-		Category:  classified.Category,
-		CreatedAt: time.Now(),
-		Summary:   classified.Summary,
-		Content:   text,
-	}
+	entry := newKnowledgeEntry(classified, text, time.Now())
 
 	filePath, err := storage.Write(p.baseDir, entry)
 	if err != nil {
@@ -307,44 +298,3 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 	return filePath, nil
 }
 
-// listExistingCategories scans the knowledge base directory for existing categories.
-func listExistingCategories(baseDir string) []string {
-	var categories []string
-	seen := make(map[string]bool)
-
-	entries, err := os.ReadDir(baseDir)
-	if err != nil {
-		return nil
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		// Skip hidden dirs and config files
-		if strings.HasPrefix(name, ".") || name == "models" {
-			continue
-		}
-		categories = append(categories, name)
-		seen[name] = true
-
-		// Check for subcategories
-		subPath := filepath.Join(baseDir, name)
-		subEntries, err := os.ReadDir(subPath)
-		if err != nil {
-			continue
-		}
-		for _, subEntry := range subEntries {
-			if subEntry.IsDir() {
-				subCat := name + "/" + subEntry.Name()
-				if !seen[subCat] {
-					categories = append(categories, subCat)
-					seen[subCat] = true
-				}
-			}
-		}
-	}
-
-	return categories
-}

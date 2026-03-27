@@ -69,7 +69,7 @@ func (b *SegmentBuffer) IsActive() bool {
 
 // Reset clears the buffer and all associated state.
 func (b *SegmentBuffer) Reset() {
-	b.samples = nil
+	b.samples = b.samples[:0]
 	b.startTime = time.Time{}
 	b.isActive = false
 }

@@ -145,8 +145,8 @@ func TestSegmentBuffer_Reset(t *testing.T) {
 	if buf.Duration() != 0 {
 		t.Errorf("expected zero duration after Reset, got %v", buf.Duration())
 	}
-	if buf.samples != nil {
-		t.Error("expected nil samples after Reset")
+	if len(buf.samples) != 0 {
+		t.Error("expected empty samples after Reset")
 	}
 	if !buf.startTime.IsZero() {
 		t.Error("expected zero start time after Reset")

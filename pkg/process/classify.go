@@ -26,14 +26,57 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 	if sttText == "" {
 		return nil, fmt.Errorf("empty STT text")
 	}
-
 	if model == "" {
 		model = "haiku"
 	}
 
-	prompt := buildPrompt(sttText, existingCategories)
-	systemPrompt := singleSystemPrompt
+	output, err := runClaude(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories), model)
+	if err != nil {
+		return nil, err
+	}
 
+	var result ClassifyResult
+	if err := parseJSONFromText(output, &result); err != nil {
+		return nil, fmt.Errorf("parse claude output: %w, raw: %s", err, truncate(string(output), 200))
+	}
+	return &result, nil
+}
+
+// ClassifyBatch invokes Claude Code CLI once to classify multiple STT texts.
+// This amortizes the CLI startup cost when multiple segments are queued.
+func ClassifyBatch(ctx context.Context, texts []string, existingCategories []string, model string) ([]*ClassifyResult, error) {
+	if len(texts) == 0 {
+		return nil, fmt.Errorf("empty texts")
+	}
+	if len(texts) == 1 {
+		r, err := Classify(ctx, texts[0], existingCategories, model)
+		if err != nil {
+			return nil, err
+		}
+		return []*ClassifyResult{r}, nil
+	}
+	if model == "" {
+		model = "haiku"
+	}
+
+	output, err := runClaude(ctx, batchSystemPrompt, buildBatchPrompt(texts, existingCategories), model)
+	if err != nil {
+		return nil, err
+	}
+
+	var response struct {
+		Results []*ClassifyResult `json:"results"`
+	}
+	if err := parseJSONFromText(output, &response); err != nil {
+		return nil, fmt.Errorf("parse batch output: %w, raw: %s", err, truncate(string(output), 200))
+	}
+	if len(response.Results) == 0 {
+		return nil, fmt.Errorf("empty results in batch response, raw: %s", truncate(string(output), 200))
+	}
+	return response.Results, nil
+}
+
+func runClaude(ctx context.Context, systemPrompt, prompt, model string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "claude", "-p",
 		"--output-format", "text",
 		"--system-prompt", systemPrompt,
@@ -55,70 +98,7 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 		}
 		return nil, fmt.Errorf("claude CLI failed: %w", err)
 	}
-
-	var result ClassifyResult
-	if err := parseJSONFromText(output, &result); err != nil {
-		return nil, fmt.Errorf("parse claude output: %w, raw: %s", err, truncate(string(output), 200))
-	}
-
-	return &result, nil
-}
-
-// ClassifyBatch invokes Claude Code CLI once to classify multiple STT texts.
-// This amortizes the CLI startup cost when multiple segments are queued.
-func ClassifyBatch(ctx context.Context, texts []string, existingCategories []string, model string) ([]*ClassifyResult, error) {
-	if len(texts) == 0 {
-		return nil, fmt.Errorf("empty texts")
-	}
-	if len(texts) == 1 {
-		r, err := Classify(ctx, texts[0], existingCategories, model)
-		if err != nil {
-			return nil, err
-		}
-		return []*ClassifyResult{r}, nil
-	}
-
-	if model == "" {
-		model = "haiku"
-	}
-
-	prompt := buildBatchPrompt(texts, existingCategories)
-	systemPrompt := batchSystemPrompt
-
-	cmd := exec.CommandContext(ctx, "claude", "-p",
-		"--output-format", "text",
-		"--system-prompt", systemPrompt,
-		"--model", model,
-		"--no-session-persistence",
-		"--strict-mcp-config",
-		"--mcp-config", `{"mcpServers":{}}`,
-		"--tools", "",
-		"--effort", "low",
-		"--setting-sources", "user",
-		"--disable-slash-commands",
-	)
-	cmd.Stdin = strings.NewReader(prompt)
-
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("claude CLI batch failed: %w, stderr: %s", err, string(exitErr.Stderr))
-		}
-		return nil, fmt.Errorf("claude CLI batch failed: %w", err)
-	}
-
-	var response struct {
-		Results []*ClassifyResult `json:"results"`
-	}
-	if err := parseJSONFromText(output, &response); err != nil {
-		return nil, fmt.Errorf("parse batch output: %w, raw: %s", err, truncate(string(output), 200))
-	}
-
-	if len(response.Results) == 0 {
-		return nil, fmt.Errorf("empty results in batch response, raw: %s", truncate(string(output), 200))
-	}
-
-	return response.Results, nil
+	return output, nil
 }
 
 // parseJSONFromText extracts and parses JSON from Claude text output,

@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 )
 
-const targetSampleRate = 16000
-
 // DecodeFile reads an audio file and returns 16kHz mono float32 PCM samples
 // using ffmpeg for decoding. This is the fallback for non-macOS platforms.
 func DecodeFile(path string) ([]float32, error) {
@@ -26,7 +24,7 @@ func DecodeFile(path string) ([]float32, error) {
 
 	cmd := exec.Command("ffmpeg",
 		"-i", absPath,
-		"-ar", fmt.Sprintf("%d", targetSampleRate),
+		"-ar", fmt.Sprintf("%d", SampleRate),
 		"-ac", "1",
 		"-f", "s16le",
 		"-acodec", "pcm_s16le",
