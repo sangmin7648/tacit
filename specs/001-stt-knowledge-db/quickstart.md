@@ -8,7 +8,7 @@
 - **C compiler** (Xcode Command Line Tools: `xcode-select --install`)
 - **ONNX Runtime** shared library (~17 MB) — required by Silero VAD
 - **Whisper model** file (downloaded on first run)
-- **Anthropic API key** — for text post-processing (title/summary/category generation)
+- **Claude Code CLI** (`claude`) — for text post-processing (title/summary/category generation). Claude 구독 필요.
 
 ## System Dependencies
 
@@ -44,8 +44,8 @@ sudo ldconfig
 git clone <repo-url> sttdb
 cd sttdb
 
-# Set Anthropic API key (required for post-processing)
-export ANTHROPIC_API_KEY="sk-ant-..."
+# Verify Claude Code CLI is installed and authenticated
+claude --version
 
 # Install Go dependencies
 go mod download
@@ -137,7 +137,7 @@ cmd/cli/      — CLI entry point (sttdb start/stop/status/search/list)
 cmd/mcp/      — MCP server entry point (stdio)
 pkg/audio/    — Audio capture + VAD
 pkg/stt/      — Whisper STT
-pkg/process/  — Anthropic API post-processing
+pkg/process/  — Claude Code CLI post-processing (os/exec)
 pkg/storage/  — Knowledge file read/write/search
 pkg/config/   — Configuration
 pkg/daemon/   — PID file management
@@ -179,6 +179,6 @@ On first run, macOS will prompt for microphone access. If denied:
 |-------|----------|
 | `ONNX Runtime not found` | Ensure `brew install onnxruntime` and check `LIBRARY_PATH` |
 | `whisper.h not found` | Set `C_INCLUDE_PATH` to whisper.cpp include directory |
-| `ANTHROPIC_API_KEY not set` | Export the key or add to shell profile |
+| `claude: command not found` | Install Claude Code CLI: `npm install -g @anthropic-ai/claude-code` and run `claude` to authenticate |
 | `Microphone permission denied` | Grant in macOS System Settings > Privacy & Security > Microphone |
 | `Stale PID file` | Delete `~/.sttdb/sttdb.pid` manually, or `sttdb stop` handles it automatically |

@@ -81,7 +81,7 @@ type KnowledgeEntry struct {
 | `min_speech_duration` | duration | `3s` | 최소 발화 길이 임계값 (이하 무시) |
 | `silence_duration` | duration | `1.5s` | 발화 종료 판단 침묵 길이 |
 | `speech_threshold` | float | `0.5` | VAD 음성 감지 임계값 (0.0-1.0) |
-| `anthropic_model` | string | `"claude-haiku-4-5-20251001"` | 텍스트 후처리에 사용할 모델 |
+| `claude_model` | string | `"haiku"` | Claude Code CLI 후처리에 사용할 모델 (`haiku`, `sonnet`, `opus`) |
 
 **Go Struct**:
 
@@ -91,7 +91,7 @@ type Config struct {
     MinSpeechDur     time.Duration `yaml:"min_speech_duration"`
     SilenceDuration  time.Duration `yaml:"silence_duration"`
     SpeechThreshold  float64       `yaml:"speech_threshold"`
-    AnthropicModel   string        `yaml:"anthropic_model"`
+    ClaudeModel       string        `yaml:"claude_model"`
 }
 ```
 
@@ -102,7 +102,7 @@ whisper_model: small
 min_speech_duration: 2s
 silence_duration: 2s
 speech_threshold: 0.6
-anthropic_model: claude-haiku-4-5-20251001
+claude_model: haiku
 ```
 
 ---

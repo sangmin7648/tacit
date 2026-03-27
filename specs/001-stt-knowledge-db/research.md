@@ -81,30 +81,53 @@
 
 ## Decision 4: Text Post-Processing (Title/Summary/Category Generation)
 
-**Decision**: Anthropic Go SDK (`anthropic-sdk-go`) calling Haiku 4.5 directly
+**Decision**: Claude Code CLI (`claude -p --json-schema`) via `os/exec`
 
 **Rationale**:
-- ~100x cheaper than Claude Code CLI: ~$0.001 vs ~$0.04-0.15 per entry
-- No process spawn overhead (direct HTTP vs forking Node.js process)
-- Built-in retry logic (2 retries for 429, 5xx)
-- Proper rate limit handling via response headers
-- Concurrency control with goroutines
+- 사용자가 Claude 구독 중이므로 CLI 사용은 추가 비용 $0 (구독에 포함)
+- `--json-schema` 플래그로 structured output (title/summary/category) 자동 추출 검증 완료
+- `--model haiku` 으로 가벼운 모델 선택 가능
+- `--tools ""` 로 불필요한 tool 사용 방지
+- Korean 텍스트 분류 정확도 검증 완료 (잡담 vs 회의 vs 업무 등)
 
 **Alternatives Considered**:
 | Alternative | Why Rejected |
 |-------------|-------------|
-| Claude Code CLI (`claude -p --json-schema`) | Works well (verified with Korean text), but ~$0.04-0.15 per call due to CLI's ~35K token system prompt overhead. Impractical for frequent automated calls. |
-| Local LLM for classification | Adds another large model to memory alongside Whisper. Violates simplicity principle. |
-| No AI post-processing (manual) | Defeats the purpose of automatic knowledge organization |
+| Anthropic Go SDK (`anthropic-sdk-go`) | API 호출 당 ~$0.001이지만 별도 API 키 및 과금 필요. Claude 구독으로 CLI가 무료이므로 불필요한 추가 비용. |
+| Local LLM for classification | Whisper와 함께 또 다른 대형 모델을 메모리에 올림. 단순성 원칙 위반. |
+| No AI post-processing (manual) | 자동 지식 정리라는 핵심 목적에 반함 |
 
-**Verified CLI Capabilities** (useful for future features/fallback):
-- `--print` + `--output-format json` + `--json-schema` produces structured output in `structured_output` field
-- `--tools ""` disables all tools for pure text processing
-- `--bare` skips hooks/plugins for fastest startup (requires `ANTHROPIC_API_KEY`)
-- `--model haiku` selects cheaper model
-- Korean text classification works correctly (잡담 vs 회의 vs 업무 etc.)
+**CLI Invocation Pattern**:
+```bash
+echo "<STT text>" | claude -p \
+  --output-format json \
+  --json-schema '{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"},"category":{"type":"string"}},"required":["title","summary","category"]}' \
+  --model haiku \
+  --tools "" \
+  --no-session-persistence
+```
 
-**Combined Schema** (single API call for both tasks):
+**Go Integration** (`os/exec`):
+```go
+cmd := exec.CommandContext(ctx, "claude", "-p",
+    "--output-format", "json",
+    "--json-schema", schemaJSON,
+    "--model", "haiku",
+    "--tools", "",
+    "--no-session-persistence",
+)
+cmd.Stdin = strings.NewReader(sttText)
+output, err := cmd.Output()
+// Parse JSON → extract .structured_output.{title, summary, category}
+```
+
+**Verified Capabilities**:
+- `--print` + `--output-format json` + `--json-schema` → `structured_output` 필드에 파싱된 결과
+- `--tools ""` → 순수 텍스트 처리 (Bash/Read/Edit 도구 비활성화)
+- `--model haiku` → 가벼운 모델로 빠른 응답
+- Korean 분류 테스트: "김치찌개 점심" → `잡담`, "프로젝트 일정 회의" → `회의` 정확 분류 확인
+
+**Combined Schema** (single CLI call for all tasks):
 ```json
 {
   "title": "string (concise, Korean, <50 chars)",
@@ -113,7 +136,7 @@
 }
 ```
 
-**Cost Estimate**: ~$0.001 per knowledge entry with Haiku 4.5 (~200-500 input tokens + ~50-100 output tokens)
+**Cost Estimate**: $0 per entry (Claude 구독 포함). CLI 응답 시간 ~6-13초/건.
 
 ---
 
@@ -164,8 +187,8 @@
 | `plandem/silero-go` | VAD + audio capture | Core pipeline requirement, bundles VAD + miniaudio |
 | ONNX Runtime (~17 MB) | Silero VAD inference | Required by Silero VAD model |
 | `ggml-org/whisper.cpp` (Go bindings) | Local STT | Core pipeline requirement, offline Whisper |
-| `anthropic-sdk-go` | Text post-processing | Title/summary/category generation, ~100x cheaper than CLI |
+| Claude Code CLI (`claude`) | Text post-processing | Title/summary/category generation via `os/exec`. Claude 구독 포함 ($0 추가 비용). |
 | `modelcontextprotocol/go-sdk` | MCP server | Official SDK for AI agent interface |
 | Go standard library | Config, filesystem, HTTP, signals | No additional deps needed for these |
 
-Total external dependencies: 5 (each justified by a core requirement)
+Total external Go dependencies: 4 (+ Claude Code CLI as runtime dependency)

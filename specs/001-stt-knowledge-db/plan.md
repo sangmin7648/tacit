@@ -5,20 +5,20 @@
 
 ## Summary
 
-마이크 → VAD → 로컬 Whisper STT → Anthropic API로 제목/요약/카테고리 자동 생성 → 마크다운 지식 파일 저장. CLI로 데몬 제어 및 검색, MCP 서버로 AI 에이전트에게 지식 검색/조회 tool 제공.
+마이크 → VAD → 로컬 Whisper STT → Claude Code CLI로 제목/요약/카테고리 자동 생성 → 마크다운 지식 파일 저장. CLI로 데몬 제어 및 검색, MCP 서버로 AI 에이전트에게 지식 검색/조회 tool 제공.
 
-핵심 기술 스택: Silero VAD (plandem/silero-go) + whisper.cpp Go bindings + Anthropic Go SDK (Haiku 4.5) + 공식 MCP Go SDK (stdio).
+핵심 기술 스택: Silero VAD (plandem/silero-go) + whisper.cpp Go bindings + Claude Code CLI (`os/exec`, 구독 포함 $0) + 공식 MCP Go SDK (stdio).
 
 ## Technical Context
 
 **Language/Version**: Go (latest stable, 1.23+)
-**Primary Dependencies**: plandem/silero-go (VAD+audio), whisper.cpp Go bindings (STT), anthropic-sdk-go (post-processing), modelcontextprotocol/go-sdk (MCP)
+**Primary Dependencies**: plandem/silero-go (VAD+audio), whisper.cpp Go bindings (STT), Claude Code CLI via os/exec (post-processing), modelcontextprotocol/go-sdk (MCP)
 **Storage**: Local filesystem (`~/.sttdb/`) — markdown files with YAML frontmatter, hierarchical category directories
 **Testing**: `go test ./...` (TDD strict per constitution)
 **Target Platform**: macOS (primary), Linux (secondary)
 **Project Type**: CLI daemon + MCP server (core library + multiple entry points)
 **Performance Goals**: Mic activation <3s, STT save <5s after speech ends, AI agent response <30s with 100+ entries
-**Constraints**: Negligible CPU/memory during idle (always-on daemon), STT offline-capable (Whisper local), post-processing requires internet (Anthropic API)
+**Constraints**: Negligible CPU/memory during idle (always-on daemon), STT offline-capable (Whisper local), post-processing requires internet (Claude Code CLI → Claude API)
 **Scale/Scope**: Single user, 100+ knowledge entries target, single language (Korean)
 
 ## Constitution Check
@@ -30,7 +30,7 @@
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | **I. TDD** | PASS | All components (VAD, STT, storage, search, MCP) will follow Red→Green→Refactor. Tests committed with implementation. |
-| **II. Simplicity/YAGNI** | PASS | 5 external dependencies, each justified by a core requirement. No plugin system, no feature flags. Phase 2 (desktop app) deferred. |
+| **II. Simplicity/YAGNI** | PASS | 4 external Go dependencies + Claude Code CLI (runtime). Each justified by a core requirement. No plugin system, no feature flags. Phase 2 (desktop app) deferred. |
 | **Tech: Go** | PASS | Go latest stable |
 | **Tech: VAD→STT pipeline** | PASS | Silero VAD activates Whisper only on speech detection. No continuous STT streaming. |
 | **Tech: Local-first storage** | PASS | All knowledge stored as local markdown files in `~/.sttdb/`. No external DB. |
@@ -44,7 +44,7 @@
 |-----------|--------|-------|
 | **I. TDD** | PASS | Data model supports testable interfaces. Storage/search/MCP handlers all testable in isolation. |
 | **II. Simplicity/YAGNI** | PASS | Flat data model (1 entity + config). No ORM, no search engine, no database. File glob + string matching for search. |
-| **Tech: Preprocessing** | PASS with note | Changed from Claude Code CLI to Anthropic Go SDK — ~100x cheaper ($0.001 vs $0.04-0.15 per entry). Same Claude model, direct API call. |
+| **Tech: Preprocessing** | PASS | Claude Code CLI (`claude -p --json-schema`) via os/exec. Claude 구독 포함이므로 추가 비용 $0. 응답 시간 ~6-13초/건. |
 
 ## Project Structure
 
@@ -79,8 +79,7 @@ sttdb/
 │   │   ├── whisper.go   # whisper.cpp Go bindings wrapper
 │   │   └── model.go     # Model loading and configuration
 │   ├── process/         # Post-processing (title/summary/category)
-│   │   ├── classify.go  # Anthropic API classification
-│   │   └── schema.go    # JSON schema definitions
+│   │   └── classify.go  # Claude Code CLI invocation via os/exec
 │   ├── storage/         # Knowledge file management
 │   │   ├── writer.go    # Markdown file writer (frontmatter + content)
 │   │   ├── reader.go    # Markdown file reader/parser
