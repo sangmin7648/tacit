@@ -38,6 +38,9 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 		"--json-schema", jsonSchema,
 		"--model", model,
 		"--no-session-persistence",
+		"--strict-mcp-config",
+		"--mcp-config", `{"mcpServers":{}}`,
+		"--tools", "",
 	)
 	cmd.Stdin = strings.NewReader(prompt)
 
@@ -92,6 +95,9 @@ func ClassifyBatch(ctx context.Context, texts []string, existingCategories []str
 		"--json-schema", batchJsonSchema,
 		"--model", model,
 		"--no-session-persistence",
+		"--strict-mcp-config",
+		"--mcp-config", `{"mcpServers":{}}`,
+		"--tools", "",
 	)
 	cmd.Stdin = strings.NewReader(prompt)
 
