@@ -1,50 +1,108 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+## Sync Impact Report
+- **Version change**: N/A → 1.0.0 (initial ratification)
+- **Modified principles**: None (first version)
+- **Added sections**:
+  - Core Principles: I. Test-First (TDD), II. Simplicity / YAGNI
+  - Technology Constraints (Go, local-first, audio pipeline)
+  - Development Workflow (TDD strict, commit discipline)
+  - Governance
+- **Removed sections**: None
+- **Templates requiring updates**:
+  - `.specify/templates/plan-template.md` — ✅ No changes needed (Constitution Check section is generic)
+  - `.specify/templates/spec-template.md` — ✅ No changes needed (user stories align with TDD workflow)
+  - `.specify/templates/tasks-template.md` — ✅ No changes needed (already enforces tests-before-implementation)
+  - `.specify/templates/commands/*.md` — ✅ No command templates found
+- **Follow-up TODOs**: None
+-->
+
+# STT Database (sttdb) Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Test-First (TDD) — NON-NEGOTIABLE
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+All production code MUST be written using strict Test-Driven Development:
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- **Red**: Write a failing test that defines the desired behavior.
+- **Green**: Write the minimum code to make the test pass.
+- **Refactor**: Clean up while keeping tests green.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Rules:
+- No production code without a corresponding failing test first.
+- Tests MUST be committed before (or in the same commit as) the
+  implementation they validate.
+- Test coverage gaps MUST be justified in the PR description.
+- `go test ./...` MUST pass on every commit.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+**Rationale**: sttdb processes ambient audio into a persistent
+knowledge store. Bugs in the pipeline (VAD, STT, preprocessing,
+storage) silently corrupt knowledge. TDD catches regressions early
+and documents intended behavior as executable specifications.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### II. Simplicity / YAGNI
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+Every addition MUST earn its place:
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- Start with the simplest implementation that satisfies the current
+  requirement. Do not build for hypothetical future needs.
+- Prefer standard library over third-party dependencies. Each new
+  dependency MUST be justified.
+- Three similar lines of code are better than a premature abstraction.
+- No feature flags, plugin systems, or extensibility hooks unless a
+  concrete, current use case demands them.
+- If a design decision feels complex, document *why* the complexity
+  is unavoidable in a code comment or PR description.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: sttdb operates as a local, always-on service.
+Unnecessary complexity increases resource consumption, attack
+surface, and maintenance burden on a system that MUST be reliable
+and lightweight.
+
+## Technology Constraints
+
+- **Language**: Go (latest stable release).
+- **Audio Pipeline**: VAD (Voice Activity Detection) activates STT
+  only when speech is detected. The system MUST NOT continuously
+  stream to an STT engine when no speech is present.
+- **Storage**: Local-first. All transcribed and preprocessed data
+  MUST be stored on the local filesystem or an embedded database.
+  No mandatory external service dependencies at runtime.
+- **Preprocessing**: Raw STT output MUST be preprocessed (cleaned,
+  structured, indexed) before storage so it is query-ready for AI
+  agents.
+- **AI Agent Interface**: The knowledge store MUST expose a clear
+  retrieval interface (CLI, API, or library) that AI agents can
+  call to obtain contextual knowledge.
+- **Resource Efficiency**: As an always-on background service, CPU
+  and memory usage during idle (no speech) MUST be negligible.
+
+## Development Workflow
+
+- **Branching**: One branch per feature or fix, branched from `main`.
+- **TDD Cycle**: Every feature follows Red → Green → Refactor.
+  Implementation PRs that lack tests MUST be rejected.
+- **Commit Discipline**: Each commit MUST represent a single logical
+  change. Prefer small, focused commits over large batches.
+- **Code Review**: All code merges to `main` via pull request.
+  Reviewer MUST verify TDD compliance and simplicity adherence.
+- **CI**: `go test ./...` and `go vet ./...` MUST pass before merge.
+  Linting (`golangci-lint`) is strongly recommended.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution is the highest-authority document for sttdb
+development practices. All other guidelines, templates, and ad-hoc
+decisions are subordinate.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+- **Amendments**: Any change to this constitution MUST be documented
+  with a version bump, rationale, and migration plan for affected
+  code or processes.
+- **Versioning**: MAJOR for principle removals/redefinitions, MINOR
+  for new principles or material expansions, PATCH for wording
+  and clarification fixes.
+- **Compliance**: Every PR and code review MUST verify adherence to
+  the principles above. Non-compliance MUST be flagged and resolved
+  before merge.
+
+**Version**: 1.0.0 | **Ratified**: 2026-03-28 | **Last Amended**: 2026-03-28
