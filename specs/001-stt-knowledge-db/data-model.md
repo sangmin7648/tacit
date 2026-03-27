@@ -16,7 +16,7 @@
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `title` | string | Yes | 지식 제목 (Anthropic API 자동 생성, <50자) |
+| `title` | string | Yes | 지식 제목 (Claude Code CLI 자동 생성, ≤100자) |
 | `category` | string | Yes | 카테고리 경로 (예: `개발/에러처리`, `잡담`) |
 | `created_at` | string (RFC 3339) | Yes | 생성 시각 (예: `2026-03-28T14:30:52+09:00`) |
 
@@ -24,7 +24,7 @@
 
 | Section | Description |
 |---------|-------------|
-| Summary | 1-2문장 요약 (Anthropic API 자동 생성) |
+| Summary | 1-2문장 요약 (Claude Code CLI 자동 생성) |
 | Content | STT 원문 텍스트 |
 
 **File Format Example**:
@@ -144,7 +144,7 @@ type AudioSegment struct {
 
 **Directory Rules**:
 - Max 2 levels: `{대분류}/` or `{대분류}/{소분류}/`
-- Categories auto-created by Anthropic API classification
+- Categories auto-created by Claude Code CLI classification
 - No predefined category list — AI determines optimal category from existing structure
 - `잡담/` is a parallel category at the same level as work categories
 - File naming: `{YYYYMMDD}-{HHmmss}.md` (timestamp of speech end)

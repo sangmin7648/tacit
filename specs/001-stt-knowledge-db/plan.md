@@ -65,14 +65,15 @@ specs/001-stt-knowledge-db/
 
 ```text
 sttdb/
+├── testdata/
+│   └── test_voice_recording.m4a  # E2E 테스트용 음성 파일
 ├── cmd/
-│   ├── cli/             # CLI entry point (sttdb start/stop/status/search/list)
-│   │   └── main.go
-│   └── mcp/             # MCP server entry point (stdio transport)
+│   └── sttdb/           # Single binary entry point (start/stop/status/search/list/mcp)
 │       └── main.go
 ├── pkg/
 │   ├── audio/           # Audio capture + VAD integration
 │   │   ├── capture.go   # Microphone capture via miniaudio
+│   │   ├── decode.go    # Audio file decoder (m4a/wav → 16kHz float32 PCM)
 │   │   ├── vad.go       # Silero VAD wrapper
 │   │   └── segment.go   # Speech segment buffer management
 │   ├── stt/             # Speech-to-text
@@ -95,7 +96,238 @@ sttdb/
 └── go.sum
 ```
 
-**Structure Decision**: Go idiomatic `cmd/` + `pkg/` layout, matching the spec's "코어 라이브러리 + 다중 진입점" architecture. Each `pkg/` package is independently testable. CLI and MCP are thin entry points calling into `pkg/`.
+**Structure Decision**: Go idiomatic `cmd/` + `pkg/` layout, matching the spec's "코어 라이브러리 + 다중 진입점" architecture. Each `pkg/` package is independently testable. Single `sttdb` binary with subcommands (`start`, `stop`, `status`, `search`, `list`, `mcp`) — the `mcp` subcommand starts the MCP server (stdio transport).
+
+## Test Strategy
+
+### Test Levels
+
+| Level | Scope | External Deps | 실행 환경 |
+|-------|-------|---------------|----------|
+| Unit | 패키지 내부 로직 (파싱, 검색, 설정 로드) | 없음 (mock/stub) | `go test ./...` CI/로컬 |
+| Integration | 패키지 간 연동 (STT→파일 생성, storage read/write) | Whisper 모델, Claude CLI | 로컬 (시스템 의존성 필요) |
+| E2E Pipeline | 오디오 파일 → STT → 후처리 → MD 파일 생성 전체 파이프라인 | Whisper 모델, Claude CLI | 로컬 (시스템 의존성 필요) |
+
+### Test Fixture
+
+**파일**: `testdata/test_voice_recording.m4a` (프로젝트 루트의 `test_voice_recording.m4a`를 `testdata/`로 이동)
+
+이 오디오 파일은 실제 음성 녹음이며, 전체 파이프라인의 통합 테스트에 사용된다. 테스트 실행 시 마이크 접근 없이 파일 기반으로 STT를 수행한다.
+
+### Integration Test: STT (pkg/stt)
+
+```go
+// pkg/stt/whisper_integration_test.go
+//go:build integration
+
+func TestWhisperTranscribe_RealAudio(t *testing.T) {
+    modelPath := os.Getenv("STTDB_WHISPER_MODEL")
+    if modelPath == "" {
+        t.Skip("STTDB_WHISPER_MODEL not set, skipping integration test")
+    }
+
+    // 1. m4a → 16kHz mono float32 PCM 변환
+    samples, err := audio.DecodeFile("../../testdata/test_voice_recording.m4a")
+    require.NoError(t, err)
+    require.NotEmpty(t, samples, "decoded audio samples must not be empty")
+
+    // 2. Whisper STT 실행
+    w, err := NewWhisper(modelPath)
+    require.NoError(t, err)
+    defer w.Close()
+
+    text, err := w.Transcribe(context.Background(), samples)
+    require.NoError(t, err)
+
+    // 3. 검증: 비어있지 않은 한국어 텍스트 생성
+    assert.NotEmpty(t, text)
+    t.Logf("STT result: %s", text)
+}
+```
+
+**검증 포인트**:
+- m4a 오디오 파일을 PCM float32로 디코딩 가능
+- Whisper가 비어있지 않은 텍스트를 반환
+- 로그로 STT 결과 확인 (정확도는 수동 검증)
+
+### Integration Test: Post-Processing (pkg/process)
+
+```go
+// pkg/process/classify_integration_test.go
+//go:build integration
+
+func TestClassify_RealCLI(t *testing.T) {
+    if _, err := exec.LookPath("claude"); err != nil {
+        t.Skip("claude CLI not found, skipping integration test")
+    }
+
+    sttText := "Go에서 에러 핸들링할 때 sentinel error 패턴을 쓰면 좋은 게 뭐냐면..."
+
+    result, err := Classify(context.Background(), sttText, nil) // nil = no existing categories
+    require.NoError(t, err)
+
+    assert.NotEmpty(t, result.Title)
+    assert.NotEmpty(t, result.Summary)
+    assert.NotEmpty(t, result.Category)
+    assert.LessOrEqual(t, len(result.Title), 100)
+    // 카테고리 형식: "대분류" 또는 "대분류/소분류"
+    assert.LessOrEqual(t, strings.Count(result.Category, "/"), 1)
+    t.Logf("Classified: title=%q, category=%q", result.Title, result.Category)
+}
+```
+
+### E2E Test: 오디오 → 지식 MD 파일 생성
+
+```go
+// pkg/pipeline/pipeline_integration_test.go
+//go:build integration
+
+func TestPipeline_AudioFileToKnowledgeEntry(t *testing.T) {
+    modelPath := os.Getenv("STTDB_WHISPER_MODEL")
+    if modelPath == "" {
+        t.Skip("STTDB_WHISPER_MODEL not set")
+    }
+    if _, err := exec.LookPath("claude"); err != nil {
+        t.Skip("claude CLI not found")
+    }
+
+    // 임시 지식 DB 디렉토리 사용 (테스트 격리)
+    tmpDir := t.TempDir()
+
+    // 1. 오디오 파일 → PCM 디코딩
+    samples, err := audio.DecodeFile("../../testdata/test_voice_recording.m4a")
+    require.NoError(t, err)
+
+    // 2. STT 실행
+    w, err := stt.NewWhisper(modelPath)
+    require.NoError(t, err)
+    defer w.Close()
+
+    text, err := w.Transcribe(context.Background(), samples)
+    require.NoError(t, err)
+    require.NotEmpty(t, text, "STT must produce non-empty text")
+    t.Logf("STT result: %s", text)
+
+    // 3. Claude Code CLI로 제목/요약/카테고리 생성
+    classified, err := process.Classify(context.Background(), text, nil)
+    require.NoError(t, err)
+    t.Logf("Classified: title=%q, summary=%q, category=%q",
+        classified.Title, classified.Summary, classified.Category)
+
+    // 4. 마크다운 지식 파일 저장
+    entry := &storage.KnowledgeEntry{
+        Title:     classified.Title,
+        Category:  classified.Category,
+        CreatedAt: time.Now(),
+        Summary:   classified.Summary,
+        Content:   text,
+    }
+    filePath, err := storage.Write(tmpDir, entry)
+    require.NoError(t, err)
+    t.Logf("Written to: %s", filePath)
+
+    // 5. 파일 존재 확인
+    _, err = os.Stat(filePath)
+    require.NoError(t, err, "knowledge file must exist")
+
+    // 6. 파일 내용 파싱 및 검증
+    loaded, err := storage.Read(filePath)
+    require.NoError(t, err)
+
+    // 6a. Frontmatter 검증
+    assert.Equal(t, entry.Title, loaded.Title)
+    assert.Equal(t, entry.Category, loaded.Category)
+    assert.False(t, loaded.CreatedAt.IsZero())
+
+    // 6b. Body 검증
+    assert.NotEmpty(t, loaded.Summary, "summary section must exist")
+    assert.NotEmpty(t, loaded.Content, "content section must exist")
+
+    // 6c. 파일 경로 구조 검증: {baseDir}/{category}/{timestamp}.md
+    relPath, _ := filepath.Rel(tmpDir, filePath)
+    parts := strings.Split(relPath, string(filepath.Separator))
+    assert.GreaterOrEqual(t, len(parts), 2, "path must include category directory")
+    assert.True(t, strings.HasSuffix(filePath, ".md"))
+
+    // 6d. 파일 원본 텍스트 확인 (마크다운 형식)
+    raw, err := os.ReadFile(filePath)
+    require.NoError(t, err)
+    content := string(raw)
+    assert.Contains(t, content, "---")        // YAML frontmatter delimiter
+    assert.Contains(t, content, "title:")     // frontmatter fields
+    assert.Contains(t, content, "category:")
+    assert.Contains(t, content, "created_at:")
+}
+```
+
+### 오디오 디코딩 유틸리티
+
+m4a 파일을 Whisper가 필요로 하는 16kHz mono float32 PCM으로 변환하는 헬퍼가 필요하다:
+
+```go
+// pkg/audio/decode.go
+// DecodeFile reads an audio file (m4a, wav, mp3 등) and returns
+// 16kHz mono float32 PCM samples using miniaudio decoder.
+func DecodeFile(path string) ([]float32, error)
+```
+
+miniaudio는 m4a(AAC), wav, mp3, flac 등을 지원하므로 `plandem/silero-go`의 miniaudio 바인딩 또는 별도의 `gen2brain/malgo` 디코더를 활용한다.
+
+### 테스트 실행 방법
+
+```bash
+# Unit tests (의존성 없음, CI에서 실행)
+go test ./...
+
+# Integration tests (Whisper 모델 + Claude CLI 필요, 로컬 실행)
+STTDB_WHISPER_MODEL=~/.sttdb/models/ggml-base.bin \
+  go test -tags integration -v -timeout 120s ./...
+
+# 특정 E2E 테스트만 실행
+STTDB_WHISPER_MODEL=~/.sttdb/models/ggml-base.bin \
+  go test -tags integration -v -run TestPipeline_AudioFileToKnowledgeEntry ./pkg/pipeline/
+```
+
+### Storage Unit Tests (외부 의존성 없음)
+
+```go
+// pkg/storage/writer_test.go (unit test — no build tag)
+
+func TestWriteAndRead_RoundTrip(t *testing.T) {
+    tmpDir := t.TempDir()
+    entry := &KnowledgeEntry{
+        Title:     "테스트 제목",
+        Category:  "개발/테스트",
+        CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, time.FixedZone("KST", 9*3600)),
+        Summary:   "테스트 요약입니다.",
+        Content:   "테스트 본문 내용입니다.",
+    }
+
+    filePath, err := Write(tmpDir, entry)
+    require.NoError(t, err)
+
+    // 디렉토리 구조 검증: tmpDir/개발/테스트/{timestamp}.md
+    assert.Contains(t, filePath, filepath.Join("개발", "테스트"))
+
+    loaded, err := Read(filePath)
+    require.NoError(t, err)
+
+    assert.Equal(t, entry.Title, loaded.Title)
+    assert.Equal(t, entry.Category, loaded.Category)
+    assert.Equal(t, entry.Summary, loaded.Summary)
+    assert.Equal(t, entry.Content, loaded.Content)
+}
+
+func TestWrite_InvalidCategory(t *testing.T) {
+    tmpDir := t.TempDir()
+    entry := &KnowledgeEntry{
+        Title:    "제목",
+        Category: "a/b/c", // 3단계 — 최대 2단계 초과
+    }
+    _, err := Write(tmpDir, entry)
+    assert.Error(t, err)
+}
+```
 
 ## Complexity Tracking
 

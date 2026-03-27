@@ -76,8 +76,7 @@
 ```
 sttdb/
 ├── pkg/          ← 코어 라이브러리 (VAD, STT, 저장, 검색)
-├── cmd/cli/      ← CLI 진입점
-├── cmd/mcp/      ← MCP 서버 진입점
+├── cmd/sttdb/    ← 단일 바이너리 (CLI + MCP 서버 서브커맨드)
 └── cmd/app/      ← (Phase 2) 데스크탑 앱 진입점
 ```
 

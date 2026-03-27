@@ -317,6 +317,8 @@ All tools follow MCP error conventions:
 claude mcp add --transport stdio sttdb --scope user -- sttdb mcp
 ```
 
+> **Note**: `sttdb` is a single binary. The `mcp` subcommand starts the MCP server in stdio mode.
+
 ### Claude Desktop
 
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
