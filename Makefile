@@ -30,8 +30,16 @@ export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFOR
 
 # ── Targets ──────────────────────────────────────────────
 
+TEN_VAD_FRAMEWORK := third_party/ten-vad/lib/macOS/ten_vad.framework
+
 build: whisper-lib
 	go build -o sttdb ./cmd/sttdb/
+ifeq ($(UNAME_S),Darwin)
+	@echo "Bundling ten_vad.framework..."
+	rm -rf ten_vad.framework
+	cp -R $(TEN_VAD_FRAMEWORK) ten_vad.framework
+	install_name_tool -rpath "$$(otool -l sttdb | grep -A2 LC_RPATH | grep path | awk '{print $$2}')" @executable_path sttdb
+endif
 
 test: whisper-lib
 	go test ./...
@@ -54,5 +62,6 @@ e2e-test: build
 
 clean:
 	rm -rf $(WHISPER_BUILD)
+	rm -rf ten_vad.framework
 	rm -f sttdb
 	go clean
