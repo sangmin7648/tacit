@@ -107,13 +107,13 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation.**
 
-- [ ] T024.1 [P] [US3] Write CLI search command unit tests in `cmd/sttdb/main_test.go`: Test argument parsing (`sttdb search <query> --category <cat> --include-chitchat`), output formatting (title, category, date, summary per result), error on missing query argument. Use `storage.Search()` with a temp directory fixture.
-- [ ] T024.2 [P] [US3] Write CLI list command unit tests in `cmd/sttdb/main_test.go`: Test argument parsing (`sttdb list --category <cat> --date-range <range>`), tabular output format, empty results message. Use `storage.List()` with a temp directory fixture.
+- [ ] T025 [P] [US3] Write CLI search command unit tests in `cmd/sttdb/main_test.go`: Test argument parsing (`sttdb search <query> --category <cat> --include-chitchat`), output formatting (title, category, date, summary per result), error on missing query argument. Use `storage.Search()` with a temp directory fixture.
+- [ ] T026 [P] [US3] Write CLI list command unit tests in `cmd/sttdb/main_test.go`: Test argument parsing (`sttdb list --category <cat> --date-range <range>`), tabular output format, empty results message. Use `storage.List()` with a temp directory fixture.
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] Add search command to CLI in `cmd/sttdb/main.go`: `sttdb search <query> [--category <cat>] [--include-chitchat]` — call `storage.Search()`, display results with title, category, date, and summary. Format output for terminal readability.
-- [ ] T026 [US3] Add list command with category filter to CLI in `cmd/sttdb/main.go`: `sttdb list [--category <cat>] [--date-range <start>..<end>]` — call `storage.List()`, display tabular list of entries with title, category, date.
+- [ ] T027 [US3] Add search command to CLI in `cmd/sttdb/main.go`: `sttdb search <query> [--category <cat>] [--include-chitchat]` — call `storage.Search()`, display results with title, category, date, and summary. Format output for terminal readability.
+- [ ] T028 [US3] Add list command with category filter to CLI in `cmd/sttdb/main.go`: `sttdb list [--category <cat>] [--date-range <start>..<end>]` — call `storage.List()`, display tabular list of entries with title, category, date.
 
 **Checkpoint**: All CLI commands work: `start`, `stop`, `status`, `search`, `list`. All user stories independently functional.
 
@@ -123,8 +123,8 @@
 
 **Purpose**: Edge cases, robustness, and validation
 
-- [ ] T027 [P] Review and verify edge case handling across packages: minimum speech duration filter enforcement in `pkg/audio/segment.go`, microphone permission error in `pkg/audio/capture.go`, Claude CLI failure graceful skip in `pkg/pipeline/pipeline.go`, stale PID cleanup in `pkg/daemon/pid.go`, path traversal rejection in MCP `get_knowledge`
-- [ ] T028 Run quickstart.md validation: verify complete setup from scratch (go mod download, go build, go test, whisper model download, `sttdb start/stop/status`, MCP server registration)
+- [ ] T029 [P] Review and verify edge case handling across packages: minimum speech duration filter enforcement in `pkg/audio/segment.go`, microphone permission error in `pkg/audio/capture.go`, Claude CLI failure graceful skip in `pkg/pipeline/pipeline.go`, stale PID cleanup in `pkg/daemon/pid.go`, path traversal rejection in MCP `get_knowledge`
+- [ ] T030 Run quickstart.md validation: verify complete setup from scratch (go mod download, go build, go test, whisper model download, `sttdb start/stop/status`, MCP server registration)
 
 ---
 
@@ -167,7 +167,8 @@
 - T024: sequential (MCP server depends on search + listing)
 
 **Phase 5 (US3)**:
-- T025-T026: sequential (both modify cmd/cli/main.go)
+- Tests T025-T026: parallel
+- T027-T028: sequential (both modify cmd/sttdb/main.go)
 
 ---
 
