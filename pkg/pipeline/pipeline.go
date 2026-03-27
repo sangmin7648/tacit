@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/rapportlabs/sttdb/pkg/audio"
+	"github.com/rapportlabs/sttdb/pkg/capture"
 	"github.com/rapportlabs/sttdb/pkg/config"
 	"github.com/rapportlabs/sttdb/pkg/model"
 	"github.com/rapportlabs/sttdb/pkg/process"
 	"github.com/rapportlabs/sttdb/pkg/stt"
 	"github.com/rapportlabs/sttdb/pkg/storage"
+	"github.com/rapportlabs/sttdb/pkg/vad"
 )
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
@@ -50,6 +52,121 @@ func (p *Pipeline) Close() {
 	if p.whisper != nil {
 		p.whisper.Close()
 	}
+}
+
+// Run starts the real-time capture→VAD→STT→classify→store loop.
+// It blocks until ctx is cancelled.
+func (p *Pipeline) Run(ctx context.Context) error {
+	// Init VAD (256 samples = 16ms at 16kHz)
+	const hopSize = 256
+	v, err := vad.New(hopSize, float32(p.cfg.SpeechThreshold))
+	if err != nil {
+		return fmt.Errorf("init vad: %w", err)
+	}
+	defer v.Close()
+	log.Printf("VAD initialized (hop=%d, threshold=%.2f)", hopSize, p.cfg.SpeechThreshold)
+
+	// Init microphone capture
+	mic, err := capture.New()
+	if err != nil {
+		return fmt.Errorf("init capture: %w", err)
+	}
+	defer mic.Close()
+
+	stream, err := mic.Stream(ctx)
+	if err != nil {
+		return fmt.Errorf("start capture stream: %w", err)
+	}
+
+	// Segment buffer for accumulating speech audio
+	segBuf := audio.NewSegmentBuffer(capture.SampleRate, p.cfg.MinSpeechDur)
+
+	// VAD frame buffer: accumulate samples until we have hopSize
+	var frameBuf []int16
+	silenceFrames := 0
+	silenceLimit := int(p.cfg.SilenceDuration.Seconds() * float64(capture.SampleRate) / float64(hopSize))
+
+	log.Printf("Listening for speech... (silence timeout: %v, min speech: %v)", p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
+
+	for chunk := range stream {
+		frameBuf = append(frameBuf, chunk...)
+
+		// Process all complete frames in the buffer
+		for len(frameBuf) >= hopSize {
+			frame := frameBuf[:hopSize]
+			frameBuf = frameBuf[hopSize:]
+
+			_, isSpeech, err := v.Process(frame)
+			if err != nil {
+				log.Printf("VAD error: %v", err)
+				continue
+			}
+
+			if isSpeech {
+				silenceFrames = 0
+				if !segBuf.IsActive() {
+					segBuf.Start()
+					log.Printf("Speech started")
+				}
+				segBuf.Append(capture.Int16ToFloat32(frame))
+			} else if segBuf.IsActive() {
+				// Still append during silence gap (captures trailing audio)
+				segBuf.Append(capture.Int16ToFloat32(frame))
+				silenceFrames++
+
+				if silenceFrames >= silenceLimit {
+					log.Printf("Speech ended (%.1fs)", segBuf.Duration().Seconds())
+					seg, ok := segBuf.Finish()
+					silenceFrames = 0
+					if ok {
+						p.processSegment(ctx, seg)
+					} else {
+						log.Printf("Segment too short, discarding")
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// processSegment runs STT→classify→store on a speech segment.
+func (p *Pipeline) processSegment(ctx context.Context, seg *audio.AudioSegment) {
+	log.Printf("Processing segment: %.1fs of audio", seg.Duration.Seconds())
+
+	text, err := p.whisper.Transcribe(ctx, seg.Samples)
+	if err != nil {
+		log.Printf("STT error: %v", err)
+		return
+	}
+	if text == "" {
+		log.Printf("STT produced empty text, skipping")
+		return
+	}
+	log.Printf("STT: %s", text)
+
+	existingCategories := listExistingCategories(p.baseDir)
+	classified, err := process.Classify(ctx, text, existingCategories, p.cfg.ClaudeModel)
+	if err != nil {
+		log.Printf("Classify error: %v", err)
+		return
+	}
+
+	entry := &storage.KnowledgeEntry{
+		Title:     classified.Title,
+		Category:  classified.Category,
+		CreatedAt: time.Now(),
+		Summary:   classified.Summary,
+		Content:   text,
+	}
+
+	filePath, err := storage.Write(p.baseDir, entry)
+	if err != nil {
+		log.Printf("Write error: %v", err)
+		return
+	}
+	log.Printf("Knowledge entry saved: %s", filePath)
 }
 
 // ProcessFile processes an audio file through the full pipeline:

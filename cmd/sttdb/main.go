@@ -120,9 +120,9 @@ func cmdStart(cfg *config.Config) {
 	log.Printf("Knowledge base: %s", config.BaseDir())
 	log.Printf("Press Ctrl+C to stop")
 
-	// TODO: Start real-time microphone capture pipeline
-	// For now, just wait for shutdown signal
-	<-ctx.Done()
+	if err := p.Run(ctx); err != nil {
+		log.Printf("Pipeline error: %v", err)
+	}
 	log.Printf("sttdb daemon stopped")
 }
 
