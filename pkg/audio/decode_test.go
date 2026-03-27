@@ -1,15 +1,10 @@
 package audio
 
 import (
-	"os/exec"
 	"testing"
 )
 
 func TestDecodeFile_M4A(t *testing.T) {
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not found, skipping decode test")
-	}
-
 	samples, err := DecodeFile("../../testdata/test_voice_recording.m4a")
 	if err != nil {
 		t.Fatalf("DecodeFile failed: %v", err)

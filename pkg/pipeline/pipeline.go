@@ -11,6 +11,7 @@ import (
 
 	"github.com/rapportlabs/sttdb/pkg/audio"
 	"github.com/rapportlabs/sttdb/pkg/config"
+	"github.com/rapportlabs/sttdb/pkg/model"
 	"github.com/rapportlabs/sttdb/pkg/process"
 	"github.com/rapportlabs/sttdb/pkg/stt"
 	"github.com/rapportlabs/sttdb/pkg/storage"
@@ -28,8 +29,8 @@ func New(cfg *config.Config) (*Pipeline, error) {
 	baseDir := config.BaseDir()
 
 	modelPath := config.ModelPath(cfg.WhisperModel)
-	if _, err := os.Stat(modelPath); err != nil {
-		return nil, fmt.Errorf("whisper model not found at %s: %w", modelPath, err)
+	if err := model.EnsureModel(modelPath); err != nil {
+		return nil, fmt.Errorf("ensure whisper model: %w", err)
 	}
 
 	w, err := stt.NewWhisper(modelPath)

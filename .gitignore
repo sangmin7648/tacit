@@ -1,1 +1,3 @@
 sttdb
+.DS_Store
+third_party/whisper.cpp/build/

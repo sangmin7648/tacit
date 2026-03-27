@@ -5,72 +5,43 @@
 ## Prerequisites
 
 - **Go** 1.23+ (`brew install go`)
-- **C compiler** (Xcode Command Line Tools: `xcode-select --install`)
-- **ONNX Runtime** shared library (~17 MB) — required by Silero VAD
-- **Whisper model** file (downloaded on first run)
-- **Claude Code CLI** (`claude`) — for text post-processing (title/summary/category generation). Claude 구독 필요.
+- **C compiler + cmake** (Xcode Command Line Tools: `xcode-select --install` && `brew install cmake`)
+- **Claude Code CLI** (`claude`) — for text post-processing. Claude 구독 필요.
 
-## System Dependencies
-
-### macOS
-
-```bash
-# ONNX Runtime (required for Silero VAD)
-brew install onnxruntime
-
-# Whisper.cpp (for the shared library)
-brew install whisper-cpp
-
-# Or build whisper.cpp from source:
-git clone https://github.com/ggml-org/whisper.cpp.git
-cd whisper.cpp && make -j
-```
-
-### Linux (Ubuntu/Debian)
-
-```bash
-# ONNX Runtime
-wget https://github.com/microsoft/onnxruntime/releases/download/v1.18.1/onnxruntime-linux-x64-1.18.1.tgz
-tar xzf onnxruntime-linux-x64-1.18.1.tgz
-sudo cp onnxruntime-linux-x64-1.18.1/lib/* /usr/local/lib/
-sudo cp -r onnxruntime-linux-x64-1.18.1/include/* /usr/local/include/
-sudo ldconfig
-```
+That's it. whisper.cpp is vendored as a git submodule and built automatically. Audio decoding uses macOS AudioToolbox (no ffmpeg needed). Whisper model is auto-downloaded on first run.
 
 ## Environment Setup
 
 ```bash
 # Clone and enter project
-git clone <repo-url> sttdb
+git clone --recursive <repo-url> sttdb
 cd sttdb
 
 # Verify Claude Code CLI is installed and authenticated
 claude --version
 
-# Install Go dependencies
-go mod download
+# Build (builds whisper.cpp static lib + Go binary)
+make build
 
-# Verify build
-go build ./...
-
-# Run tests (TDD — must pass on every commit)
-go test ./...
+# Run tests
+make test
 ```
 
-## Whisper Model Download
+## Whisper Model
 
-Models are stored in `~/.sttdb/models/`. The default `base` model (~142 MB) is downloaded on first run, or manually:
+Models are stored in `~/.sttdb/models/` and auto-downloaded on first run.
+
+To pre-download or use a different model:
 
 ```bash
 mkdir -p ~/.sttdb/models
-# Download base model (default)
-curl -L -o ~/.sttdb/models/ggml-base.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
 # Optional: Download small model for better Korean accuracy (~466 MB)
 curl -L -o ~/.sttdb/models/ggml-small.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 ```
+
+Then set `whisper_model: small` in `~/.sttdb/config.yaml`.
 
 ## Configuration
 
@@ -99,7 +70,7 @@ anthropic_model: claude-haiku-4-5-20251001
 
 ```bash
 # Build the CLI
-go build -o sttdb ./cmd/cli/
+make build
 
 # Start voice capture daemon
 ./sttdb start
@@ -177,8 +148,8 @@ On first run, macOS will prompt for microphone access. If denied:
 
 | Issue | Solution |
 |-------|----------|
-| `ONNX Runtime not found` | Ensure `brew install onnxruntime` and check `LIBRARY_PATH` |
-| `whisper.h not found` | Set `C_INCLUDE_PATH` to whisper.cpp include directory |
+| `cmake: command not found` | `brew install cmake` |
+| `whisper.h not found` | Run `make clean && make build` to rebuild whisper.cpp |
 | `claude: command not found` | Install Claude Code CLI: `npm install -g @anthropic-ai/claude-code` and run `claude` to authenticate |
 | `Microphone permission denied` | Grant in macOS System Settings > Privacy & Security > Microphone |
 | `Stale PID file` | Delete `~/.sttdb/sttdb.pid` manually, or `sttdb stop` handles it automatically |

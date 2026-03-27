@@ -1,3 +1,5 @@
+//go:build !darwin
+
 package audio
 
 import (
@@ -11,8 +13,8 @@ import (
 
 const targetSampleRate = 16000
 
-// DecodeFile reads an audio file (m4a, wav, mp3, flac, etc.) and returns
-// 16kHz mono float32 PCM samples using ffmpeg for decoding.
+// DecodeFile reads an audio file and returns 16kHz mono float32 PCM samples
+// using ffmpeg for decoding. This is the fallback for non-macOS platforms.
 func DecodeFile(path string) ([]float32, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
@@ -22,7 +24,6 @@ func DecodeFile(path string) ([]float32, error) {
 		return nil, fmt.Errorf("audio file not found: %w", err)
 	}
 
-	// Use ffmpeg to decode to raw 16kHz mono s16le PCM
 	cmd := exec.Command("ffmpeg",
 		"-i", absPath,
 		"-ar", fmt.Sprintf("%d", targetSampleRate),
@@ -42,7 +43,6 @@ func DecodeFile(path string) ([]float32, error) {
 		return nil, fmt.Errorf("ffmpeg produced no output")
 	}
 
-	// Convert s16le bytes to float32 samples
 	numSamples := len(output) / 2
 	samples := make([]float32, numSamples)
 	for i := 0; i < numSamples; i++ {

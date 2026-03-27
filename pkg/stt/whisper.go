@@ -1,9 +1,6 @@
 package stt
 
 /*
-#cgo pkg-config: whisper
-#cgo CFLAGS: -I/opt/homebrew/include
-#cgo LDFLAGS: -L/opt/homebrew/lib
 #include <whisper.h>
 #include <ggml-backend.h>
 #include <stdlib.h>
