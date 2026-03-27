@@ -19,6 +19,8 @@ const singleSystemPrompt = `STT→JSON만. {"title":"제목","summary":"요약",
 
 const batchSystemPrompt = `STT텍스트들→JSON만. {"results":[{"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}]}만출력. 순서유지`
 
+const defaultModel = "haiku"
+
 // Classify invokes Claude Code CLI to generate title, summary, and category
 // for the given STT text. existingCategories provides context about current
 // directory structure for consistent categorization.
@@ -27,7 +29,7 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 		return nil, fmt.Errorf("empty STT text")
 	}
 	if model == "" {
-		model = "haiku"
+		model = defaultModel
 	}
 
 	output, err := runClaude(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories), model)
@@ -56,7 +58,7 @@ func ClassifyBatch(ctx context.Context, texts []string, existingCategories []str
 		return []*ClassifyResult{r}, nil
 	}
 	if model == "" {
-		model = "haiku"
+		model = defaultModel
 	}
 
 	output, err := runClaude(ctx, batchSystemPrompt, buildBatchPrompt(texts, existingCategories), model)

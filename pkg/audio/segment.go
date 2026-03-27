@@ -76,8 +76,5 @@ func (b *SegmentBuffer) Reset() {
 
 // Duration returns the current buffered duration based on the sample count.
 func (b *SegmentBuffer) Duration() time.Duration {
-	if b.sampleRate == 0 {
-		return 0
-	}
-	return time.Duration(float64(len(b.samples)) / float64(b.sampleRate) * float64(time.Second))
+	return DurationFromSamples(len(b.samples), b.sampleRate)
 }
