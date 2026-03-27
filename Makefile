@@ -1,4 +1,4 @@
-.PHONY: build clean whisper-lib test e2e-test
+.PHONY: build clean whisper-lib test e2e-test install
 
 WHISPER_DIR  := third_party/whisper.cpp
 WHISPER_BUILD := $(WHISPER_DIR)/build
@@ -59,6 +59,18 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 
 e2e-test: build
 	./sttdb process testdata/test_voice_recording.m4a
+
+INSTALL_DIR := $(HOME)/.local/bin
+
+install: build
+	@mkdir -p $(INSTALL_DIR)
+	cp sttdb $(INSTALL_DIR)/sttdb
+	chmod +x $(INSTALL_DIR)/sttdb
+ifeq ($(UNAME_S),Darwin)
+	rm -rf $(INSTALL_DIR)/ten_vad.framework
+	cp -R ten_vad.framework $(INSTALL_DIR)/ten_vad.framework
+endif
+	@echo "Installed to $(INSTALL_DIR)/sttdb"
 
 clean:
 	rm -rf $(WHISPER_BUILD)
