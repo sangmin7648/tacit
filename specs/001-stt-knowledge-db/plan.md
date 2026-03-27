@@ -34,7 +34,7 @@
 | **Tech: Go** | PASS | Go latest stable |
 | **Tech: VAD→STT pipeline** | PASS | Silero VAD activates Whisper only on speech detection. No continuous STT streaming. |
 | **Tech: Local-first storage** | PASS | All knowledge stored as local markdown files in `~/.sttdb/`. No external DB. |
-| **Tech: Preprocessing** | PASS | Anthropic API generates title/summary/category before storage. Files are query-ready. |
+| **Tech: Preprocessing** | PASS | Claude Code CLI generates title/summary/category before storage. Files are query-ready. |
 | **Tech: AI Agent Interface** | PASS | MCP server exposes search/list/get tools via official Go SDK. |
 | **Tech: Resource Efficiency** | PASS | Silero VAD: 0.43% CPU during continuous monitoring. Whisper only runs on speech segments. |
 
@@ -97,6 +97,14 @@ sttdb/
 ```
 
 **Structure Decision**: Go idiomatic `cmd/` + `pkg/` layout, matching the spec's "코어 라이브러리 + 다중 진입점" architecture. Each `pkg/` package is independently testable. Single `sttdb` binary with subcommands (`start`, `stop`, `status`, `search`, `list`, `mcp`) — the `mcp` subcommand starts the MCP server (stdio transport).
+
+### Daemonization Strategy
+
+`sttdb start`는 현재 프로세스에서 파이프라인을 실행한다 (foreground 모드). 백그라운드 실행은 사용자가 `sttdb start &` 또는 `nohup sttdb start &`로 처리한다. Go는 Unix fork를 네이티브로 지원하지 않으므로, 자체 daemonization은 구현하지 않는다 (YAGNI).
+
+- `sttdb start`: 포그라운드에서 파이프라인 실행, PID 파일 기록, Ctrl+C (SIGINT/SIGTERM)로 graceful shutdown
+- `sttdb stop`: PID 파일에서 프로세스 ID를 읽어 SIGTERM 전송
+- `sttdb status`: PID 파일 존재 + 프로세스 생존 여부 확인
 
 ## Test Strategy
 

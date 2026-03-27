@@ -70,7 +70,7 @@
 **Pipeline + CLI** — Sequential, depends on all above:
 
 - [ ] T018 [US1] Implement VAD→STT→Process→Store pipeline orchestration in `pkg/pipeline/pipeline.go`: Wire together audio capture → VAD → segment buffering → Whisper STT → Claude CLI classify → storage write. Accept Config. Run as long-running goroutine. On classify failure: log error, skip saving (no data loss panic). List existing categories from storage for classify prompt context.
-- [ ] T019 [US1] Implement CLI entry point with start/stop/status daemon commands in `cmd/sttdb/main.go`: `sttdb start` (fork daemon, write PID, start pipeline), `sttdb stop` (read PID, send SIGTERM, remove PID file), `sttdb status` (check PID liveness, report running/stopped). Use `pkg/daemon` for PID management, `pkg/pipeline` for pipeline, `pkg/config` for configuration.
+- [ ] T019 [US1] Implement CLI entry point with start/stop/status daemon commands in `cmd/sttdb/main.go`: `sttdb start` (run pipeline in foreground, write PID, handle SIGINT/SIGTERM for graceful shutdown), `sttdb stop` (read PID, send SIGTERM, remove PID file), `sttdb status` (check PID liveness, report running/stopped). Use `pkg/daemon` for PID management, `pkg/pipeline` for pipeline, `pkg/config` for configuration.
 
 **Checkpoint**: User Story 1 complete. Run `sttdb start` → speak → verify markdown file in `~/.sttdb/`. Run `sttdb stop` → verify daemon terminates. Integration tests pass with `go test -tags integration ./...`
 
@@ -102,6 +102,13 @@
 **Goal**: CLI commands for searching and browsing the knowledge DB
 
 **Independent Test**: With knowledge entries stored, run `sttdb search "에러"` and `sttdb list --category 개발` to verify results display correctly
+
+### Tests for User Story 3
+
+> **NOTE: Write these tests FIRST, ensure they FAIL before implementation.**
+
+- [ ] T024.1 [P] [US3] Write CLI search command unit tests in `cmd/sttdb/main_test.go`: Test argument parsing (`sttdb search <query> --category <cat> --include-chitchat`), output formatting (title, category, date, summary per result), error on missing query argument. Use `storage.Search()` with a temp directory fixture.
+- [ ] T024.2 [P] [US3] Write CLI list command unit tests in `cmd/sttdb/main_test.go`: Test argument parsing (`sttdb list --category <cat> --date-range <range>`), tabular output format, empty results message. Use `storage.List()` with a temp directory fixture.
 
 ### Implementation for User Story 3
 
