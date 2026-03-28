@@ -13,11 +13,12 @@ type ClassifyResult struct {
 	Title    string `json:"title"`
 	Summary  string `json:"summary"`
 	Category string `json:"category"`
+	Skip     bool   `json:"skip,omitempty"`
 }
 
-const singleSystemPrompt = `STT→JSON만. {"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}만출력`
+const singleSystemPrompt = `STT→JSON만. {"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}만출력. 의미없는소리/잡음/불분명한말이면 {"skip":true}만출력`
 
-const batchSystemPrompt = `STT텍스트들→JSON만. {"results":[{"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}]}만출력. 순서유지`
+const batchSystemPrompt = `STT텍스트들→JSON만. {"results":[{"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}]}만출력. 순서유지. 의미없는소리/잡음/불분명한말은 {"skip":true}로`
 
 const defaultModel = "haiku"
 

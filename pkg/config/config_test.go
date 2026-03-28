@@ -13,8 +13,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.WhisperModel != "base" {
 		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "base")
 	}
-	if cfg.MinSpeechDur != 3*time.Second {
-		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 3*time.Second)
+	if cfg.MinSpeechDur != 8*time.Second {
+		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 8*time.Second)
 	}
 	if cfg.SilenceDuration != 1500*time.Millisecond {
 		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, 1500*time.Millisecond)

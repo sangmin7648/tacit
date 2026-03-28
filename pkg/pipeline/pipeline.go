@@ -202,6 +202,10 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 				log.Printf("Classify error: %v", err)
 				continue
 			}
+			if classified.Skip {
+				log.Printf("Skipping meaningless segment")
+				continue
+			}
 			p.storeEntry(classified, batch[0])
 		} else {
 			log.Printf("Batch classifying %d segments in one CLI call...", len(batch))
@@ -218,12 +222,20 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 						log.Printf("Classify error: %v", err)
 						continue
 					}
+					if classified.Skip {
+						log.Printf("Skipping meaningless segment")
+						continue
+					}
 					p.storeEntry(classified, b)
 				}
 				continue
 			}
 			for i, classified := range results {
 				if i < len(batch) {
+					if classified.Skip {
+						log.Printf("Skipping meaningless segment %d", i+1)
+						continue
+					}
 					p.storeEntry(classified, batch[i])
 				}
 			}
@@ -286,6 +298,10 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 		return "", fmt.Errorf("classify: %w", err)
 	}
 	log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
+
+	if classified.Skip {
+		return "", fmt.Errorf("content classified as meaningless, skipping")
+	}
 
 	entry := newKnowledgeEntry(classified, text, time.Now())
 

@@ -23,7 +23,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		WhisperModel:    "base",
-		MinSpeechDur:    3 * time.Second,
+		MinSpeechDur:    8 * time.Second,
 		SilenceDuration: 1500 * time.Millisecond,
 		SpeechThreshold: 0.5,
 		ClaudeModel:     "haiku",
