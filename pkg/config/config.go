@@ -9,8 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds user-configurable settings for the tatic pipeline.
-// Stored at ~/.tatic/config.yaml; missing file means all defaults apply.
+// Config holds user-configurable settings for the tacit pipeline.
+// Stored at ~/.tacit/config.yaml; missing file means all defaults apply.
 type Config struct {
 	WhisperModel    string        `yaml:"whisper_model"`
 	MinSpeechDur    time.Duration `yaml:"min_speech_duration"`
@@ -53,27 +53,27 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// BaseDir returns the root directory for the tatic knowledge base (~/.tatic).
+// BaseDir returns the root directory for the tacit knowledge base (~/.tacit).
 func BaseDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		// Fallback: this should not happen on supported platforms.
-		return filepath.Join(os.Getenv("HOME"), ".tatic")
+		return filepath.Join(os.Getenv("HOME"), ".tacit")
 	}
-	return filepath.Join(home, ".tatic")
+	return filepath.Join(home, ".tacit")
 }
 
-// ConfigPath returns the default config file path (~/.tatic/config.yaml).
+// ConfigPath returns the default config file path (~/.tacit/config.yaml).
 func ConfigPath() string {
 	return filepath.Join(BaseDir(), "config.yaml")
 }
 
-// ModelPath returns the path for a whisper model file (~/.tatic/models/ggml-{model}.bin).
+// ModelPath returns the path for a whisper model file (~/.tacit/models/ggml-{model}.bin).
 func ModelPath(model string) string {
 	return filepath.Join(BaseDir(), "models", "ggml-"+model+".bin")
 }
 
-// PIDPath returns the path for the daemon PID file (~/.tatic/tatic.pid).
+// PIDPath returns the path for the daemon PID file (~/.tacit/tacit.pid).
 func PIDPath() string {
-	return filepath.Join(BaseDir(), "tatic.pid")
+	return filepath.Join(BaseDir(), "tacit.pid")
 }

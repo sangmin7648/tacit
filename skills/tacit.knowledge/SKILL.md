@@ -1,14 +1,14 @@
 ---
-name: tatic.knowledge
+name: tacit.knowledge
 description: |
-  Query the local tatic knowledge database (~/.tatic/) for relevant context.
+  Query the local tacit knowledge database (~/.tacit/) for relevant context.
   TRIGGER when: user asks about topics that might have been previously captured — past conversations, meetings, decisions, ideas, learnings, or any domain knowledge. Also trigger when the user's question could benefit from previously stored knowledge context, even if they don't explicitly ask for it.
   DO NOT TRIGGER when: purely code-editing tasks, git operations, or questions clearly unrelated to stored knowledge.
 ---
 
-# tatic Knowledge Base Query
+# tacit Knowledge Base Query
 
-You are retrieving relevant knowledge from the user's local tatic knowledge database at `~/.tatic/`.
+You are retrieving relevant knowledge from the user's local tacit knowledge database at `~/.tacit/`.
 
 ## Knowledge File Format
 
@@ -27,22 +27,22 @@ created_at: "2006-01-02T15:04:05-07:00"
 원본 전사 내용
 ```
 
-Files are stored at: `~/.tatic/<category>/<subcategory>/YYYYMMDD-HHMMSS.md`
+Files are stored at: `~/.tacit/<category>/<subcategory>/YYYYMMDD-HHMMSS.md`
 
 ## Process
 
 1. **List categories** to understand what knowledge exists:
    ```
-   ls ~/.tatic/ (top-level categories)
-   ls ~/.tatic/<category>/ (subcategories and files)
+   ls ~/.tacit/ (top-level categories)
+   ls ~/.tacit/<category>/ (subcategories and files)
    ```
 
 2. **Identify relevant categories** based on the user's question or current conversation context.
 
 3. **List files** in relevant categories (sorted by date, most recent first):
    ```
-   ls -t ~/.tatic/<category>/
-   ls -t ~/.tatic/<category>/<subcategory>/
+   ls -t ~/.tacit/<category>/
+   ls -t ~/.tacit/<category>/<subcategory>/
    ```
 
 4. **Search for keywords** if the topic is specific:

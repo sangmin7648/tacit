@@ -1,4 +1,4 @@
-# Quickstart: tatic Development Setup
+# Quickstart: tacit Development Setup
 
 **Date**: 2026-03-28
 
@@ -14,13 +14,13 @@ That's it. whisper.cpp is vendored as a git submodule and built automatically. A
 
 ```bash
 # Clone and enter project
-git clone --recursive <repo-url> tatic
-cd tatic
+git clone --recursive <repo-url> tacit
+cd tacit
 
 # Verify Claude Code CLI is installed and authenticated
 claude --version
 
-# Build (builds whisper.cpp static lib + Go binary)
+# Build (builds whisper.cpp stacit lib + Go binary)
 make build
 
 # Run tests
@@ -29,23 +29,23 @@ make test
 
 ## Whisper Model
 
-Models are stored in `~/.tatic/models/` and auto-downloaded on first run.
+Models are stored in `~/.tacit/models/` and auto-downloaded on first run.
 
 To pre-download or use a different model:
 
 ```bash
-mkdir -p ~/.tatic/models
+mkdir -p ~/.tacit/models
 
 # Optional: Download small model for better Korean accuracy (~466 MB)
-curl -L -o ~/.tatic/models/ggml-small.bin \
+curl -L -o ~/.tacit/models/ggml-small.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 ```
 
-Then set `whisper_model: small` in `~/.tatic/config.yaml`.
+Then set `whisper_model: small` in `~/.tacit/config.yaml`.
 
 ## Configuration
 
-Optional. Create `~/.tatic/config.yaml` to override defaults:
+Optional. Create `~/.tacit/config.yaml` to override defaults:
 
 ```yaml
 # Whisper model size (tiny/base/small/medium/large)
@@ -73,30 +73,30 @@ anthropic_model: claude-haiku-4-5-20251001
 make build
 
 # Start voice capture daemon
-./tatic start
+./tacit start
 
 # Check daemon status
-./tatic status
+./tacit status
 
 # Stop daemon
-./tatic stop
+./tacit stop
 
 # Search knowledge
-./tatic search "에러 핸들링"
+./tacit search "에러 핸들링"
 
 # List knowledge entries
-./tatic list
-./tatic list --category "개발"
+./tacit list
+./tacit list --category "개발"
 ```
 
 ### MCP Server
 
 ```bash
 # Build the MCP server
-go build -o tatic-mcp ./cmd/mcp/
+go build -o tacit-mcp ./cmd/mcp/
 
 # Register with Claude Code (user scope)
-claude mcp add --transport stdio tatic --scope user -- ./tatic-mcp
+claude mcp add --transport stdio tacit --scope user -- ./tacit-mcp
 
 # Or add to .mcp.json for project scope
 ```
@@ -104,7 +104,7 @@ claude mcp add --transport stdio tatic --scope user -- ./tatic-mcp
 ## Project Structure
 
 ```
-cmd/cli/      — CLI entry point (tatic start/stop/status/search/list)
+cmd/cli/      — CLI entry point (tacit start/stop/status/search/list)
 cmd/mcp/      — MCP server entry point (stdio)
 pkg/audio/    — Audio capture + VAD
 pkg/stt/      — Whisper STT
@@ -152,4 +152,4 @@ On first run, macOS will prompt for microphone access. If denied:
 | `whisper.h not found` | Run `make clean && make build` to rebuild whisper.cpp |
 | `claude: command not found` | Install Claude Code CLI: `npm install -g @anthropic-ai/claude-code` and run `claude` to authenticate |
 | `Microphone permission denied` | Grant in macOS System Settings > Privacy & Security > Microphone |
-| `Stale PID file` | Delete `~/.tatic/tatic.pid` manually, or `tatic stop` handles it automatically |
+| `Stale PID file` | Delete `~/.tacit/tacit.pid` manually, or `tacit stop` handles it automatically |

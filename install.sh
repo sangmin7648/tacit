@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="rapportlabs/tatic"
+REPO="rapportlabs/tacit"
 INSTALL_DIR="$HOME/.local/bin"
 
 # ── Helpers ─────────────────────────────────────────────
@@ -25,16 +25,16 @@ info "Detected platform: $PLATFORM"
 
 # ── Resolve version ─────────────────────────────────────
 
-VERSION="${TATIC_VERSION:-latest}"
+VERSION="${TACIT_VERSION:-latest}"
 if [ "$VERSION" = "latest" ]; then
   VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)
   [ -n "$VERSION" ] || error "Failed to fetch latest version."
 fi
-info "Installing tatic $VERSION"
+info "Installing tacit $VERSION"
 
 # ── Download ────────────────────────────────────────────
 
-ARCHIVE="tatic-${VERSION}-${PLATFORM}.tar.gz"
+ARCHIVE="tacit-${VERSION}-${PLATFORM}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
 
 TMPDIR=$(mktemp -d)
@@ -48,8 +48,8 @@ tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
 
 mkdir -p "$INSTALL_DIR"
 
-cp "$TMPDIR/tatic" "$INSTALL_DIR/tatic"
-chmod +x "$INSTALL_DIR/tatic"
+cp "$TMPDIR/tacit" "$INSTALL_DIR/tacit"
+chmod +x "$INSTALL_DIR/tacit"
 
 # Bundle ten_vad.framework (macOS)
 if [ "$OS" = "darwin" ] && [ -d "$TMPDIR/ten_vad.framework" ]; then
@@ -71,4 +71,4 @@ case ":$PATH:" in
     ;;
 esac
 
-info "Done! Run 'tatic --help' to get started."
+info "Done! Run 'tacit --help' to get started."

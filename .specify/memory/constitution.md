@@ -16,7 +16,7 @@
 - **Follow-up TODOs**: None
 -->
 
-# STT Database (tatic) Constitution
+# STT Database (tacit) Constitution
 
 ## Core Principles
 
@@ -35,7 +35,7 @@ Rules:
 - Test coverage gaps MUST be justified in the PR description.
 - `go test ./...` MUST pass on every commit.
 
-**Rationale**: tatic processes ambient audio into a persistent
+**Rationale**: tacit processes ambient audio into a persistent
 knowledge store. Bugs in the pipeline (VAD, STT, preprocessing,
 storage) silently corrupt knowledge. TDD catches regressions early
 and documents intended behavior as executable specifications.
@@ -54,7 +54,7 @@ Every addition MUST earn its place:
 - If a design decision feels complex, document *why* the complexity
   is unavoidable in a code comment or PR description.
 
-**Rationale**: tatic operates as a local, always-on service.
+**Rationale**: tacit operates as a local, always-on service.
 Unnecessary complexity increases resource consumption, attack
 surface, and maintenance burden on a system that MUST be reliable
 and lightweight.
@@ -91,7 +91,7 @@ and lightweight.
 
 ## Governance
 
-This constitution is the highest-authority document for tatic
+This constitution is the highest-authority document for tacit
 development practices. All other guidelines, templates, and ad-hoc
 decisions are subordinate.
 

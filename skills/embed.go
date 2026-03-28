@@ -2,5 +2,5 @@ package skills
 
 import "embed"
 
-//go:embed tatic.knowledge/SKILL.md
+//go:embed tacit.knowledge/SKILL.md
 var FS embed.FS

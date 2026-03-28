@@ -3,7 +3,7 @@
 WHISPER_DIR  := third_party/whisper.cpp
 WHISPER_BUILD := $(WHISPER_DIR)/build
 
-# Static libraries produced by whisper.cpp cmake build
+# Stacit libraries produced by whisper.cpp cmake build
 WHISPER_LIBS := \
 	$(WHISPER_BUILD)/src/libwhisper.a \
 	$(WHISPER_BUILD)/ggml/src/libggml.a \
@@ -33,12 +33,12 @@ export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFOR
 TEN_VAD_FRAMEWORK := third_party/ten-vad/lib/macOS/ten_vad.framework
 
 build: whisper-lib
-	go build -o tatic ./cmd/tatic/
+	go build -o tacit ./cmd/tacit/
 ifeq ($(UNAME_S),Darwin)
 	@echo "Bundling ten_vad.framework..."
 	rm -rf ten_vad.framework
 	cp -R $(TEN_VAD_FRAMEWORK) ten_vad.framework
-	install_name_tool -rpath "$$(otool -l tatic | grep -A2 LC_RPATH | grep path | awk '{print $$2}')" @executable_path tatic
+	install_name_tool -rpath "$$(otool -l tacit | grep -A2 LC_RPATH | grep path | awk '{print $$2}')" @executable_path tacit
 endif
 
 test: whisper-lib
@@ -48,7 +48,7 @@ whisper-lib: $(WHISPER_BUILD)/src/libwhisper.a
 
 $(WHISPER_BUILD)/src/libwhisper.a:
 	@command -v cmake >/dev/null 2>&1 || { echo "Error: cmake is required. Install with: brew install cmake"; exit 1; }
-	@echo "Building whisper.cpp static libraries..."
+	@echo "Building whisper.cpp stacit libraries..."
 	cmake -B $(WHISPER_BUILD) -S $(WHISPER_DIR) \
 		-DBUILD_SHARED_LIBS=OFF \
 		-DWHISPER_BUILD_EXAMPLES=OFF \
@@ -58,22 +58,22 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 	cmake --build $(WHISPER_BUILD) --config Release -j
 
 e2e-test: build
-	./tatic process testdata/test_voice_recording.m4a
+	./tacit process testdata/test_voice_recording.m4a
 
 INSTALL_DIR := $(HOME)/.local/bin
 
 install: build
 	@mkdir -p $(INSTALL_DIR)
-	cp tatic $(INSTALL_DIR)/tatic
-	chmod +x $(INSTALL_DIR)/tatic
+	cp tacit $(INSTALL_DIR)/tacit
+	chmod +x $(INSTALL_DIR)/tacit
 ifeq ($(UNAME_S),Darwin)
 	rm -rf $(INSTALL_DIR)/ten_vad.framework
 	cp -R ten_vad.framework $(INSTALL_DIR)/ten_vad.framework
 endif
-	@echo "Installed to $(INSTALL_DIR)/tatic"
+	@echo "Installed to $(INSTALL_DIR)/tacit"
 
 clean:
 	rm -rf $(WHISPER_BUILD)
 	rm -rf ten_vad.framework
-	rm -f tatic
+	rm -f tacit
 	go clean
