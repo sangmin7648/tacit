@@ -13,7 +13,7 @@
 
 **Language/Version**: Go (latest stable, 1.23+)
 **Primary Dependencies**: plandem/silero-go (VAD+audio), whisper.cpp Go bindings (STT), Claude Code CLI via os/exec (post-processing), modelcontextprotocol/go-sdk (MCP)
-**Storage**: Local filesystem (`~/.sttdb/`) — markdown files with YAML frontmatter, hierarchical category directories
+**Storage**: Local filesystem (`~/.tatic/`) — markdown files with YAML frontmatter, hierarchical category directories
 **Testing**: `go test ./...` (TDD strict per constitution)
 **Target Platform**: macOS (primary), Linux (secondary)
 **Project Type**: CLI daemon + MCP server (core library + multiple entry points)
@@ -33,7 +33,7 @@
 | **II. Simplicity/YAGNI** | PASS | 4 external Go dependencies + Claude Code CLI (runtime). Each justified by a core requirement. No plugin system, no feature flags. Phase 2 (desktop app) deferred. |
 | **Tech: Go** | PASS | Go latest stable |
 | **Tech: VAD→STT pipeline** | PASS | Silero VAD activates Whisper only on speech detection. No continuous STT streaming. |
-| **Tech: Local-first storage** | PASS | All knowledge stored as local markdown files in `~/.sttdb/`. No external DB. |
+| **Tech: Local-first storage** | PASS | All knowledge stored as local markdown files in `~/.tatic/`. No external DB. |
 | **Tech: Preprocessing** | PASS | Claude Code CLI generates title/summary/category before storage. Files are query-ready. |
 | **Tech: AI Agent Interface** | PASS | MCP server exposes search/list/get tools via official Go SDK. |
 | **Tech: Resource Efficiency** | PASS | Silero VAD: 0.43% CPU during continuous monitoring. Whisper only runs on speech segments. |
@@ -64,11 +64,11 @@ specs/001-stt-knowledge-db/
 ### Source Code (repository root)
 
 ```text
-sttdb/
+tatic/
 ├── testdata/
 │   └── test_voice_recording.m4a  # E2E 테스트용 음성 파일
 ├── cmd/
-│   └── sttdb/           # Single binary entry point (start/stop/status/search/list/mcp)
+│   └── tatic/           # Single binary entry point (start/stop/status/search/list/mcp)
 │       └── main.go
 ├── pkg/
 │   ├── audio/           # Audio capture + VAD integration
@@ -87,7 +87,7 @@ sttdb/
 │   │   ├── search.go    # File glob + keyword matching search
 │   │   └── listing.go   # Directory traversal and listing
 │   ├── config/          # Configuration management
-│   │   └── config.go    # YAML config loading from ~/.sttdb/config.yaml
+│   │   └── config.go    # YAML config loading from ~/.tatic/config.yaml
 │   ├── daemon/          # Daemon lifecycle management
 │   │   └── pid.go       # PID file management + stale detection
 │   └── pipeline/        # Pipeline orchestration
@@ -96,15 +96,15 @@ sttdb/
 └── go.sum
 ```
 
-**Structure Decision**: Go idiomatic `cmd/` + `pkg/` layout, matching the spec's "코어 라이브러리 + 다중 진입점" architecture. Each `pkg/` package is independently testable. Single `sttdb` binary with subcommands (`start`, `stop`, `status`, `search`, `list`, `mcp`) — the `mcp` subcommand starts the MCP server (stdio transport).
+**Structure Decision**: Go idiomatic `cmd/` + `pkg/` layout, matching the spec's "코어 라이브러리 + 다중 진입점" architecture. Each `pkg/` package is independently testable. Single `tatic` binary with subcommands (`start`, `stop`, `status`, `search`, `list`, `mcp`) — the `mcp` subcommand starts the MCP server (stdio transport).
 
 ### Daemonization Strategy
 
-`sttdb start`는 현재 프로세스에서 파이프라인을 실행한다 (foreground 모드). 백그라운드 실행은 사용자가 `sttdb start &` 또는 `nohup sttdb start &`로 처리한다. Go는 Unix fork를 네이티브로 지원하지 않으므로, 자체 daemonization은 구현하지 않는다 (YAGNI).
+`tatic start`는 현재 프로세스에서 파이프라인을 실행한다 (foreground 모드). 백그라운드 실행은 사용자가 `tatic start &` 또는 `nohup tatic start &`로 처리한다. Go는 Unix fork를 네이티브로 지원하지 않으므로, 자체 daemonization은 구현하지 않는다 (YAGNI).
 
-- `sttdb start`: 포그라운드에서 파이프라인 실행, PID 파일 기록, Ctrl+C (SIGINT/SIGTERM)로 graceful shutdown
-- `sttdb stop`: PID 파일에서 프로세스 ID를 읽어 SIGTERM 전송
-- `sttdb status`: PID 파일 존재 + 프로세스 생존 여부 확인
+- `tatic start`: 포그라운드에서 파이프라인 실행, PID 파일 기록, Ctrl+C (SIGINT/SIGTERM)로 graceful shutdown
+- `tatic stop`: PID 파일에서 프로세스 ID를 읽어 SIGTERM 전송
+- `tatic status`: PID 파일 존재 + 프로세스 생존 여부 확인
 
 ## Test Strategy
 
@@ -129,9 +129,9 @@ sttdb/
 //go:build integration
 
 func TestWhisperTranscribe_RealAudio(t *testing.T) {
-    modelPath := os.Getenv("STTDB_WHISPER_MODEL")
+    modelPath := os.Getenv("TATIC_WHISPER_MODEL")
     if modelPath == "" {
-        t.Skip("STTDB_WHISPER_MODEL not set, skipping integration test")
+        t.Skip("TATIC_WHISPER_MODEL not set, skipping integration test")
     }
 
     // 1. m4a → 16kHz mono float32 PCM 변환
@@ -191,9 +191,9 @@ func TestClassify_RealCLI(t *testing.T) {
 //go:build integration
 
 func TestPipeline_AudioFileToKnowledgeEntry(t *testing.T) {
-    modelPath := os.Getenv("STTDB_WHISPER_MODEL")
+    modelPath := os.Getenv("TATIC_WHISPER_MODEL")
     if modelPath == "" {
-        t.Skip("STTDB_WHISPER_MODEL not set")
+        t.Skip("TATIC_WHISPER_MODEL not set")
     }
     if _, err := exec.LookPath("claude"); err != nil {
         t.Skip("claude CLI not found")
@@ -288,11 +288,11 @@ miniaudio는 m4a(AAC), wav, mp3, flac 등을 지원하므로 `plandem/silero-go`
 go test ./...
 
 # Integration tests (Whisper 모델 + Claude CLI 필요, 로컬 실행)
-STTDB_WHISPER_MODEL=~/.sttdb/models/ggml-base.bin \
+TATIC_WHISPER_MODEL=~/.tatic/models/ggml-base.bin \
   go test -tags integration -v -timeout 120s ./...
 
 # 특정 E2E 테스트만 실행
-STTDB_WHISPER_MODEL=~/.sttdb/models/ggml-base.bin \
+TATIC_WHISPER_MODEL=~/.tatic/models/ggml-base.bin \
   go test -tags integration -v -run TestPipeline_AudioFileToKnowledgeEntry ./pkg/pipeline/
 ```
 

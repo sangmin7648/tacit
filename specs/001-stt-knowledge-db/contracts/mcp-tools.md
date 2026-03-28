@@ -1,15 +1,15 @@
-# MCP Tool Contracts: sttdb Knowledge Server
+# MCP Tool Contracts: tatic Knowledge Server
 
 **Date**: 2026-03-28
 **Transport**: stdio
 **SDK**: `modelcontextprotocol/go-sdk` v1.0+
-**Server Name**: `sttdb`
+**Server Name**: `tatic`
 
 ## Server Capabilities
 
 ```json
 {
-  "name": "sttdb",
+  "name": "tatic",
   "version": "1.0.0",
   "capabilities": {
     "tools": {}
@@ -302,8 +302,8 @@ All tools follow MCP error conventions:
 ```json
 {
   "mcpServers": {
-    "sttdb": {
-      "command": "sttdb",
+    "tatic": {
+      "command": "tatic",
       "args": ["mcp"],
       "env": {}
     }
@@ -314,10 +314,10 @@ All tools follow MCP error conventions:
 ### Claude Code (user scope)
 
 ```bash
-claude mcp add --transport stdio sttdb --scope user -- sttdb mcp
+claude mcp add --transport stdio tatic --scope user -- tatic mcp
 ```
 
-> **Note**: `sttdb` is a single binary. The `mcp` subcommand starts the MCP server in stdio mode.
+> **Note**: `tatic` is a single binary. The `mcp` subcommand starts the MCP server in stdio mode.
 
 ### Claude Desktop
 
@@ -325,8 +325,8 @@ claude mcp add --transport stdio sttdb --scope user -- sttdb mcp
 ```json
 {
   "mcpServers": {
-    "sttdb": {
-      "command": "sttdb",
+    "tatic": {
+      "command": "tatic",
       "args": ["mcp"]
     }
   }

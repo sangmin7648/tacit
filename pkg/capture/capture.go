@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gen2brain/malgo"
-	"github.com/rapportlabs/sttdb/pkg/audio"
+	"github.com/rapportlabs/tatic/pkg/audio"
 )
 
 const Channels = 1

@@ -132,7 +132,7 @@ func TestBaseDir(t *testing.T) {
 		t.Fatalf("cannot determine home dir: %v", err)
 	}
 
-	want := filepath.Join(home, ".sttdb")
+	want := filepath.Join(home, ".tatic")
 	got := BaseDir()
 	if got != want {
 		t.Errorf("BaseDir: got %q, want %q", got, want)

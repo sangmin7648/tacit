@@ -8,9 +8,9 @@
 
 한 번의 음성 발화에서 생성된 지식 단위. 마크다운 파일로 저장된다.
 
-**File Path Pattern**: `~/.sttdb/{category}/{subcategory?}/{timestamp}.md`
-- Example: `~/.sttdb/개발/에러처리/20260328-143052.md`
-- Example: `~/.sttdb/잡담/20260328-150000.md`
+**File Path Pattern**: `~/.tatic/{category}/{subcategory?}/{timestamp}.md`
+- Example: `~/.tatic/개발/에러처리/20260328-143052.md`
+- Example: `~/.tatic/잡담/20260328-150000.md`
 
 **YAML Frontmatter Fields**:
 
@@ -69,9 +69,9 @@ type KnowledgeEntry struct {
 
 ### 2. Config (설정)
 
-사용자 설정. `~/.sttdb/config.yaml`에 저장. 파일이 없으면 기본값으로 동작.
+사용자 설정. `~/.tatic/config.yaml`에 저장. 파일이 없으면 기본값으로 동작.
 
-**File Path**: `~/.sttdb/config.yaml`
+**File Path**: `~/.tatic/config.yaml`
 
 **Fields**:
 
@@ -124,9 +124,9 @@ type AudioSegment struct {
 ## Knowledge Base Directory Structure
 
 ```text
-~/.sttdb/
+~/.tatic/
 ├── config.yaml                         # 사용자 설정 (optional)
-├── sttdb.pid                           # 데몬 PID 파일 (runtime)
+├── tatic.pid                           # 데몬 PID 파일 (runtime)
 ├── 개발/
 │   ├── 에러처리/
 │   │   ├── 20260328-143052.md

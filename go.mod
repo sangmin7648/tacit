@@ -1,4 +1,4 @@
-module github.com/rapportlabs/sttdb
+module github.com/rapportlabs/tatic
 
 go 1.26.1
 

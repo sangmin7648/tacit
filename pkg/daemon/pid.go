@@ -1,5 +1,5 @@
 // Package daemon provides PID file management with stale detection
-// for the sttdb daemon process.
+// for the tatic daemon process.
 package daemon
 
 import (

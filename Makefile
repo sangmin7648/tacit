@@ -33,12 +33,12 @@ export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFOR
 TEN_VAD_FRAMEWORK := third_party/ten-vad/lib/macOS/ten_vad.framework
 
 build: whisper-lib
-	go build -o sttdb ./cmd/sttdb/
+	go build -o tatic ./cmd/tatic/
 ifeq ($(UNAME_S),Darwin)
 	@echo "Bundling ten_vad.framework..."
 	rm -rf ten_vad.framework
 	cp -R $(TEN_VAD_FRAMEWORK) ten_vad.framework
-	install_name_tool -rpath "$$(otool -l sttdb | grep -A2 LC_RPATH | grep path | awk '{print $$2}')" @executable_path sttdb
+	install_name_tool -rpath "$$(otool -l tatic | grep -A2 LC_RPATH | grep path | awk '{print $$2}')" @executable_path tatic
 endif
 
 test: whisper-lib
@@ -58,22 +58,22 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 	cmake --build $(WHISPER_BUILD) --config Release -j
 
 e2e-test: build
-	./sttdb process testdata/test_voice_recording.m4a
+	./tatic process testdata/test_voice_recording.m4a
 
 INSTALL_DIR := $(HOME)/.local/bin
 
 install: build
 	@mkdir -p $(INSTALL_DIR)
-	cp sttdb $(INSTALL_DIR)/sttdb
-	chmod +x $(INSTALL_DIR)/sttdb
+	cp tatic $(INSTALL_DIR)/tatic
+	chmod +x $(INSTALL_DIR)/tatic
 ifeq ($(UNAME_S),Darwin)
 	rm -rf $(INSTALL_DIR)/ten_vad.framework
 	cp -R ten_vad.framework $(INSTALL_DIR)/ten_vad.framework
 endif
-	@echo "Installed to $(INSTALL_DIR)/sttdb"
+	@echo "Installed to $(INSTALL_DIR)/tatic"
 
 clean:
 	rm -rf $(WHISPER_BUILD)
 	rm -rf ten_vad.framework
-	rm -f sttdb
+	rm -f tatic
 	go clean

@@ -53,7 +53,7 @@
 | `small` | 466 MB | ~852 MB | ~10-18% | ~4x real-time |
 | `small` (fine-tuned Korean) | ~484 MB | ~852 MB | ~6.45% | ~4x real-time |
 
-**Recommendation**: Start with `base` as default per spec (speed/size balance), but design STT interface to be model-agnostic. Users switch via `~/.sttdb/config.yaml`. Document that `small` or fine-tuned Korean models are recommended for better Korean accuracy.
+**Recommendation**: Start with `base` as default per spec (speed/size balance), but design STT interface to be model-agnostic. Users switch via `~/.tatic/config.yaml`. Document that `small` or fine-tuned Korean models are recommended for better Korean accuracy.
 
 **Audio Format**: 16 kHz, mono, float32 (normalized [-1.0, 1.0]). Convert int16 samples by dividing by 32768.0.
 
@@ -168,7 +168,7 @@ output, err := cmd.Output()
 
 ## Decision 6: Daemon Management
 
-**Decision**: PID file (`~/.sttdb/sttdb.pid`) with stale PID detection
+**Decision**: PID file (`~/.tatic/tatic.pid`) with stale PID detection
 
 **Rationale**:
 - Simplest daemon management approach for a single-user local service
@@ -176,7 +176,7 @@ output, err := cmd.Output()
 - Automatic cleanup of stale PIDs (process crashed/killed)
 - No dependency on systemd, launchd, or other init systems
 
-**Implementation**: `sttdb start` forks daemon, writes PID. `sttdb stop` reads PID, sends SIGTERM. `sttdb status` checks PID liveness.
+**Implementation**: `tatic start` forks daemon, writes PID. `tatic stop` reads PID, sends SIGTERM. `tatic status` checks PID liveness.
 
 ---
 

@@ -9,13 +9,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds user-configurable settings for the sttdb pipeline.
-// Stored at ~/.sttdb/config.yaml; missing file means all defaults apply.
+// Config holds user-configurable settings for the tatic pipeline.
+// Stored at ~/.tatic/config.yaml; missing file means all defaults apply.
 type Config struct {
 	WhisperModel    string        `yaml:"whisper_model"`
 	MinSpeechDur    time.Duration `yaml:"min_speech_duration"`
 	SilenceDuration time.Duration `yaml:"silence_duration"`
 	SpeechThreshold float64       `yaml:"speech_threshold"`
+	EnergyThreshold float64       `yaml:"energy_threshold"`
 	ClaudeModel     string        `yaml:"claude_model"`
 }
 
@@ -26,6 +27,7 @@ func DefaultConfig() *Config {
 		MinSpeechDur:    8 * time.Second,
 		SilenceDuration: 1500 * time.Millisecond,
 		SpeechThreshold: 0.5,
+		EnergyThreshold: 200,
 		ClaudeModel:     "haiku",
 	}
 }
@@ -51,27 +53,27 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// BaseDir returns the root directory for the sttdb knowledge base (~/.sttdb).
+// BaseDir returns the root directory for the tatic knowledge base (~/.tatic).
 func BaseDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		// Fallback: this should not happen on supported platforms.
-		return filepath.Join(os.Getenv("HOME"), ".sttdb")
+		return filepath.Join(os.Getenv("HOME"), ".tatic")
 	}
-	return filepath.Join(home, ".sttdb")
+	return filepath.Join(home, ".tatic")
 }
 
-// ConfigPath returns the default config file path (~/.sttdb/config.yaml).
+// ConfigPath returns the default config file path (~/.tatic/config.yaml).
 func ConfigPath() string {
 	return filepath.Join(BaseDir(), "config.yaml")
 }
 
-// ModelPath returns the path for a whisper model file (~/.sttdb/models/ggml-{model}.bin).
+// ModelPath returns the path for a whisper model file (~/.tatic/models/ggml-{model}.bin).
 func ModelPath(model string) string {
 	return filepath.Join(BaseDir(), "models", "ggml-"+model+".bin")
 }
 
-// PIDPath returns the path for the daemon PID file (~/.sttdb/sttdb.pid).
+// PIDPath returns the path for the daemon PID file (~/.tatic/tatic.pid).
 func PIDPath() string {
-	return filepath.Join(BaseDir(), "sttdb.pid")
+	return filepath.Join(BaseDir(), "tatic.pid")
 }

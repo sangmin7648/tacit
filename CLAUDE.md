@@ -1,4 +1,4 @@
-# sttdb Development Guidelines
+# tatic Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-28
 
@@ -9,7 +9,7 @@ Auto-generated from all feature plans. Last updated: 2026-03-28
 ## Project Structure
 
 ```text
-cmd/sttdb/     — CLI entry point
+cmd/tatic/     — CLI entry point
 pkg/audio/     — Audio decoding (AudioToolbox on macOS, ffmpeg fallback) + segment buffer
 pkg/capture/   — Real-time microphone capture (malgo/miniaudio)
 pkg/vad/       — Voice Activity Detection (ten-vad, prebuilt framework)

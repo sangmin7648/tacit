@@ -4,17 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 
-	"github.com/rapportlabs/sttdb/pkg/audio"
-	"github.com/rapportlabs/sttdb/pkg/capture"
-	"github.com/rapportlabs/sttdb/pkg/config"
-	"github.com/rapportlabs/sttdb/pkg/model"
-	"github.com/rapportlabs/sttdb/pkg/process"
-	"github.com/rapportlabs/sttdb/pkg/stt"
-	"github.com/rapportlabs/sttdb/pkg/storage"
-	"github.com/rapportlabs/sttdb/pkg/vad"
+	"github.com/rapportlabs/tatic/pkg/audio"
+	"github.com/rapportlabs/tatic/pkg/capture"
+	"github.com/rapportlabs/tatic/pkg/config"
+	"github.com/rapportlabs/tatic/pkg/model"
+	"github.com/rapportlabs/tatic/pkg/process"
+	"github.com/rapportlabs/tatic/pkg/stt"
+	"github.com/rapportlabs/tatic/pkg/storage"
+	"github.com/rapportlabs/tatic/pkg/vad"
 )
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
@@ -70,7 +71,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		return fmt.Errorf("init vad: %w", err)
 	}
 	defer v.Close()
-	log.Printf("VAD initialized (hop=%d, threshold=%.2f)", hopSize, p.cfg.SpeechThreshold)
+	log.Printf("VAD initialized (hop=%d, threshold=%.2f, energy=%.0f)", hopSize, p.cfg.SpeechThreshold, p.cfg.EnergyThreshold)
 
 	// Init microphone capture
 	mic, err := capture.New()
@@ -115,6 +116,18 @@ func (p *Pipeline) Run(ctx context.Context) error {
 			if err != nil {
 				log.Printf("VAD error: %v", err)
 				continue
+			}
+
+			// Energy gate: ignore VAD result if frame RMS is below threshold
+			if isSpeech && p.cfg.EnergyThreshold > 0 {
+				var sum float64
+				for _, s := range frame {
+					sum += float64(s) * float64(s)
+				}
+				rms := math.Sqrt(sum / float64(len(frame)))
+				if rms < p.cfg.EnergyThreshold {
+					isSpeech = false
+				}
 			}
 
 			if isSpeech {

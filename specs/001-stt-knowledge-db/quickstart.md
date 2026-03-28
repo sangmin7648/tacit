@@ -1,4 +1,4 @@
-# Quickstart: sttdb Development Setup
+# Quickstart: tatic Development Setup
 
 **Date**: 2026-03-28
 
@@ -14,8 +14,8 @@ That's it. whisper.cpp is vendored as a git submodule and built automatically. A
 
 ```bash
 # Clone and enter project
-git clone --recursive <repo-url> sttdb
-cd sttdb
+git clone --recursive <repo-url> tatic
+cd tatic
 
 # Verify Claude Code CLI is installed and authenticated
 claude --version
@@ -29,23 +29,23 @@ make test
 
 ## Whisper Model
 
-Models are stored in `~/.sttdb/models/` and auto-downloaded on first run.
+Models are stored in `~/.tatic/models/` and auto-downloaded on first run.
 
 To pre-download or use a different model:
 
 ```bash
-mkdir -p ~/.sttdb/models
+mkdir -p ~/.tatic/models
 
 # Optional: Download small model for better Korean accuracy (~466 MB)
-curl -L -o ~/.sttdb/models/ggml-small.bin \
+curl -L -o ~/.tatic/models/ggml-small.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
 ```
 
-Then set `whisper_model: small` in `~/.sttdb/config.yaml`.
+Then set `whisper_model: small` in `~/.tatic/config.yaml`.
 
 ## Configuration
 
-Optional. Create `~/.sttdb/config.yaml` to override defaults:
+Optional. Create `~/.tatic/config.yaml` to override defaults:
 
 ```yaml
 # Whisper model size (tiny/base/small/medium/large)
@@ -73,30 +73,30 @@ anthropic_model: claude-haiku-4-5-20251001
 make build
 
 # Start voice capture daemon
-./sttdb start
+./tatic start
 
 # Check daemon status
-./sttdb status
+./tatic status
 
 # Stop daemon
-./sttdb stop
+./tatic stop
 
 # Search knowledge
-./sttdb search "에러 핸들링"
+./tatic search "에러 핸들링"
 
 # List knowledge entries
-./sttdb list
-./sttdb list --category "개발"
+./tatic list
+./tatic list --category "개발"
 ```
 
 ### MCP Server
 
 ```bash
 # Build the MCP server
-go build -o sttdb-mcp ./cmd/mcp/
+go build -o tatic-mcp ./cmd/mcp/
 
 # Register with Claude Code (user scope)
-claude mcp add --transport stdio sttdb --scope user -- ./sttdb-mcp
+claude mcp add --transport stdio tatic --scope user -- ./tatic-mcp
 
 # Or add to .mcp.json for project scope
 ```
@@ -104,7 +104,7 @@ claude mcp add --transport stdio sttdb --scope user -- ./sttdb-mcp
 ## Project Structure
 
 ```
-cmd/cli/      — CLI entry point (sttdb start/stop/status/search/list)
+cmd/cli/      — CLI entry point (tatic start/stop/status/search/list)
 cmd/mcp/      — MCP server entry point (stdio)
 pkg/audio/    — Audio capture + VAD
 pkg/stt/      — Whisper STT
@@ -152,4 +152,4 @@ On first run, macOS will prompt for microphone access. If denied:
 | `whisper.h not found` | Run `make clean && make build` to rebuild whisper.cpp |
 | `claude: command not found` | Install Claude Code CLI: `npm install -g @anthropic-ai/claude-code` and run `claude` to authenticate |
 | `Microphone permission denied` | Grant in macOS System Settings > Privacy & Security > Microphone |
-| `Stale PID file` | Delete `~/.sttdb/sttdb.pid` manually, or `sttdb stop` handles it automatically |
+| `Stale PID file` | Delete `~/.tatic/tatic.pid` manually, or `tatic stop` handles it automatically |

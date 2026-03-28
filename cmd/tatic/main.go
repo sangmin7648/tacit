@@ -11,10 +11,10 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/rapportlabs/sttdb/pkg/config"
-	"github.com/rapportlabs/sttdb/pkg/daemon"
-	"github.com/rapportlabs/sttdb/pkg/pipeline"
-	"github.com/rapportlabs/sttdb/skills"
+	"github.com/rapportlabs/tatic/pkg/config"
+	"github.com/rapportlabs/tatic/pkg/daemon"
+	"github.com/rapportlabs/tatic/pkg/pipeline"
+	"github.com/rapportlabs/tatic/skills"
 )
 
 func main() {
@@ -47,14 +47,14 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, `sttdb - STT Knowledge DB
+	fmt.Fprintf(os.Stderr, `tatic - STT Knowledge DB
 
 Usage:
-  sttdb setup                  Install Claude Code skill for knowledge base
-  sttdb process <audio-file>   Process an audio file into a knowledge entry
-  sttdb start                  Start the voice capture daemon (foreground)
-  sttdb stop                   Stop the voice capture daemon
-  sttdb status                 Check daemon status
+  tatic setup                  Install Claude Code skill for knowledge base
+  tatic process <audio-file>   Process an audio file into a knowledge entry
+  tatic start                  Start the voice capture daemon (foreground)
+  tatic stop                   Stop the voice capture daemon
+  tatic status                 Check daemon status
 `)
 }
 
@@ -105,7 +105,7 @@ func cmdSetup() {
 // cmdProcess handles the "process" subcommand: audio file → knowledge entry.
 func cmdProcess(cfg *config.Config) {
 	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: sttdb process <audio-file>\n")
+		fmt.Fprintf(os.Stderr, "Usage: tatic process <audio-file>\n")
 		os.Exit(1)
 	}
 
@@ -166,14 +166,14 @@ func cmdStart(cfg *config.Config) {
 		cancel()
 	}()
 
-	log.Printf("sttdb daemon started (PID: %d)", os.Getpid())
+	log.Printf("tatic daemon started (PID: %d)", os.Getpid())
 	log.Printf("Knowledge base: %s", config.BaseDir())
 	log.Printf("Press Ctrl+C to stop")
 
 	if err := p.Run(ctx); err != nil {
 		log.Printf("Pipeline error: %v", err)
 	}
-	log.Printf("sttdb daemon stopped")
+	log.Printf("tatic daemon stopped")
 }
 
 // cmdStop sends SIGTERM to the running daemon.
@@ -182,13 +182,13 @@ func cmdStop() {
 
 	pid, err := daemon.ReadPID(pidPath)
 	if err != nil {
-		fmt.Println("sttdb is not running")
+		fmt.Println("tatic is not running")
 		return
 	}
 
 	if !daemon.IsRunning(pid) {
 		daemon.RemovePID(pidPath)
-		fmt.Println("sttdb is not running (stale PID cleaned)")
+		fmt.Println("tatic is not running (stale PID cleaned)")
 		return
 	}
 
@@ -201,7 +201,7 @@ func cmdStop() {
 		log.Fatalf("Failed to send SIGTERM to %d: %v", pid, err)
 	}
 
-	fmt.Printf("Sent SIGTERM to sttdb (PID: %d)\n", pid)
+	fmt.Printf("Sent SIGTERM to tatic (PID: %d)\n", pid)
 }
 
 // cmdStatus checks if the daemon is running.
@@ -210,14 +210,14 @@ func cmdStatus() {
 
 	pid, err := daemon.ReadPID(pidPath)
 	if err != nil {
-		fmt.Println("sttdb is not running")
+		fmt.Println("tatic is not running")
 		return
 	}
 
 	if daemon.IsRunning(pid) {
-		fmt.Printf("sttdb is running (PID: %d)\n", pid)
+		fmt.Printf("tatic is running (PID: %d)\n", pid)
 	} else {
 		daemon.RemovePID(pidPath)
-		fmt.Println("sttdb is not running (stale PID cleaned)")
+		fmt.Println("tatic is not running (stale PID cleaned)")
 	}
 }
