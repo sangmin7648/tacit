@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-14
+            os: darwin
+            arch: arm64
+          - runner: macos-13
+            os: darwin
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: make build
+
+      - name: Ad-hoc code sign
+        run: codesign --force --sign - tacit
+
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          ARCHIVE="tacit-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz"
+          tar -czf "${ARCHIVE}" tacit ten_vad.framework
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tacit-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ env.ARCHIVE }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tacit-*.tar.gz
+          generate_release_notes: true

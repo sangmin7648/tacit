@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="rapportlabs/tacit"
+REPO="sangmin7648/tacit"
 INSTALL_DIR="$HOME/.local/bin"
 
 # ── Helpers ─────────────────────────────────────────────

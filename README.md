@@ -76,13 +76,13 @@ graph TD
 ### Quick Install (prebuilt binary)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rapportlabs/tacit/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/sangmin7648/tacit/main/install.sh | sh
 ```
 
 또는 버전 지정:
 
 ```bash
-TACIT_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/rapportlabs/tacit/main/install.sh | sh
+TACIT_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/sangmin7648/tacit/main/install.sh | sh
 ```
 
 ### Build from Source
@@ -90,7 +90,7 @@ TACIT_VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/rapportlabs/ta
 **요구사항:** Go 1.23+, CMake, macOS (Metal GPU 가속 지원)
 
 ```bash
-git clone --recursive https://github.com/rapportlabs/tacit.git
+git clone --recursive https://github.com/sangmin7648/tacit.git
 cd tacit
 make build
 make install   # ~/.local/bin/tacit에 설치
