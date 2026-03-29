@@ -6,13 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 )
 
 // WritePID writes the current process PID to the specified file path.
+// It creates the parent directory if it does not exist.
 func WritePID(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("creating PID directory: %w", err)
+	}
 	pid := os.Getpid()
 	data := []byte(strconv.Itoa(pid) + "\n")
 	return os.WriteFile(path, data, 0644)
