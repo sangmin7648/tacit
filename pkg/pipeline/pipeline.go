@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rapportlabs/tacit/pkg/audio"
-	"github.com/rapportlabs/tacit/pkg/capture"
-	"github.com/rapportlabs/tacit/pkg/config"
-	"github.com/rapportlabs/tacit/pkg/model"
-	"github.com/rapportlabs/tacit/pkg/process"
-	"github.com/rapportlabs/tacit/pkg/stt"
-	"github.com/rapportlabs/tacit/pkg/storage"
-	"github.com/rapportlabs/tacit/pkg/vad"
+	"github.com/sangmin7648/tacit/pkg/audio"
+	"github.com/sangmin7648/tacit/pkg/capture"
+	"github.com/sangmin7648/tacit/pkg/config"
+	"github.com/sangmin7648/tacit/pkg/model"
+	"github.com/sangmin7648/tacit/pkg/process"
+	"github.com/sangmin7648/tacit/pkg/stt"
+	"github.com/sangmin7648/tacit/pkg/storage"
+	"github.com/sangmin7648/tacit/pkg/vad"
 )
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.

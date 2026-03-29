@@ -11,10 +11,10 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"github.com/rapportlabs/tacit/pkg/config"
-	"github.com/rapportlabs/tacit/pkg/daemon"
-	"github.com/rapportlabs/tacit/pkg/pipeline"
-	"github.com/rapportlabs/tacit/skills"
+	"github.com/sangmin7648/tacit/pkg/config"
+	"github.com/sangmin7648/tacit/pkg/daemon"
+	"github.com/sangmin7648/tacit/pkg/pipeline"
+	"github.com/sangmin7648/tacit/skills"
 )
 
 func main() {

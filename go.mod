@@ -1,4 +1,4 @@
-module github.com/rapportlabs/tacit
+module github.com/sangmin7648/tacit
 
 go 1.26.1
 
