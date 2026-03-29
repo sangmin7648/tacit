@@ -8,9 +8,16 @@ import (
 	"strings"
 )
 
-const singleSystemPrompt = `STT→JSON만. {"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}만출력. 의미없는소리/잡음/불분명한말이면 {"skip":true}만출력`
+const singleSystemPrompt = `You are a speech-to-text classifier. Output only valid JSON, no extra text.
+Format: {"title":"brief topic of what was said (not the category)","summary":"one sentence summary of the content","category":"category(max 2 levels)"}
+Example: input="오늘 회의에서 일정 조율했어" → {"title":"일정 조율","summary":"오늘 회의에서 일정을 조율했다","category":"업무/회의"}
+If the input is meaningless noise or unclear, output only: {"skip":true}
+All JSON values must be in the same language as the input text.`
 
-const batchSystemPrompt = `STT텍스트들→JSON만. {"results":[{"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}]}만출력. 순서유지. 의미없는소리/잡음/불분명한말은 {"skip":true}로`
+const batchSystemPrompt = `You are a speech-to-text classifier. Output only valid JSON, no extra text.
+Format: {"results":[{"title":"brief topic of what was said (not the category)","summary":"one sentence summary of the content","category":"category(max 2 levels)"}]}
+Preserve input order. If an entry is meaningless noise or unclear, use {"skip":true} for that entry.
+All JSON values must be in the same language as the input text.`
 
 const defaultModel = "haiku"
 

@@ -29,8 +29,8 @@ func DefaultConfig() *Config {
 		SilenceDuration: 1500 * time.Millisecond,
 		SpeechThreshold: 0.5,
 		EnergyThreshold: 200,
-		LLMProvider:     "claude",
-		LLMModel:        "haiku",
+		LLMProvider:     "ollama",
+		LLMModel:        "llama3.2",
 	}
 }
 
