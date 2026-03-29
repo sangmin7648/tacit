@@ -123,11 +123,12 @@ type ollamaGenerateOptions struct {
 }
 
 type ollamaGenerateRequest struct {
-	Model   string                `json:"model"`
-	System  string                `json:"system"`
-	Prompt  string                `json:"prompt"`
-	Stream  bool                  `json:"stream"`
-	Format  json.RawMessage       `json:"format,omitempty"`
+	Model   string                 `json:"model"`
+	System  string                 `json:"system"`
+	Prompt  string                 `json:"prompt"`
+	Stream  bool                   `json:"stream"`
+	Think   bool                   `json:"think"`
+	Format  json.RawMessage        `json:"format,omitempty"`
 	Options *ollamaGenerateOptions `json:"options,omitempty"`
 }
 
