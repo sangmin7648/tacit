@@ -22,8 +22,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.SpeechThreshold != 0.5 {
 		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.5)
 	}
-	if cfg.ClaudeModel != "haiku" {
-		t.Errorf("ClaudeModel: got %q, want %q", cfg.ClaudeModel, "haiku")
+	if cfg.LLMProvider != "claude" {
+		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "claude")
+	}
+	if cfg.LLMModel != "haiku" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "haiku")
 	}
 }
 
@@ -35,7 +38,8 @@ func TestLoadValidYAML(t *testing.T) {
 min_speech_duration: 5s
 silence_duration: 2s
 speech_threshold: 0.8
-claude_model: sonnet
+llm_provider: claude
+llm_model: sonnet
 `
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write test config: %v", err)
@@ -58,8 +62,11 @@ claude_model: sonnet
 	if cfg.SpeechThreshold != 0.8 {
 		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.8)
 	}
-	if cfg.ClaudeModel != "sonnet" {
-		t.Errorf("ClaudeModel: got %q, want %q", cfg.ClaudeModel, "sonnet")
+	if cfg.LLMProvider != "claude" {
+		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "claude")
+	}
+	if cfg.LLMModel != "sonnet" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "sonnet")
 	}
 }
 
@@ -83,8 +90,8 @@ func TestLoadFileNotExist(t *testing.T) {
 	if cfg.SpeechThreshold != defaults.SpeechThreshold {
 		t.Errorf("SpeechThreshold: got %v, want default %v", cfg.SpeechThreshold, defaults.SpeechThreshold)
 	}
-	if cfg.ClaudeModel != defaults.ClaudeModel {
-		t.Errorf("ClaudeModel: got %q, want default %q", cfg.ClaudeModel, defaults.ClaudeModel)
+	if cfg.LLMModel != defaults.LLMModel {
+		t.Errorf("LLMModel: got %q, want default %q", cfg.LLMModel, defaults.LLMModel)
 	}
 }
 
@@ -121,8 +128,8 @@ speech_threshold: 0.7
 	if cfg.SilenceDuration != defaults.SilenceDuration {
 		t.Errorf("SilenceDuration: got %v, want default %v", cfg.SilenceDuration, defaults.SilenceDuration)
 	}
-	if cfg.ClaudeModel != defaults.ClaudeModel {
-		t.Errorf("ClaudeModel: got %q, want default %q", cfg.ClaudeModel, defaults.ClaudeModel)
+	if cfg.LLMModel != defaults.LLMModel {
+		t.Errorf("LLMModel: got %q, want default %q", cfg.LLMModel, defaults.LLMModel)
 	}
 }
 

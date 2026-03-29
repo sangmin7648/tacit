@@ -8,32 +8,32 @@ import (
 	"strings"
 )
 
-// ClassifyResult holds the output from Claude Code CLI classification.
-type ClassifyResult struct {
-	Title    string `json:"title"`
-	Summary  string `json:"summary"`
-	Category string `json:"category"`
-	Skip     bool   `json:"skip,omitempty"`
-}
-
 const singleSystemPrompt = `STT→JSON만. {"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}만출력. 의미없는소리/잡음/불분명한말이면 {"skip":true}만출력`
 
 const batchSystemPrompt = `STT텍스트들→JSON만. {"results":[{"title":"제목","summary":"요약","category":"카테고리(최대2단계)"}]}만출력. 순서유지. 의미없는소리/잡음/불분명한말은 {"skip":true}로`
 
 const defaultModel = "haiku"
 
-// Classify invokes Claude Code CLI to generate title, summary, and category
-// for the given STT text. existingCategories provides context about current
-// directory structure for consistent categorization.
-func Classify(ctx context.Context, sttText string, existingCategories []string, model string) (*ClassifyResult, error) {
-	if sttText == "" {
-		return nil, fmt.Errorf("empty STT text")
-	}
+// ClaudeClassifier implements Classifier using Claude Code CLI.
+type ClaudeClassifier struct {
+	model string
+}
+
+// NewClaudeClassifier creates a ClaudeClassifier with the given model name.
+// If model is empty, defaults to "haiku".
+func NewClaudeClassifier(model string) *ClaudeClassifier {
 	if model == "" {
 		model = defaultModel
 	}
+	return &ClaudeClassifier{model: model}
+}
 
-	output, err := runClaude(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories), model)
+func (c *ClaudeClassifier) Classify(ctx context.Context, sttText string, existingCategories []string) (*ClassifyResult, error) {
+	if sttText == "" {
+		return nil, fmt.Errorf("empty STT text")
+	}
+
+	output, err := runClaude(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories), c.model)
 	if err != nil {
 		return nil, err
 	}
@@ -45,24 +45,19 @@ func Classify(ctx context.Context, sttText string, existingCategories []string, 
 	return &result, nil
 }
 
-// ClassifyBatch invokes Claude Code CLI once to classify multiple STT texts.
-// This amortizes the CLI startup cost when multiple segments are queued.
-func ClassifyBatch(ctx context.Context, texts []string, existingCategories []string, model string) ([]*ClassifyResult, error) {
+func (c *ClaudeClassifier) ClassifyBatch(ctx context.Context, texts []string, existingCategories []string) ([]*ClassifyResult, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("empty texts")
 	}
 	if len(texts) == 1 {
-		r, err := Classify(ctx, texts[0], existingCategories, model)
+		r, err := c.Classify(ctx, texts[0], existingCategories)
 		if err != nil {
 			return nil, err
 		}
 		return []*ClassifyResult{r}, nil
 	}
-	if model == "" {
-		model = defaultModel
-	}
 
-	output, err := runClaude(ctx, batchSystemPrompt, buildBatchPrompt(texts, existingCategories), model)
+	output, err := runClaude(ctx, batchSystemPrompt, buildBatchPrompt(texts, existingCategories), c.model)
 	if err != nil {
 		return nil, err
 	}

@@ -17,7 +17,8 @@ type Config struct {
 	SilenceDuration time.Duration `yaml:"silence_duration"`
 	SpeechThreshold float64       `yaml:"speech_threshold"`
 	EnergyThreshold float64       `yaml:"energy_threshold"`
-	ClaudeModel     string        `yaml:"claude_model"`
+	LLMProvider     string        `yaml:"llm_provider"`
+	LLMModel        string        `yaml:"llm_model"`
 }
 
 // DefaultConfig returns a Config populated with default values.
@@ -28,7 +29,8 @@ func DefaultConfig() *Config {
 		SilenceDuration: 1500 * time.Millisecond,
 		SpeechThreshold: 0.5,
 		EnergyThreshold: 200,
-		ClaudeModel:     "haiku",
+		LLMProvider:     "claude",
+		LLMModel:        "haiku",
 	}
 }
 

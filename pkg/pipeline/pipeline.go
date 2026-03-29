@@ -20,9 +20,10 @@ import (
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
 type Pipeline struct {
-	cfg     *config.Config
-	whisper *stt.Whisper
-	baseDir string
+	cfg        *config.Config
+	whisper    *stt.Whisper
+	classifier process.Classifier
+	baseDir    string
 }
 
 // New creates a new pipeline with the given configuration.
@@ -40,9 +41,10 @@ func New(cfg *config.Config) (*Pipeline, error) {
 	}
 
 	return &Pipeline{
-		cfg:     cfg,
-		whisper: w,
-		baseDir: baseDir,
+		cfg:        cfg,
+		whisper:    w,
+		classifier: process.NewClaudeClassifier(cfg.LLMModel),
+		baseDir:    baseDir,
 	}, nil
 }
 
@@ -210,7 +212,7 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 
 		if len(batch) == 1 {
 			log.Printf("Classifying 1 segment...")
-			classified, err := process.Classify(ctx, batch[0].text, existingCategories, p.cfg.ClaudeModel)
+			classified, err := p.classifier.Classify(ctx, batch[0].text, existingCategories)
 			if err != nil {
 				log.Printf("Classify error: %v", err)
 				continue
@@ -226,11 +228,11 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 			for i, b := range batch {
 				texts[i] = b.text
 			}
-			results, err := process.ClassifyBatch(ctx, texts, existingCategories, p.cfg.ClaudeModel)
+			results, err := p.classifier.ClassifyBatch(ctx, texts, existingCategories)
 			if err != nil {
 				log.Printf("Batch classify error, falling back to individual: %v", err)
 				for _, b := range batch {
-					classified, err := process.Classify(ctx, b.text, existingCategories, p.cfg.ClaudeModel)
+					classified, err := p.classifier.Classify(ctx, b.text, existingCategories)
 					if err != nil {
 						log.Printf("Classify error: %v", err)
 						continue
@@ -303,10 +305,10 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 	}
 	log.Printf("STT result: %s", text)
 
-	log.Printf("Classifying with Claude Code CLI...")
+	log.Printf("Classifying with LLM...")
 	classifyStart := time.Now()
 	existingCategories := storage.ListCategories(p.baseDir)
-	classified, err := process.Classify(ctx, text, existingCategories, p.cfg.ClaudeModel)
+	classified, err := p.classifier.Classify(ctx, text, existingCategories)
 	if err != nil {
 		return "", fmt.Errorf("classify: %w", err)
 	}
