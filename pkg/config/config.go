@@ -55,6 +55,17 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// WriteDefault writes a default config YAML file to path.
+// Useful for seeding a config file before opening it in an editor.
+func WriteDefault(path string) error {
+	cfg := DefaultConfig()
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
 // BaseDir returns the root directory for the tacit knowledge base (~/.tacit).
 func BaseDir() string {
 	home, err := os.UserHomeDir()

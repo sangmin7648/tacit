@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 
@@ -39,6 +40,21 @@ func main() {
 		cmdStop()
 	case "status":
 		cmdStatus()
+	case "config":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit>\n")
+			os.Exit(1)
+		}
+		switch os.Args[2] {
+		case "view":
+			cmdConfigView(cfg)
+		case "edit":
+			cmdConfigEdit()
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown config subcommand: %s\n", os.Args[2])
+			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit>\n")
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -55,6 +71,8 @@ Usage:
   tacit listen                 Start the voice capture daemon (foreground)
   tacit stop                   Stop the voice capture daemon
   tacit status                 Check daemon status
+  tacit config view            Show current configuration
+  tacit config edit            Open configuration in a text editor
 `)
 }
 
@@ -97,6 +115,18 @@ func cmdSetup() {
 
 	if err != nil {
 		log.Fatalf("Setup failed: %v", err)
+	}
+
+	// Create default config if it doesn't exist yet.
+	cfgPath := config.ConfigPath()
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+			log.Fatalf("Failed to create config directory: %v", err)
+		}
+		if err := config.WriteDefault(cfgPath); err != nil {
+			log.Fatalf("Failed to create default config: %v", err)
+		}
+		fmt.Printf("Created default config: %s\n", cfgPath)
 	}
 
 	fmt.Println("Setup complete.")
@@ -202,6 +232,72 @@ func cmdStop() {
 	}
 
 	fmt.Printf("Sent SIGTERM to tacit (PID: %d)\n", pid)
+}
+
+// cmdConfigView prints the current configuration.
+func cmdConfigView(cfg *config.Config) {
+	cfgPath := config.ConfigPath()
+	fmt.Printf("Config file: %s\n\n", cfgPath)
+	fmt.Printf("whisper_model:    %s\n", cfg.WhisperModel)
+	fmt.Printf("min_speech_dur:   %s\n", cfg.MinSpeechDur)
+	fmt.Printf("silence_duration: %s\n", cfg.SilenceDuration)
+	fmt.Printf("speech_threshold: %.2f\n", cfg.SpeechThreshold)
+	fmt.Printf("energy_threshold: %.0f\n", cfg.EnergyThreshold)
+	fmt.Printf("llm_provider:     %s\n", cfg.LLMProvider)
+	fmt.Printf("llm_model:        %s\n", cfg.LLMModel)
+}
+
+// cmdConfigEdit opens the config file in a text editor.
+// It creates the file with defaults if it does not exist yet.
+func cmdConfigEdit() {
+	cfgPath := config.ConfigPath()
+
+	// Ensure the config file exists so the editor has something to open.
+	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+			log.Fatalf("Failed to create config directory: %v", err)
+		}
+		if err := config.WriteDefault(cfgPath); err != nil {
+			log.Fatalf("Failed to create default config: %v", err)
+		}
+		fmt.Printf("Created default config at %s\n", cfgPath)
+	}
+
+	editor := detectEditor()
+	if editor == "" {
+		fmt.Fprintf(os.Stderr, "No text editor found. Set $EDITOR or install one of: nano, vim, vi, emacs.\n")
+		fmt.Fprintf(os.Stderr, "Config file is at: %s\n", cfgPath)
+		os.Exit(1)
+	}
+
+	cmd := exec.Command(editor, cfgPath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Editor exited with error: %v", err)
+	}
+}
+
+// detectEditor returns the path to an available text editor.
+// Priority: $VISUAL → $EDITOR → well-known editors in PATH.
+func detectEditor() string {
+	for _, env := range []string{"VISUAL", "EDITOR"} {
+		if e := os.Getenv(env); e != "" {
+			if path, err := exec.LookPath(e); err == nil {
+				return path
+			}
+		}
+	}
+
+	candidates := []string{"nano", "vim", "vi", "emacs", "micro", "hx", "code", "subl", "gedit", "kate"}
+	for _, name := range candidates {
+		if path, err := exec.LookPath(name); err == nil {
+			return path
+		}
+	}
+
+	return ""
 }
 
 // cmdStatus checks if the daemon is running.
