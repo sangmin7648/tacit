@@ -40,10 +40,17 @@ func New(cfg *config.Config) (*Pipeline, error) {
 		return nil, fmt.Errorf("init whisper: %w", err)
 	}
 
+	classifier := process.NewClassifier(cfg)
+	if p, ok := classifier.(process.Pinger); ok {
+		if err := p.Ping(context.Background()); err != nil {
+			return nil, err
+		}
+	}
+
 	return &Pipeline{
 		cfg:        cfg,
 		whisper:    w,
-		classifier: process.NewClaudeClassifier(cfg.LLMModel),
+		classifier: classifier,
 		baseDir:    baseDir,
 	}, nil
 }
