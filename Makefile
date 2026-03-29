@@ -59,6 +59,7 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 
 e2e-test: build
 	./tacit process testdata/test_voice_recording.m4a
+	go test -tags integration -v -count=1 ./pkg/process/ -run TestClassifier
 
 INSTALL_DIR := $(HOME)/.local/bin
 
