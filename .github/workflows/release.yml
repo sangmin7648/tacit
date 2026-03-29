@@ -10,25 +10,16 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        include:
-          - runner: macos-14
-            os: darwin
-            arch: arm64
-          - runner: macos-13
-            os: darwin
-            arch: amd64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
 
     steps:
       - name: Checkout with submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -41,14 +32,14 @@ jobs:
       - name: Package
         run: |
           VERSION="${GITHUB_REF_NAME}"
-          ARCHIVE="tacit-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}.tar.gz"
+          ARCHIVE="tacit-${VERSION}-darwin-arm64.tar.gz"
           tar -czf "${ARCHIVE}" tacit ten_vad.framework
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: tacit-${{ matrix.os }}-${{ matrix.arch }}
+          name: tacit-darwin-arm64
           path: ${{ env.ARCHIVE }}
 
   release:
@@ -57,7 +48,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           merge-multiple: true
 
