@@ -22,11 +22,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.SpeechThreshold != 0.5 {
 		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.5)
 	}
-	if cfg.LLMProvider != "claude" {
-		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "claude")
+	if cfg.LLMProvider != "ollama" {
+		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "ollama")
 	}
-	if cfg.LLMModel != "haiku" {
-		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "haiku")
+	if cfg.LLMModel != "llama3.2" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "llama3.2")
 	}
 }
 
