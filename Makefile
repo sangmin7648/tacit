@@ -64,13 +64,13 @@ INSTALL_DIR := $(HOME)/.local/bin
 
 install: build
 	@mkdir -p $(INSTALL_DIR)
-	cp tacit $(INSTALL_DIR)/tacit
-	chmod +x $(INSTALL_DIR)/tacit
+	cp tacit $(INSTALL_DIR)/tacit-dev
+	chmod +x $(INSTALL_DIR)/tacit-dev
 ifeq ($(UNAME_S),Darwin)
 	rm -rf $(INSTALL_DIR)/ten_vad.framework
 	cp -R ten_vad.framework $(INSTALL_DIR)/ten_vad.framework
 endif
-	@echo "Installed to $(INSTALL_DIR)/tacit"
+	@echo "Installed to $(INSTALL_DIR)/tacit-dev"
 
 clean:
 	rm -rf $(WHISPER_BUILD)
