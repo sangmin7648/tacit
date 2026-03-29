@@ -73,7 +73,7 @@ func (o *OllamaClassifier) Classify(ctx context.Context, sttText string, existin
 		return nil, fmt.Errorf("empty STT text")
 	}
 
-	output, err := o.runOllama(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories))
+	output, err := o.runOllama(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories), classifySchema)
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +82,7 @@ func (o *OllamaClassifier) Classify(ctx context.Context, sttText string, existin
 	if err := parseJSONFromText([]byte(output), &result); err != nil {
 		return nil, fmt.Errorf("parse ollama output: %w, raw: %s", err, truncate(output, 200))
 	}
+	sanitizeResult(&result)
 	return &result, nil
 }
 
@@ -97,7 +98,7 @@ func (o *OllamaClassifier) ClassifyBatch(ctx context.Context, texts []string, ex
 		return []*ClassifyResult{r}, nil
 	}
 
-	output, err := o.runOllama(ctx, batchSystemPrompt, buildBatchPrompt(texts, existingCategories))
+	output, err := o.runOllama(ctx, batchSystemPrompt, buildBatchPrompt(texts, existingCategories), batchClassifySchema)
 	if err != nil {
 		return nil, err
 	}
@@ -111,26 +112,69 @@ func (o *OllamaClassifier) ClassifyBatch(ctx context.Context, texts []string, ex
 	if len(response.Results) == 0 {
 		return nil, fmt.Errorf("empty results in batch response, raw: %s", truncate(output, 200))
 	}
+	for _, r := range response.Results {
+		sanitizeResult(r)
+	}
 	return response.Results, nil
 }
 
-type ollamaGenerateRequest struct {
-	Model  string `json:"model"`
-	System string `json:"system"`
-	Prompt string `json:"prompt"`
-	Stream bool   `json:"stream"`
+type ollamaGenerateOptions struct {
+	Temperature float64 `json:"temperature"`
 }
+
+type ollamaGenerateRequest struct {
+	Model   string                `json:"model"`
+	System  string                `json:"system"`
+	Prompt  string                `json:"prompt"`
+	Stream  bool                  `json:"stream"`
+	Format  json.RawMessage       `json:"format,omitempty"`
+	Options *ollamaGenerateOptions `json:"options,omitempty"`
+}
+
+// classifySchema is the JSON schema for a single classification result.
+// The skip field is optional; when true the other fields are omitted.
+var classifySchema = json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "title":    {"type": "string"},
+    "summary":  {"type": "string"},
+    "category": {"type": "string"},
+    "skip":     {"type": "boolean"}
+  }
+}`)
+
+// batchClassifySchema is the JSON schema for a batch classification result.
+var batchClassifySchema = json.RawMessage(`{
+  "type": "object",
+  "required": ["results"],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title":    {"type": "string"},
+          "summary":  {"type": "string"},
+          "category": {"type": "string"},
+          "skip":     {"type": "boolean"}
+        }
+      }
+    }
+  }
+}`)
 
 type ollamaGenerateResponse struct {
 	Response string `json:"response"`
 }
 
-func (o *OllamaClassifier) runOllama(ctx context.Context, systemPrompt, prompt string) (string, error) {
+func (o *OllamaClassifier) runOllama(ctx context.Context, systemPrompt, prompt string, schema json.RawMessage) (string, error) {
 	reqBody := ollamaGenerateRequest{
-		Model:  o.model,
-		System: systemPrompt,
-		Prompt: prompt,
-		Stream: false,
+		Model:   o.model,
+		System:  systemPrompt,
+		Prompt:  prompt,
+		Stream:  false,
+		Format:  schema,
+		Options: &ollamaGenerateOptions{Temperature: 0},
 	}
 
 	data, err := json.Marshal(reqBody)
