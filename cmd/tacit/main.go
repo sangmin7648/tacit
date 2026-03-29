@@ -33,8 +33,8 @@ func main() {
 		cmdSetup()
 	case "process":
 		cmdProcess(cfg)
-	case "start":
-		cmdStart(cfg)
+	case "listen":
+		cmdListen(cfg)
 	case "stop":
 		cmdStop()
 	case "status":
@@ -52,7 +52,7 @@ func printUsage() {
 Usage:
   tacit setup                  Install Claude Code skill for knowledge base
   tacit process <audio-file>   Process an audio file into a knowledge entry
-  tacit start                  Start the voice capture daemon (foreground)
+  tacit listen                 Start the voice capture daemon (foreground)
   tacit stop                   Stop the voice capture daemon
   tacit status                 Check daemon status
 `)
@@ -133,8 +133,8 @@ func cmdProcess(cfg *config.Config) {
 	os.Exit(0) // Exit immediately to avoid ggml Metal cleanup crash
 }
 
-// cmdStart starts the voice capture pipeline in the foreground.
-func cmdStart(cfg *config.Config) {
+// cmdListen starts the voice capture pipeline in the foreground.
+func cmdListen(cfg *config.Config) {
 	pidPath := config.PIDPath()
 
 	// Check for existing daemon
