@@ -43,6 +43,7 @@ func New(cfg *config.Config) (*Pipeline, error) {
 	classifier := process.NewClassifier(cfg)
 	if p, ok := classifier.(process.Pinger); ok {
 		if err := p.Ping(context.Background()); err != nil {
+			w.Close() // Release whisper to avoid ggml Metal cleanup crash on exit
 			return nil, err
 		}
 	}
