@@ -176,7 +176,7 @@ func (p *Pipeline) Run(ctx context.Context) error {
 func (p *Pipeline) transcribeAndQueue(ctx context.Context, seg *audio.AudioSegment, ch chan<- classifyItem) {
 	log.Printf("Processing segment: %.1fs of audio", seg.Duration.Seconds())
 
-	text, err := p.whisper.Transcribe(ctx, seg.Samples)
+	text, err := p.whisper.Transcribe(ctx, seg.Samples, p.cfg.InitialPrompt)
 	if err != nil {
 		log.Printf("STT error: %v", err)
 		return
@@ -303,7 +303,7 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 	}
 
 	log.Printf("Running STT...")
-	text, err := p.whisper.Transcribe(ctx, samples)
+	text, err := p.whisper.Transcribe(ctx, samples, p.cfg.InitialPrompt)
 	if err != nil {
 		return "", fmt.Errorf("transcribe: %w", err)
 	}

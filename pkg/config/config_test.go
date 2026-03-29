@@ -10,8 +10,8 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.WhisperModel != "base" {
-		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "base")
+	if cfg.WhisperModel != "small" {
+		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "small")
 	}
 	if cfg.MinSpeechDur != 8*time.Second {
 		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 8*time.Second)

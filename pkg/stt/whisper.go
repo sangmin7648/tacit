@@ -42,7 +42,8 @@ func NewWhisper(modelPath string) (*Whisper, error) {
 }
 
 // Transcribe converts float32 PCM samples (16kHz mono) to text.
-func (w *Whisper) Transcribe(ctx context.Context, samples []float32) (string, error) {
+// initialPrompt provides optional context to bias the transcription (empty string = no hint).
+func (w *Whisper) Transcribe(ctx context.Context, samples []float32, initialPrompt string) (string, error) {
 	if w.ctx == nil {
 		return "", fmt.Errorf("whisper context is nil")
 	}
@@ -50,7 +51,8 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32) (string, er
 		return "", fmt.Errorf("empty samples")
 	}
 
-	params := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
+	params := C.whisper_full_default_params(C.WHISPER_SAMPLING_BEAM_SEARCH)
+	params.beam_search.beam_size = 5
 
 	// Set language to Korean
 	lang := C.CString("ko")
@@ -64,6 +66,14 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32) (string, er
 	params.print_realtime = C.bool(false)
 	params.print_timestamps = C.bool(false)
 	params.n_threads = 4
+
+	// Set initial prompt if provided
+	var cPrompt *C.char
+	if initialPrompt != "" {
+		cPrompt = C.CString(initialPrompt)
+		defer C.free(unsafe.Pointer(cPrompt))
+		params.initial_prompt = cPrompt
+	}
 
 	// Run inference
 	ret := C.whisper_full(w.ctx, params, (*C.float)(unsafe.Pointer(&samples[0])), C.int(len(samples)))

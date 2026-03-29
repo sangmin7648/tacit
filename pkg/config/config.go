@@ -13,6 +13,7 @@ import (
 // Stored at ~/.tacit/config.yaml; missing file means all defaults apply.
 type Config struct {
 	WhisperModel    string        `yaml:"whisper_model"`
+	InitialPrompt   string        `yaml:"initial_prompt"`
 	MinSpeechDur    time.Duration `yaml:"min_speech_duration"`
 	SilenceDuration time.Duration `yaml:"silence_duration"`
 	SpeechThreshold float64       `yaml:"speech_threshold"`
@@ -24,7 +25,7 @@ type Config struct {
 // DefaultConfig returns a Config populated with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		WhisperModel:    "base",
+		WhisperModel:    "small",
 		MinSpeechDur:    8 * time.Second,
 		SilenceDuration: 1500 * time.Millisecond,
 		SpeechThreshold: 0.5,
@@ -36,7 +37,8 @@ func DefaultConfig() *Config {
 
 // Load reads a YAML config file at path and returns the resulting Config.
 // If the file does not exist, it returns DefaultConfig with a nil error.
-// Fields absent from the YAML file retain their default values.
+// Fields absent from the YAML file retain their default values and are
+// written back to the file so users can discover and edit them.
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
@@ -50,6 +52,12 @@ func Load(path string) (*Config, error) {
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
+	}
+
+	// Write back if any new fields are missing from the file.
+	updated, err := yaml.Marshal(cfg)
+	if err == nil && string(updated) != string(data) {
+		_ = os.WriteFile(path, updated, 0644)
 	}
 
 	return cfg, nil
