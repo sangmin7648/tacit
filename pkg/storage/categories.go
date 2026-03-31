@@ -2,7 +2,6 @@ package storage
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -24,17 +23,6 @@ func ListCategories(baseDir string) []string {
 			continue
 		}
 		categories = append(categories, name)
-
-		subPath := filepath.Join(baseDir, name)
-		subEntries, err := os.ReadDir(subPath)
-		if err != nil {
-			continue
-		}
-		for _, subEntry := range subEntries {
-			if subEntry.IsDir() {
-				categories = append(categories, name+"/"+subEntry.Name())
-			}
-		}
 	}
 
 	return categories

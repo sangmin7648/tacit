@@ -63,10 +63,9 @@ func validateEntry(entry *KnowledgeEntry) error {
 		return fmt.Errorf("category must not contain path traversal (..)")
 	}
 
-	// Count slashes to enforce max 2 levels (max 1 slash)
-	slashCount := strings.Count(category, "/")
-	if slashCount > 1 {
-		return fmt.Errorf("category must have at most 2 levels (max 1 slash), got %d slashes", slashCount)
+	// Enforce single level: no slashes allowed
+	if strings.Contains(category, "/") {
+		return fmt.Errorf("category must be a single level (no slash allowed)")
 	}
 
 	return nil

@@ -14,7 +14,7 @@ func TestWriteAndRead_RoundTrip(t *testing.T) {
 
 	original := &KnowledgeEntry{
 		Title:     "Go 에러 핸들링에서 sentinel error 패턴 사용",
-		Category:  "개발/에러처리",
+		Category:  "개발",
 		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, loc),
 		Summary:   "Summary text here.",
 		Content:   "Content text here.",
@@ -27,7 +27,7 @@ func TestWriteAndRead_RoundTrip(t *testing.T) {
 	}
 
 	// Verify path contains category
-	if !strings.Contains(path, filepath.Join("개발", "에러처리")) {
+	if !strings.Contains(path, "개발") {
 		t.Errorf("path should contain category, got %s", path)
 	}
 
@@ -64,7 +64,7 @@ func TestRead_ValidFile(t *testing.T) {
 
 	content := `---
 title: "Test Entry"
-category: "dev/golang"
+category: "dev"
 created_at: "2026-03-28T14:30:52+09:00"
 ---
 
@@ -86,8 +86,8 @@ This is the content section.
 	if entry.Title != "Test Entry" {
 		t.Errorf("Title: got %q, want %q", entry.Title, "Test Entry")
 	}
-	if entry.Category != "dev/golang" {
-		t.Errorf("Category: got %q, want %q", entry.Category, "dev/golang")
+	if entry.Category != "dev" {
+		t.Errorf("Category: got %q, want %q", entry.Category, "dev")
 	}
 	if entry.Summary != "This is the summary section." {
 		t.Errorf("Summary: got %q, want %q", entry.Summary, "This is the summary section.")

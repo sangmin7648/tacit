@@ -2,7 +2,6 @@ package storage
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ func TestWrite_CreatesFileWithCorrectPath(t *testing.T) {
 
 	entry := &KnowledgeEntry{
 		Title:     "Test Title",
-		Category:  "dev/errors",
+		Category:  "dev",
 		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, time.FixedZone("KST", 9*3600)),
 		Summary:   "Summary text.",
 		Content:   "Content text.",
@@ -25,7 +24,7 @@ func TestWrite_CreatesFileWithCorrectPath(t *testing.T) {
 	}
 
 	// Verify path contains category
-	if !strings.Contains(path, filepath.Join("dev", "errors")) {
+	if !strings.Contains(path, "dev") {
 		t.Errorf("path should contain category directory, got %s", path)
 	}
 
@@ -40,12 +39,12 @@ func TestWrite_CreatesFileWithCorrectPath(t *testing.T) {
 	}
 }
 
-func TestWrite_InvalidCategory_ThreeLevels(t *testing.T) {
+func TestWrite_InvalidCategory_WithSlash(t *testing.T) {
 	baseDir := t.TempDir()
 
 	entry := &KnowledgeEntry{
 		Title:     "Test Title",
-		Category:  "a/b/c",
+		Category:  "a/b",
 		CreatedAt: time.Now(),
 		Summary:   "Summary.",
 		Content:   "Content.",
@@ -53,10 +52,10 @@ func TestWrite_InvalidCategory_ThreeLevels(t *testing.T) {
 
 	_, err := Write(baseDir, entry)
 	if err == nil {
-		t.Fatal("Write() should return error for 3-level category")
+		t.Fatal("Write() should return error for category with slash")
 	}
-	if !strings.Contains(err.Error(), "at most 2 levels") {
-		t.Errorf("error should mention level limit, got: %v", err)
+	if !strings.Contains(err.Error(), "no slash allowed") {
+		t.Errorf("error should mention no slash allowed, got: %v", err)
 	}
 }
 
@@ -147,7 +146,7 @@ func TestWrite_KoreanCategory(t *testing.T) {
 
 	entry := &KnowledgeEntry{
 		Title:     "Go 에러 핸들링에서 sentinel error 패턴 사용",
-		Category:  "개발/에러처리",
+		Category:  "개발",
 		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, time.FixedZone("KST", 9*3600)),
 		Summary:   "Summary text here.",
 		Content:   "Content text here.",
@@ -158,7 +157,7 @@ func TestWrite_KoreanCategory(t *testing.T) {
 		t.Fatalf("Write() error: %v", err)
 	}
 
-	if !strings.Contains(path, filepath.Join("개발", "에러처리")) {
-		t.Errorf("path should contain Korean category directories, got %s", path)
+	if !strings.Contains(path, "개발") {
+		t.Errorf("path should contain Korean category directory, got %s", path)
 	}
 }

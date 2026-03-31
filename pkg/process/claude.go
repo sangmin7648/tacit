@@ -15,37 +15,37 @@ SKIP CONDITION: Text with ONLY filler sounds (음, 어, 그, 아, 응, um, uh...
 NORMAL CLASSIFICATION:
 - title: specific topic of what was discussed
 - summary: exactly ONE sentence condensing the key point (do NOT copy the input text)
-- category: create a descriptive category in format 주제/세부주제 matching the content.
+- category: single Korean word/phrase describing the topic (NO slash, NO sub-category).
   Key distinctions:
-  - coding/debugging/tech → 개발/프로그래밍
-  - algorithm study → 학습/알고리즘  (NOT 개발)
-  - sprint/release planning → 업무/스프린트  (NOT 개발)
-  - cooking recipes → 생활/요리  (NOT 일상/식사)
-  - personal feelings/reflection → 일기/감정  (NOT 업무)
-  - exercise/sports → 건강/운동
-  - For any other topic: invent a fitting 주제/세부주제 pair
+  - coding/debugging/tech → 개발
+  - algorithm study → 학습  (NOT 개발)
+  - sprint/release planning → 업무  (NOT 개발)
+  - cooking recipes → 생활  (NOT 일상)
+  - personal feelings/reflection → 일기  (NOT 업무)
+  - exercise/sports → 건강
+  - For any other topic: invent a fitting single-word category
 
 EXAMPLES:
 [1] "파이썬에서 데코레이터로 함수 실행 시간 측정하는 법 공부했어. functools.wraps 꼭 써야 원본 함수 이름 유지됨"
-→ {"title":"파이썬 데코레이터 활용","summary":"파이썬 데코레이터로 실행 시간을 측정할 때 functools.wraps를 사용해야 원본 함수 정보가 유지된다","category":"개발/프로그래밍"}
+→ {"title":"파이썬 데코레이터 활용","summary":"파이썬 데코레이터로 실행 시간을 측정할 때 functools.wraps를 사용해야 원본 함수 정보가 유지된다","category":"개발"}
 
 [2] "BFS랑 DFS 차이 드디어 이해했어. BFS는 너비 우선이라 최단경로에 쓰고 DFS는 깊이 우선이라 그래프 탐색이나 백트래킹에 씀"
-→ {"title":"BFS와 DFS 차이 이해","summary":"BFS는 최단경로 탐색에, DFS는 그래프 탐색과 백트래킹에 적합하다는 것을 이해했다","category":"학습/알고리즘"}
+→ {"title":"BFS와 DFS 차이 이해","summary":"BFS는 최단경로 탐색에, DFS는 그래프 탐색과 백트래킹에 적합하다는 것을 이해했다","category":"학습"}
 
 [3] "이번 릴리즈에서 로그인 모듈 리팩토링 끝내야 해. 내가 백엔드 맡고 디자인팀이랑 연동은 다음 주까지"
-→ {"title":"로그인 모듈 리팩토링 계획","summary":"이번 릴리즈에서 로그인 모듈 리팩토링을 완료하고 디자인팀과 다음 주까지 연동할 계획이다","category":"업무/스프린트"}
+→ {"title":"로그인 모듈 리팩토링 계획","summary":"이번 릴리즈에서 로그인 모듈 리팩토링을 완료하고 디자인팀과 다음 주까지 연동할 계획이다","category":"업무"}
 
 [4] "어제 수영 1km 했는데 팔이 너무 아파. 자유형 자세가 아직 어색한 것 같음"
-→ {"title":"수영 후 팔 근육통","summary":"수영 1km를 완료했지만 팔이 많이 아파서 자유형 자세를 교정할 필요를 느꼈다","category":"건강/운동"}
+→ {"title":"수영 후 팔 근육통","summary":"수영 1km를 완료했지만 팔이 많이 아파서 자유형 자세를 교정할 필요를 느꼈다","category":"건강"}
 
 [5] "된장찌개 끓일 때 멸치 육수를 기본으로 해야 맛이 깊어. 두부랑 호박 넣고 마지막에 청양고추 추가하면 됨"
-→ {"title":"된장찌개 레시피","summary":"된장찌개를 맛있게 끓이려면 멸치 육수를 기본으로 하고 두부와 호박, 청양고추를 넣는다","category":"생활/요리"}
+→ {"title":"된장찌개 레시피","summary":"된장찌개를 맛있게 끓이려면 멸치 육수를 기본으로 하고 두부와 호박, 청양고추를 넣는다","category":"생활"}
 
 [6] "오늘 면접에서 긴장을 너무 많이 했어. 준비는 충분히 했는데 막상 말이 잘 안 나오더라. 다음엔 잘 할 수 있겠지"
-→ {"title":"면접 긴장으로 인한 아쉬움","summary":"충분히 준비했지만 면접에서 긴장하여 말을 제대로 못해 아쉬움을 느꼈다","category":"일기/감정"}
+→ {"title":"면접 긴장으로 인한 아쉬움","summary":"충분히 준비했지만 면접에서 긴장하여 말을 제대로 못해 아쉬움을 느꼈다","category":"일기"}
 
 [7] "마트에서 장 보다가 지갑을 두고 나왔어. 다시 가서 찾았는데 다행히 있었음"
-→ {"title":"마트 지갑 분실 해프닝","summary":"마트에서 지갑을 두고 나왔다가 다시 찾은 일상적인 해프닝이 있었다","category":"일상/생활"}
+→ {"title":"마트 지갑 분실 해프닝","summary":"마트에서 지갑을 두고 나왔다가 다시 찾은 일상적인 해프닝이 있었다","category":"일상"}
 
 [8] "어... 그... 음..."
 → {"skip":true}`
@@ -55,10 +55,10 @@ const batchSystemPrompt = `You classify multiple speech-to-text transcripts. Ret
 Each entry has:
 - title: descriptive phrase of what was discussed (a sentence fragment, NOT a category label)
 - summary: one sentence condensing the key point (do NOT copy the input)
-- category: create a descriptive category in format 주제/세부주제 that best fits the content.
-  For NEW topics, invent a fitting category name. Examples of the principle:
-  coding content → 개발/프로그래밍, exercise → 건강/운동, cooking → 생활/요리,
-  reading/reflection → 학습/독서 or 일기/감정, work planning → 업무/<type>
+- category: single Korean word/phrase (NO slash) that best fits the content.
+  For NEW topics, invent a fitting single-word category. Examples of the principle:
+  coding content → 개발, exercise → 건강, cooking → 생활,
+  reading/reflection → 학습 or 일기, work planning → 업무
 
 Set skip=true only for pure filler sounds with no meaningful content.
 
@@ -67,7 +67,7 @@ EXAMPLE — two VAD-split segments from the same conversation:
 오늘 요가 수업 처음 갔는데 생각보다 훨씬 힘들더라
 --- 텍스트 2 ---
 특히 코어 운동 부분이 힘들었는데, 강사님이 매일 10분씩만 해도 된다고 하셔서 집에서 꾸준히 해보려고
-→ {"results":[{"title":"요가 수업 첫 경험","summary":"요가 수업에 처음 참여했는데 생각보다 훨씬 힘들었다","category":"건강/운동"},{"title":"홈 요가 루틴 결심","summary":"코어 운동이 힘들었지만 강사 조언에 따라 매일 10분씩 집에서 꾸준히 하기로 결심했다","category":"건강/운동"}]}`
+→ {"results":[{"title":"요가 수업 첫 경험","summary":"요가 수업에 처음 참여했는데 생각보다 훨씬 힘들었다","category":"건강"},{"title":"홈 요가 루틴 결심","summary":"코어 운동이 힘들었지만 강사 조언에 따라 매일 10분씩 집에서 꾸준히 하기로 결심했다","category":"건강"}]}`
 
 const defaultModel = "haiku"
 
@@ -186,9 +186,11 @@ func sanitizeResult(r *ClassifyResult) {
 		r.Skip = true
 		return
 	}
-	// Strip trailing /잡담 added by some models (e.g. "개발/프로그래밍/잡담" → "개발/프로그래밍")
-	r.Category = strings.TrimSuffix(r.Category, "/잡담")
-	// Strip leading 잡담/ prefix
+	// If the model still returned a slash despite instructions, keep only the first segment.
+	if idx := strings.Index(r.Category, "/"); idx >= 0 {
+		r.Category = r.Category[:idx]
+	}
+	// Strip leading 잡담/ prefix (already handled above, but keep as safety)
 	r.Category = strings.TrimPrefix(r.Category, "잡담/")
 	// If category is exactly "잡담", replace with 일상
 	if r.Category == "잡담" {
