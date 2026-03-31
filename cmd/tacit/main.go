@@ -22,6 +22,7 @@ import (
 	"github.com/sangmin7648/tacit/pkg/search"
 	"github.com/sangmin7648/tacit/pkg/storage"
 	"github.com/sangmin7648/tacit/skills"
+	"golang.org/x/term"
 )
 
 func main() {
@@ -96,35 +97,28 @@ Usage:
 
 // cmdSetup runs an interactive setup wizard and installs skills.
 func cmdSetup() {
-	reader := bufio.NewReader(os.Stdin)
-
 	fmt.Println("=== tacit setup ===")
 	fmt.Println()
 
-	// Step 1: LLM provider
-	fmt.Println("Step 1/3: Select LLM provider for summarization")
-	fmt.Println("  a) ollama [default]")
-	fmt.Println("  b) claude")
-	fmt.Print("Choice [a]: ")
-
 	var llmProvider, llmModel string
 
-	switch strings.ToLower(strings.TrimSpace(readLine(reader))) {
-	case "b", "claude":
+	// Step 1: LLM provider
+	fmt.Println("Step 1/3: Select LLM provider for summarization")
+	providerIdx := selectOption([]string{"ollama", "claude"}, 0)
+	fmt.Println()
+
+	switch providerIdx {
+	case 1:
 		llmProvider = "claude"
 
 		// Step 2: Claude model
-		fmt.Println()
 		fmt.Println("Step 2/3: Select Claude model")
-		fmt.Println("  a) haiku [default]")
-		fmt.Println("  b) sonnet")
-		fmt.Println("  c) opus")
-		fmt.Print("Choice [a]: ")
-
-		switch strings.ToLower(strings.TrimSpace(readLine(reader))) {
-		case "b", "sonnet":
+		modelIdx := selectOption([]string{"haiku", "sonnet", "opus"}, 0)
+		fmt.Println()
+		switch modelIdx {
+		case 1:
 			llmModel = "sonnet"
-		case "c", "opus":
+		case 2:
 			llmModel = "opus"
 		default:
 			llmModel = "haiku"
@@ -133,12 +127,12 @@ func cmdSetup() {
 	default:
 		llmProvider = "ollama"
 
-		// Step 2: Ollama model
-		fmt.Println()
+		// Step 2: Ollama model (text input)
+		reader := bufio.NewReader(os.Stdin)
 		fmt.Println("Step 2/3: Enter Ollama model name")
-		fmt.Print("Model name [qwen3.5]: ")
-
+		fmt.Print("  Model name [qwen3.5]: ")
 		input := strings.TrimSpace(readLine(reader))
+		fmt.Println()
 		if input == "" {
 			llmModel = "qwen3.5"
 		} else {
@@ -146,12 +140,10 @@ func cmdSetup() {
 		}
 	}
 
-	// Step 3: AI agent for skill installation
-	fmt.Println()
+	// Step 3: AI agent for skill installation (only claude supported)
 	fmt.Println("Step 3/3: Select AI agent for skill installation")
-	fmt.Println("  a) claude [default]")
-	fmt.Print("Choice [a]: ")
-	readLine(reader) // only claude is supported; input is ignored
+	selectOption([]string{"claude"}, 0) //nolint
+	fmt.Println()
 
 	fmt.Println()
 	fmt.Printf("  LLM provider : %s\n", llmProvider)
@@ -244,6 +236,81 @@ func cmdSetup() {
 func readLine(r *bufio.Reader) string {
 	line, _ := r.ReadString('\n')
 	return strings.TrimRight(line, "\r\n")
+}
+
+// selectOption presents an interactive arrow-key menu on stdout and returns the
+// index of the selected option. defaultIdx is highlighted initially.
+func selectOption(options []string, defaultIdx int) int {
+	cur := defaultIdx
+
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		// Fallback: print numbered list and read a line
+		for i, o := range options {
+			fmt.Printf("  %d) %s\n", i+1, o)
+		}
+		fmt.Printf("Choice [%d]: ", defaultIdx+1)
+		reader := bufio.NewReader(os.Stdin)
+		line := strings.TrimSpace(readLine(reader))
+		for i := range options {
+			if line == fmt.Sprintf("%d", i+1) {
+				return i
+			}
+		}
+		return defaultIdx
+	}
+	defer term.Restore(fd, oldState)
+
+	// draw prints all options, then moves cursor back to top.
+	// On the first call (atTop=true) cursor is already at top; subsequent
+	// calls move up first so the list is redrawn in-place.
+	draw := func(atTop bool) {
+		if !atTop {
+			fmt.Printf("\033[%dA", len(options))
+		}
+		for i, o := range options {
+			fmt.Print("\r\033[2K") // carriage-return + erase line
+			if i == cur {
+				fmt.Printf("  \033[36m> %s\033[0m\n", o)
+			} else {
+				fmt.Printf("    %s\n", o)
+			}
+		}
+	}
+
+	draw(true)
+
+	buf := make([]byte, 4)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err != nil || n == 0 {
+			break
+		}
+		switch {
+		case n == 1 && (buf[0] == '\r' || buf[0] == '\n'): // Enter
+			// Erase the list and print a single confirmation line.
+			fmt.Printf("\033[%dA", len(options))
+			for range options {
+				fmt.Print("\r\033[2K\n")
+			}
+			fmt.Printf("\033[%dA", len(options))
+			fmt.Printf("\r\033[2K  > %s\n", options[cur])
+			return cur
+		case n >= 3 && buf[0] == 0x1b && buf[1] == '[' && buf[2] == 'A': // Up
+			if cur > 0 {
+				cur--
+				draw(false)
+			}
+		case n >= 3 && buf[0] == 0x1b && buf[1] == '[' && buf[2] == 'B': // Down
+			if cur < len(options)-1 {
+				cur++
+				draw(false)
+			}
+		}
+	}
+
+	return cur
 }
 
 // cmdProcess handles the "process" subcommand: audio file → knowledge entry.
