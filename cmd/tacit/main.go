@@ -1,19 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
-
-	"io/fs"
 
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
@@ -93,8 +94,82 @@ Usage:
 `)
 }
 
-// cmdSetup installs the Claude Code skill from the embedded files.
+// cmdSetup runs an interactive setup wizard and installs skills.
 func cmdSetup() {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("=== tacit setup ===")
+	fmt.Println()
+
+	// Step 1: LLM provider
+	fmt.Println("Step 1/3: Select LLM provider for summarization")
+	fmt.Println("  a) ollama [default]")
+	fmt.Println("  b) claude")
+	fmt.Print("Choice [a]: ")
+
+	var llmProvider, llmModel string
+
+	switch strings.ToLower(strings.TrimSpace(readLine(reader))) {
+	case "b", "claude":
+		llmProvider = "claude"
+
+		// Step 2: Claude model
+		fmt.Println()
+		fmt.Println("Step 2/3: Select Claude model")
+		fmt.Println("  a) haiku [default]")
+		fmt.Println("  b) sonnet")
+		fmt.Println("  c) opus")
+		fmt.Print("Choice [a]: ")
+
+		switch strings.ToLower(strings.TrimSpace(readLine(reader))) {
+		case "b", "sonnet":
+			llmModel = "sonnet"
+		case "c", "opus":
+			llmModel = "opus"
+		default:
+			llmModel = "haiku"
+		}
+
+	default:
+		llmProvider = "ollama"
+
+		// Step 2: Ollama model
+		fmt.Println()
+		fmt.Println("Step 2/3: Enter Ollama model name")
+		fmt.Print("Model name [qwen3.5]: ")
+
+		input := strings.TrimSpace(readLine(reader))
+		if input == "" {
+			llmModel = "qwen3.5"
+		} else {
+			llmModel = input
+		}
+	}
+
+	// Step 3: AI agent for skill installation
+	fmt.Println()
+	fmt.Println("Step 3/3: Select AI agent for skill installation")
+	fmt.Println("  a) claude [default]")
+	fmt.Print("Choice [a]: ")
+	readLine(reader) // only claude is supported; input is ignored
+
+	fmt.Println()
+	fmt.Printf("  LLM provider : %s\n", llmProvider)
+	fmt.Printf("  LLM model    : %s\n", llmModel)
+	fmt.Printf("  Skill agent  : claude\n")
+	fmt.Println()
+
+	// Write LLM settings to config-override.yaml
+	overridePath := config.OverridePath()
+	if err := os.MkdirAll(filepath.Dir(overridePath), 0755); err != nil {
+		log.Fatalf("Failed to create config directory: %v", err)
+	}
+	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel); err != nil {
+		log.Fatalf("Failed to write config override: %v", err)
+	}
+	fmt.Printf("Saved LLM settings: %s\n", overridePath)
+
+	// Install Claude Code skill files
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("Failed to get home directory: %v", err)
@@ -143,10 +218,7 @@ func cmdSetup() {
 	// If config.yaml exists and differs from defaults, the user may have edited
 	// it manually (old behavior). Back it up and warn before overwriting.
 	if existing, readErr := os.ReadFile(cfgPath); readErr == nil {
-		overridePath := config.OverridePath()
 		if _, overrideExists := os.Stat(overridePath); os.IsNotExist(overrideExists) {
-			// Heuristic: if config.yaml doesn't start with our managed header,
-			// it was likely edited by the user under the old scheme.
 			if len(existing) > 0 && existing[0] != '#' {
 				bakPath := cfgPath + ".bak"
 				if err := os.WriteFile(bakPath, existing, 0644); err == nil {
@@ -166,6 +238,12 @@ func cmdSetup() {
 	fmt.Printf("Updated reference config: %s\n", cfgPath)
 
 	fmt.Println("Setup complete.")
+}
+
+// readLine reads a single line from r, trimming the trailing newline.
+func readLine(r *bufio.Reader) string {
+	line, _ := r.ReadString('\n')
+	return strings.TrimRight(line, "\r\n")
 }
 
 // cmdProcess handles the "process" subcommand: audio file → knowledge entry.
