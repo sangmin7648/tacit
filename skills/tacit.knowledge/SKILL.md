@@ -8,60 +8,65 @@ description: |
 
 # tacit Knowledge Base Query
 
-You are retrieving relevant knowledge from the user's local tacit knowledge database at `~/.tacit/`.
+You are retrieving relevant knowledge from the user's local tacit knowledge database using the `tacit` CLI.
 
-## Knowledge File Format
+## Available Commands
 
-Each file is Markdown with YAML frontmatter:
 ```
----
-title: "제목"
-category: "카테고리/서브카테고리"
-created_at: "2006-01-02T15:04:05-07:00"
----
-
-요약 내용
-
----
-
-원본 전사 내용
+tacit list [duration]     — List entries created within duration (default: 1h). Supports: 30m, 1h, 24h, 1d, 7d, 2w
+tacit search <pattern>    — Full-text search across all entries (title + summary + content)
+tacit get <file-path>     — Print full content of a specific entry
 ```
-
-Files are stored at: `~/.tacit/<category>/<subcategory>/YYYYMMDD-HHMMSS.md`
 
 ## Process
 
-1. **List categories** to understand what knowledge exists:
-   ```
-   ls ~/.tacit/ (top-level categories)
-   ls ~/.tacit/<category>/ (subcategories and files)
-   ```
+When the user invokes `/tacit.knowledge <prompt>`, extract the time window from the prompt if mentioned (e.g. "오늘", "이번 주", "지난 1시간"). If no time is specified, default to **1h** for list.
 
-2. **Identify relevant categories** based on the user's question or current conversation context.
+### Step 1 — Run list agent and search agent IN PARALLEL
 
-3. **List files** in relevant categories (sorted by date, most recent first):
-   ```
-   ls -t ~/.tacit/<category>/
-   ls -t ~/.tacit/<category>/<subcategory>/
-   ```
+**List agent** — retrieves recent entries:
+```bash
+tacit list <duration>
+```
+- Use the time window from the prompt if specified; otherwise use `1h`
+- Parse the output: each entry has `[datetime] category / title`, `File: <path>`, and optionally `Summary: <first line>`
+- Collect all file paths from the output
 
-4. **Search for keywords** if the topic is specific:
-   - Use grep across knowledge files to find relevant entries
-   - Search in both title (frontmatter) and summary sections
+**Search agent** — finds topically relevant entries:
+1. Extract 2–4 keywords from the user's prompt (nouns, domain terms, key verbs)
+2. Run `tacit search <keyword>` for each keyword to maximize recall
+3. Collect all unique file paths from results
+4. Deduplicate across keywords
 
-5. **Read relevant files** — prioritize:
-   - Most recent entries first
-   - Files whose title/summary matches the query topic
-   - Limit to 3-5 most relevant entries to avoid context overload
+Each agent returns: a list of `{ file_path, title, category, created_at, summary_snippet }` objects.
 
-6. **Present the knowledge** naturally integrated into your response:
-   - Reference the title and date of each knowledge entry
-   - Use the summary for concise context; include content (raw transcript) only if the user needs details
-   - If no relevant knowledge is found, briefly mention that and continue answering normally
+### Step 2 — Merge results
+
+In the main thread:
+- Union the file paths from both agents, deduplicated
+- If a file path appears in both, it is high-confidence relevant — prioritize it
+- Limit to the **5 most relevant** entries to avoid context overload (prefer recent + multi-source matches)
+
+### Step 3 — Fetch full content for top entries
+
+For each selected file path, run:
+```bash
+tacit get <file-path>
+```
+
+Read the `Summary` section first. Include the `Content` (raw STT) only if the user's question requires detail or the summary is insufficient.
+
+### Step 4 — Respond
+
+Synthesize the retrieved knowledge into a direct answer to the user's prompt:
+- Reference each entry by title and date
+- Use summary for concise context; raw content only when needed
+- If no relevant entries are found, briefly note this and answer from general knowledge
 
 ## Important
 
-- Knowledge is captured from real-time speech (STT), so content may have transcription artifacts
+- Knowledge content is captured from real-time speech (STT) — expect transcription artifacts
 - Categories and content are primarily in Korean
-- Do NOT fabricate knowledge entries — only reference what actually exists in the files
-- The summary section is the classified/processed version; content section is raw STT output
+- Do NOT fabricate knowledge entries — only reference what actually exists
+- The `Summary` section is the AI-processed version; `Content` is raw STT output
+- `tacit search` supports regex-compatible patterns — you can use `tacit search "키워드1\|키워드2"` to search multiple terms at once
