@@ -191,3 +191,51 @@ func ModelPath(model string) string {
 func PIDPath() string {
 	return filepath.Join(BaseDir(), "tacit.pid")
 }
+
+// WriteSetupOverride writes a full override template with llm_provider and
+// llm_model set to the given values (uncommented). Other fields are preserved
+// from the existing override file if present; otherwise they remain commented
+// out with their default values so users can easily edit them later.
+func WriteSetupOverride(path string, provider, model string) error {
+	// Load existing override values to preserve non-LLM user settings.
+	existing := map[string]interface{}{}
+	if data, err := os.ReadFile(path); err == nil {
+		_ = yaml.Unmarshal(data, &existing)
+	}
+
+	defaults := DefaultConfig()
+
+	header := "# tacit user overrides — edit this file to customize tacit.\n" +
+		"# Only fields you uncomment and set here will override the defaults.\n" +
+		"# Run 'tacit config view' to see the current merged configuration.\n\n"
+
+	type field struct {
+		key        string
+		value      string
+		forceActive bool // true = always write uncommented
+	}
+
+	fields := []field{
+		{"whisper_model", defaults.WhisperModel, false},
+		{"initial_prompt", "\"\"", false},
+		{"min_speech_duration", formatDuration(defaults.MinSpeechDur), false},
+		{"silence_duration", formatDuration(defaults.SilenceDuration), false},
+		{"speech_threshold", fmt.Sprintf("%.2f", defaults.SpeechThreshold), false},
+		{"energy_threshold", fmt.Sprintf("%.0f", defaults.EnergyThreshold), false},
+		{"llm_provider", provider, true},
+		{"llm_model", model, true},
+	}
+
+	var sb strings.Builder
+	sb.WriteString(header)
+	for _, f := range fields {
+		active := f.forceActive || existing[f.key] != nil
+		if active {
+			sb.WriteString(f.key + ": " + f.value + "\n")
+		} else {
+			sb.WriteString("# " + f.key + ": " + f.value + "\n")
+		}
+	}
+
+	return os.WriteFile(path, []byte(sb.String()), 0644)
+}
