@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -17,6 +18,10 @@ import (
 	"github.com/sangmin7648/tacit/pkg/storage"
 	"github.com/sangmin7648/tacit/pkg/vad"
 )
+
+// ErrSkipped is returned by ProcessFile when the audio content is classified
+// as meaningless and intentionally not stored. It is not a processing error.
+var ErrSkipped = errors.New("content classified as meaningless, skipping")
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
 type Pipeline struct {
@@ -323,7 +328,7 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 	log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
 
 	if classified.Skip {
-		return "", fmt.Errorf("content classified as meaningless, skipping")
+		return "", ErrSkipped
 	}
 
 	entry := newKnowledgeEntry(classified, text, time.Now())

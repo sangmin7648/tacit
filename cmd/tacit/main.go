@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -28,7 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load(config.ConfigPath())
+	cfg, err := config.LoadWithOverride(config.ConfigPath(), config.OverridePath())
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -133,17 +134,36 @@ func cmdSetup() {
 		log.Fatalf("Setup failed: %v", err)
 	}
 
-	// Create default config if it doesn't exist yet.
+	// Always regenerate config.yaml (tacit-managed reference doc).
 	cfgPath := config.ConfigPath()
-	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
-			log.Fatalf("Failed to create config directory: %v", err)
-		}
-		if err := config.WriteDefault(cfgPath); err != nil {
-			log.Fatalf("Failed to create default config: %v", err)
-		}
-		fmt.Printf("Created default config: %s\n", cfgPath)
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+		log.Fatalf("Failed to create config directory: %v", err)
 	}
+
+	// If config.yaml exists and differs from defaults, the user may have edited
+	// it manually (old behavior). Back it up and warn before overwriting.
+	if existing, readErr := os.ReadFile(cfgPath); readErr == nil {
+		overridePath := config.OverridePath()
+		if _, overrideExists := os.Stat(overridePath); os.IsNotExist(overrideExists) {
+			// Heuristic: if config.yaml doesn't start with our managed header,
+			// it was likely edited by the user under the old scheme.
+			if len(existing) > 0 && existing[0] != '#' {
+				bakPath := cfgPath + ".bak"
+				if err := os.WriteFile(bakPath, existing, 0644); err == nil {
+					fmt.Printf("WARNING: config.yaml appears to have been edited manually.\n")
+					fmt.Printf("  tacit now uses config-override.yaml for user settings.\n")
+					fmt.Printf("  Your previous config.yaml has been backed up to:\n")
+					fmt.Printf("    %s\n", bakPath)
+					fmt.Printf("  Run 'tacit config edit' to set your overrides in config-override.yaml.\n\n")
+				}
+			}
+		}
+	}
+
+	if err := config.WriteDefault(cfgPath); err != nil {
+		log.Fatalf("Failed to write reference config: %v", err)
+	}
+	fmt.Printf("Updated reference config: %s\n", cfgPath)
 
 	fmt.Println("Setup complete.")
 }
@@ -172,6 +192,10 @@ func cmdProcess(cfg *config.Config) {
 	p.Close() // Close before printing to avoid ggml cleanup race
 
 	if err != nil {
+		if errors.Is(err, pipeline.ErrSkipped) {
+			fmt.Println("Content classified as meaningless, skipping.")
+			os.Exit(0)
+		}
 		log.Fatalf("Processing failed: %v", err)
 	}
 
@@ -250,43 +274,64 @@ func cmdStop() {
 	fmt.Printf("Sent SIGTERM to tacit (PID: %d)\n", pid)
 }
 
-// cmdConfigView prints the current configuration.
+// cmdConfigView prints the current configuration, annotating each field as
+// [default] or [override] based on whether it appears in config-override.yaml.
 func cmdConfigView(cfg *config.Config) {
 	cfgPath := config.ConfigPath()
-	fmt.Printf("Config file: %s\n\n", cfgPath)
-	fmt.Printf("whisper_model:    %s\n", cfg.WhisperModel)
-	fmt.Printf("min_speech_dur:   %s\n", cfg.MinSpeechDur)
-	fmt.Printf("silence_duration: %s\n", cfg.SilenceDuration)
-	fmt.Printf("speech_threshold: %.2f\n", cfg.SpeechThreshold)
-	fmt.Printf("energy_threshold: %.0f\n", cfg.EnergyThreshold)
-	fmt.Printf("llm_provider:     %s\n", cfg.LLMProvider)
-	fmt.Printf("llm_model:        %s\n", cfg.LLMModel)
+	overridePath := config.OverridePath()
+
+	fmt.Printf("Config files:\n")
+	fmt.Printf("  reference: %s\n", cfgPath)
+	fmt.Printf("  overrides: %s\n\n", overridePath)
+
+	overrideKeys, err := config.LoadOverrideKeys(overridePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not read override file: %v\n\n", err)
+		overrideKeys = map[string]bool{}
+	}
+
+	tag := func(yamlKey string) string {
+		if overrideKeys[yamlKey] {
+			return "[override]"
+		}
+		return "[default]"
+	}
+
+	fmt.Printf("%-22s %-20s %s\n", "whisper_model:", cfg.WhisperModel, tag("whisper_model"))
+	if cfg.InitialPrompt != "" {
+		fmt.Printf("%-22s %-20s %s\n", "initial_prompt:", cfg.InitialPrompt, tag("initial_prompt"))
+	}
+	fmt.Printf("%-22s %-20s %s\n", "min_speech_duration:", cfg.MinSpeechDur, tag("min_speech_duration"))
+	fmt.Printf("%-22s %-20s %s\n", "silence_duration:", cfg.SilenceDuration, tag("silence_duration"))
+	fmt.Printf("%-22s %-20.2f %s\n", "speech_threshold:", cfg.SpeechThreshold, tag("speech_threshold"))
+	fmt.Printf("%-22s %-20.0f %s\n", "energy_threshold:", cfg.EnergyThreshold, tag("energy_threshold"))
+	fmt.Printf("%-22s %-20s %s\n", "llm_provider:", cfg.LLMProvider, tag("llm_provider"))
+	fmt.Printf("%-22s %-20s %s\n", "llm_model:", cfg.LLMModel, tag("llm_model"))
 }
 
-// cmdConfigEdit opens the config file in a text editor.
-// It creates the file with defaults if it does not exist yet.
+// cmdConfigEdit opens the user override config file in a text editor.
+// It creates a commented template if the file does not exist yet.
 func cmdConfigEdit() {
-	cfgPath := config.ConfigPath()
+	overridePath := config.OverridePath()
 
-	// Ensure the config file exists so the editor has something to open.
-	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
+	if _, err := os.Stat(overridePath); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(overridePath), 0755); err != nil {
 			log.Fatalf("Failed to create config directory: %v", err)
 		}
-		if err := config.WriteDefault(cfgPath); err != nil {
-			log.Fatalf("Failed to create default config: %v", err)
+		if err := config.WriteOverrideTemplate(overridePath, config.DefaultConfig()); err != nil {
+			log.Fatalf("Failed to create override template: %v", err)
 		}
-		fmt.Printf("Created default config at %s\n", cfgPath)
+		fmt.Printf("Created override template at %s\n", overridePath)
 	}
 
 	editor := detectEditor()
 	if editor == "" {
 		fmt.Fprintf(os.Stderr, "No text editor found. Set $EDITOR or install one of: nano, vim, vi, emacs.\n")
-		fmt.Fprintf(os.Stderr, "Config file is at: %s\n", cfgPath)
+		fmt.Fprintf(os.Stderr, "Override config file is at: %s\n", overridePath)
 		os.Exit(1)
 	}
 
-	cmd := exec.Command(editor, cfgPath)
+	cmd := exec.Command(editor, overridePath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
