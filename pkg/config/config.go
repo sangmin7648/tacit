@@ -30,8 +30,8 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		WhisperModel:    "medium",
-		MinSpeechDur:    8 * time.Second,
-		SilenceDuration: 1500 * time.Millisecond,
+		MinSpeechDur:    5 * time.Second,
+		SilenceDuration: 3 * time.Second,
 		SpeechThreshold: 0.5,
 		EnergyThreshold: 200,
 		LLMProvider:     "ollama",
