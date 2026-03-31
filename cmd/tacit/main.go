@@ -7,14 +7,18 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"sort"
 	"syscall"
+	"time"
 
 	"io/fs"
-	"path/filepath"
 
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/pipeline"
+	"github.com/sangmin7648/tacit/pkg/search"
+	"github.com/sangmin7648/tacit/pkg/storage"
 	"github.com/sangmin7648/tacit/skills"
 )
 
@@ -42,6 +46,12 @@ func main() {
 		cmdStatus()
 	case "update":
 		cmdUpdate()
+	case "list":
+		cmdList()
+	case "search":
+		cmdSearch()
+	case "get":
+		cmdGet()
 	case "config":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit>\n")
@@ -74,6 +84,9 @@ Usage:
   tacit stop                   Stop the voice capture daemon
   tacit status                 Check daemon status
   tacit update                 Update tacit to the latest version
+  tacit list [duration]        List knowledge entries (default: 24h)
+  tacit search <pattern>       Search knowledge entries by pattern
+  tacit get <file-path>        Print the full content of a knowledge entry
   tacit config view            Show current configuration
   tacit config edit            Open configuration in a text editor
 `)
@@ -324,6 +337,222 @@ func cmdUpdate() {
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("Update failed: %v", err)
 	}
+}
+
+// parseDuration extends time.ParseDuration with support for d (days) and w (weeks).
+func parseDuration(s string) (time.Duration, error) {
+	// Replace w and d with their hour equivalents before parsing.
+	// Process longest suffixes first to avoid partial replacement.
+	result := time.Duration(0)
+	remaining := s
+	for remaining != "" {
+		// Find next numeric run
+		i := 0
+		for i < len(remaining) && (remaining[i] >= '0' && remaining[i] <= '9') {
+			i++
+		}
+		if i == 0 {
+			// Non-numeric start — pass the whole thing to time.ParseDuration for error
+			return time.ParseDuration(s)
+		}
+		numStr := remaining[:i]
+		remaining = remaining[i:]
+
+		// Find the unit (non-numeric, non-dot characters)
+		j := 0
+		for j < len(remaining) && !(remaining[j] >= '0' && remaining[j] <= '9') {
+			j++
+		}
+		unit := remaining[:j]
+		remaining = remaining[j:]
+
+		var n int64
+		fmt.Sscanf(numStr, "%d", &n)
+
+		switch unit {
+		case "d":
+			result += time.Duration(n) * 24 * time.Hour
+		case "w":
+			result += time.Duration(n) * 7 * 24 * time.Hour
+		default:
+			// Re-parse this token with standard parser
+			d, err := time.ParseDuration(numStr + unit)
+			if err != nil {
+				return 0, fmt.Errorf("unknown unit %q in duration %q", unit, s)
+			}
+			result += d
+		}
+	}
+	return result, nil
+}
+
+// cmdList lists knowledge entries created within the given duration (default 24h).
+func cmdList() {
+	dur := 24 * time.Hour
+	if len(os.Args) >= 3 {
+		d, err := parseDuration(os.Args[2])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid duration %q: %v\n", os.Args[2], err)
+			fmt.Fprintf(os.Stderr, "Examples: 1h, 30m, 24h, 1d, 7d, 2w\n")
+			os.Exit(1)
+		}
+		dur = d
+	}
+
+	baseDir := config.BaseDir()
+	cutoff := time.Now().Add(-dur)
+
+	var entries []*storage.KnowledgeEntry
+	err := filepath.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip unreadable entries
+		}
+		if d.IsDir() {
+			// Skip internal directories
+			name := d.Name()
+			if name == "models" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != ".md" {
+			return nil
+		}
+
+		entry, err := storage.Read(path)
+		if err != nil {
+			return nil // skip malformed files
+		}
+
+		if entry.CreatedAt.After(cutoff) {
+			entries = append(entries, entry)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatalf("Failed to read knowledge base: %v", err)
+	}
+
+	durStr := formatDuration(dur)
+
+	if len(entries) == 0 {
+		fmt.Printf("No entries found in the last %s.\n", durStr)
+		return
+	}
+
+	// Sort newest first
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].CreatedAt.After(entries[j].CreatedAt)
+	})
+
+	fmt.Printf("Found %d entries in the last %s:\n\n", len(entries), durStr)
+	for _, e := range entries {
+		fmt.Printf("[%s] %s / %s\n", e.CreatedAt.Format("2006-01-02 15:04:05"), e.Category, e.Title)
+		fmt.Printf("  File:    %s\n", e.FilePath)
+		if e.Summary != "" {
+			// Print first line of summary
+			summary := e.Summary
+			if idx := findNewline(summary); idx >= 0 {
+				summary = summary[:idx]
+			}
+			fmt.Printf("  Summary: %s\n", summary)
+		}
+		fmt.Println()
+	}
+}
+
+// cmdSearch searches the knowledge base for entries matching a pattern.
+func cmdSearch() {
+	if len(os.Args) < 3 {
+		fmt.Fprintf(os.Stderr, "Usage: tacit search <pattern>\n")
+		os.Exit(1)
+	}
+
+	pattern := os.Args[2]
+	baseDir := config.BaseDir()
+
+	results, err := search.Search(baseDir, pattern)
+	if err != nil {
+		log.Fatalf("Search failed: %v", err)
+	}
+
+	if len(results) == 0 {
+		fmt.Printf("No results found for %q.\n", pattern)
+		return
+	}
+
+	fmt.Printf("Found %d result(s) for %q:\n\n", len(results), pattern)
+	for _, r := range results {
+		fmt.Printf("[%s] %s / %s\n", r.CreatedAt.Format("2006-01-02 15:04:05"), r.Category, r.Title)
+		fmt.Printf("  File:  %s\n", r.FilePath)
+		for _, line := range r.MatchLines {
+			fmt.Printf("  Match: %s\n", line)
+		}
+		fmt.Println()
+	}
+}
+
+// cmdGet prints the full content of a knowledge entry file.
+func cmdGet() {
+	if len(os.Args) < 3 {
+		fmt.Fprintf(os.Stderr, "Usage: tacit get <file-path>\n")
+		os.Exit(1)
+	}
+
+	filePath := os.Args[2]
+	entry, err := storage.Read(filePath)
+	if err != nil {
+		log.Fatalf("Failed to read entry: %v", err)
+	}
+
+	fmt.Printf("Title:    %s\n", entry.Title)
+	fmt.Printf("Category: %s\n", entry.Category)
+	fmt.Printf("Created:  %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Printf("File:     %s\n", entry.FilePath)
+	fmt.Println()
+	if entry.Summary != "" {
+		fmt.Println("## Summary")
+		fmt.Println()
+		fmt.Println(entry.Summary)
+		fmt.Println()
+	}
+	if entry.Content != "" {
+		fmt.Println("## Content")
+		fmt.Println()
+		fmt.Println(entry.Content)
+	}
+}
+
+// formatDuration formats a duration using d/w units when possible.
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "0s"
+	}
+	weeks := int(d / (7 * 24 * time.Hour))
+	rem := d % (7 * 24 * time.Hour)
+	days := int(rem / (24 * time.Hour))
+	rem = rem % (24 * time.Hour)
+
+	if rem == 0 {
+		if weeks > 0 && days == 0 {
+			return fmt.Sprintf("%dw", weeks)
+		}
+		totalDays := weeks*7 + days
+		if totalDays > 0 {
+			return fmt.Sprintf("%dd", totalDays)
+		}
+	}
+	// Fall back to standard format for sub-day durations or mixed units
+	return d.String()
+}
+
+func findNewline(s string) int {
+	for i, c := range s {
+		if c == '\n' {
+			return i
+		}
+	}
+	return -1
 }
 
 // cmdStatus checks if the daemon is running.

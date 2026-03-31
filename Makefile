@@ -1,4 +1,4 @@
-.PHONY: build clean whisper-lib test e2e-test install
+.PHONY: build clean whisper-lib test e2e-test install rg-download
 
 WHISPER_DIR  := third_party/whisper.cpp
 WHISPER_BUILD := $(WHISPER_DIR)/build
@@ -32,7 +32,29 @@ export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFOR
 
 TEN_VAD_FRAMEWORK := third_party/ten-vad/lib/macOS/ten_vad.framework
 
-build: whisper-lib
+RG_VERSION := 14.1.1
+RG_ARM64_URL := https://github.com/BurntSushi/ripgrep/releases/download/$(RG_VERSION)/ripgrep-$(RG_VERSION)-aarch64-apple-darwin.tar.gz
+RG_AMD64_URL := https://github.com/BurntSushi/ripgrep/releases/download/$(RG_VERSION)/ripgrep-$(RG_VERSION)-x86_64-apple-darwin.tar.gz
+
+pkg/search/rg-darwin-arm64:
+	@echo "Downloading ripgrep $(RG_VERSION) for darwin/arm64..."
+	@tmpdir=$$(mktemp -d) && \
+	  curl -fsSL $(RG_ARM64_URL) | tar -xz -C $$tmpdir && \
+	  mv $$tmpdir/ripgrep-$(RG_VERSION)-aarch64-apple-darwin/rg $@ && \
+	  rm -rf $$tmpdir
+	@echo "Downloaded: $@"
+
+pkg/search/rg-darwin-amd64:
+	@echo "Downloading ripgrep $(RG_VERSION) for darwin/amd64..."
+	@tmpdir=$$(mktemp -d) && \
+	  curl -fsSL $(RG_AMD64_URL) | tar -xz -C $$tmpdir && \
+	  mv $$tmpdir/ripgrep-$(RG_VERSION)-x86_64-apple-darwin/rg $@ && \
+	  rm -rf $$tmpdir
+	@echo "Downloaded: $@"
+
+rg-download: pkg/search/rg-darwin-arm64 pkg/search/rg-darwin-amd64
+
+build: whisper-lib rg-download
 	go build -o tacit ./cmd/tacit/
 ifeq ($(UNAME_S),Darwin)
 	@echo "Bundling ten_vad.framework..."
@@ -77,4 +99,5 @@ clean:
 	rm -rf $(WHISPER_BUILD)
 	rm -rf ten_vad.framework
 	rm -f tacit
+	rm -f pkg/search/rg-darwin-arm64 pkg/search/rg-darwin-amd64
 	go clean
