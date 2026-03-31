@@ -40,6 +40,8 @@ func main() {
 		cmdStop()
 	case "status":
 		cmdStatus()
+	case "update":
+		cmdUpdate()
 	case "config":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit>\n")
@@ -71,6 +73,7 @@ Usage:
   tacit listen                 Start the voice capture daemon (foreground)
   tacit stop                   Stop the voice capture daemon
   tacit status                 Check daemon status
+  tacit update                 Update tacit to the latest version
   tacit config view            Show current configuration
   tacit config edit            Open configuration in a text editor
 `)
@@ -298,6 +301,29 @@ func detectEditor() string {
 	}
 
 	return ""
+}
+
+// cmdUpdate updates tacit to the latest version by running the install script.
+func cmdUpdate() {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		log.Fatalf("sh not found: %v", err)
+	}
+
+	curl, err := exec.LookPath("curl")
+	if err != nil {
+		log.Fatalf("curl not found: %v", err)
+	}
+
+	fmt.Println("Updating tacit to the latest version...")
+
+	cmd := exec.Command(sh, "-c", curl+" -fsSL https://raw.githubusercontent.com/sangmin7648/tacit/main/install.sh | "+sh)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Update failed: %v", err)
+	}
 }
 
 // cmdStatus checks if the daemon is running.
