@@ -25,13 +25,13 @@ type Config struct {
 // DefaultConfig returns a Config populated with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		WhisperModel:    "small",
+		WhisperModel:    "medium",
 		MinSpeechDur:    8 * time.Second,
 		SilenceDuration: 1500 * time.Millisecond,
 		SpeechThreshold: 0.5,
 		EnergyThreshold: 200,
 		LLMProvider:     "ollama",
-		LLMModel:        "llama3.2",
+		LLMModel:        "qwen3.5",
 	}
 }
 
