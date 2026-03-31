@@ -1,7 +1,5 @@
 # tacit
 
-**항상 켜있다**
-
 말한 것들이 AI 지식이 된다. 백그라운드에서 대화를 캡처하고, AI가 꺼내 쓸 수 있도록 자동으로 정리한다.
 
 ## Install
@@ -16,33 +14,22 @@ curl -fsSL https://raw.githubusercontent.com/sangmin7648/tacit/main/install.sh |
 tacit setup
 ```
 
-AI agent가 저장된 지식을 검색할 수 있는 skill을 설치한다. **한 번만 실행하면 된다.**
-
 ## 사용법
 
 ### 항상 켜두기
 
 ```bash
 tacit listen    # 캡처 시작
-tacit status    # 상태 확인
-tacit stop      # 중지
 ```
 
 켜두면 된다. 말이 감지될 때마다 자동으로 텍스트 변환 → 분류 → 저장한다.
 
-### 기존 녹음 파일 처리
-
-```bash
-tacit process recording.m4a
-```
-
-m4a, mp3, wav, flac 등 오디오 파일을 지식 엔트리로 변환한다.
-
 ## AI에서 사용하기
 
-`tacit setup` 이후 AI agent가 `~/.tacit/`의 지식을 바로 검색할 수 있다.
+`tacit setup` 이후 AI agent에서 SKILL로 구두 대화를 바로 검색할 수 있다.
 
 ```
+/tacit.knowledge 방금 논의에서 검색 랭킹 관련 논의 결과를 정리해줘 
 "저번 주 회의에서 논의한 API 설계 찾아줘"
 "지난달 아이디어 중 프로젝트 관련된 것 있어?"
 ```
