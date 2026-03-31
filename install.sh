@@ -57,6 +57,14 @@ if [ "$OS" = "darwin" ] && [ -d "$TMPDIR/ten_vad.framework" ]; then
   cp -R "$TMPDIR/ten_vad.framework" "$INSTALL_DIR/ten_vad.framework"
 fi
 
+# Remove macOS quarantine (Gatekeeper)
+if [ "$OS" = "darwin" ]; then
+  xattr -dr com.apple.quarantine "$INSTALL_DIR/tacit" 2>/dev/null || true
+  if [ -d "$INSTALL_DIR/ten_vad.framework" ]; then
+    xattr -dr com.apple.quarantine "$INSTALL_DIR/ten_vad.framework" 2>/dev/null || true
+  fi
+fi
+
 # ── PATH check ──────────────────────────────────────────
 
 case ":$PATH:" in
