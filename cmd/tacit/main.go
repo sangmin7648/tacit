@@ -49,6 +49,11 @@ func main() {
 		cmdStatus()
 	case "update":
 		cmdUpdate()
+	case "install-skills":
+		if err := installSkills(cfg.SkillAgent); err != nil {
+			log.Fatalf("Failed to install skills: %v", err)
+		}
+		fmt.Println("Skills updated.")
 	case "list":
 		cmdList()
 	case "search":
@@ -142,13 +147,15 @@ func cmdSetup() {
 
 	// Step 3: AI agent for skill installation (only claude supported)
 	fmt.Println("Step 3/3: Select AI agent for skill installation")
-	selectOption([]string{"claude"}, 0) //nolint
+	agentNames := []string{"claude"}
+	agentIdx := selectOption(agentNames, 0)
+	skillAgent := agentNames[agentIdx]
 	fmt.Println()
 
 	fmt.Println()
 	fmt.Printf("  LLM provider : %s\n", llmProvider)
 	fmt.Printf("  LLM model    : %s\n", llmModel)
-	fmt.Printf("  Skill agent  : claude\n")
+	fmt.Printf("  Skill agent  : %s\n", skillAgent)
 	fmt.Println()
 
 	// Write LLM settings to config-override.yaml
@@ -156,48 +163,13 @@ func cmdSetup() {
 	if err := os.MkdirAll(filepath.Dir(overridePath), 0755); err != nil {
 		log.Fatalf("Failed to create config directory: %v", err)
 	}
-	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel); err != nil {
+	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel, skillAgent); err != nil {
 		log.Fatalf("Failed to write config override: %v", err)
 	}
-	fmt.Printf("Saved LLM settings: %s\n", overridePath)
+	fmt.Printf("Saved settings: %s\n", overridePath)
 
-	// Install Claude Code skill files
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Failed to get home directory: %v", err)
-	}
-
-	skillsDir := filepath.Join(home, ".claude", "skills")
-
-	err = fs.WalkDir(skills.FS, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		dest := filepath.Join(skillsDir, path)
-
-		if d.IsDir() {
-			return os.MkdirAll(dest, 0755)
-		}
-
-		data, err := skills.FS.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("reading embedded %s: %w", path, err)
-		}
-
-		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-			return err
-		}
-
-		if err := os.WriteFile(dest, data, 0644); err != nil {
-			return fmt.Errorf("writing %s: %w", dest, err)
-		}
-
-		fmt.Printf("Installed: %s\n", dest)
-		return nil
-	})
-
-	if err != nil {
+	// Install skill files for the selected agent
+	if err := installSkills(skillAgent); err != nil {
 		log.Fatalf("Setup failed: %v", err)
 	}
 
@@ -452,6 +424,7 @@ func cmdConfigView(cfg *config.Config) {
 	fmt.Printf("%-22s %-20.0f %s\n", "energy_threshold:", cfg.EnergyThreshold, tag("energy_threshold"))
 	fmt.Printf("%-22s %-20s %s\n", "llm_provider:", cfg.LLMProvider, tag("llm_provider"))
 	fmt.Printf("%-22s %-20s %s\n", "llm_model:", cfg.LLMModel, tag("llm_model"))
+	fmt.Printf("%-22s %-20s %s\n", "skill_agent:", cfg.SkillAgent, tag("skill_agent"))
 }
 
 // cmdConfigEdit opens the user override config file in a text editor.
@@ -506,7 +479,8 @@ func detectEditor() string {
 	return ""
 }
 
-// cmdUpdate updates tacit to the latest version by running the install script.
+// cmdUpdate updates tacit to the latest version by running the install script,
+// then automatically installs the updated skills from the new binary.
 func cmdUpdate() {
 	sh, err := exec.LookPath("sh")
 	if err != nil {
@@ -527,6 +501,64 @@ func cmdUpdate() {
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("Update failed: %v", err)
 	}
+
+	// Install skills from the newly downloaded binary so that skill changes
+	// are applied without requiring a separate `tacit setup` run.
+	newBin, err := exec.LookPath("tacit")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not find tacit binary to update skills: %v\n", err)
+		return
+	}
+	skillCmd := exec.Command(newBin, "install-skills")
+	skillCmd.Stdin = os.Stdin
+	skillCmd.Stdout = os.Stdout
+	skillCmd.Stderr = os.Stderr
+	if err := skillCmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: skill update failed: %v\n", err)
+	}
+}
+
+// agentSkillsDir returns the skills directory for the given agent.
+func agentSkillsDir(agent string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	switch agent {
+	case "claude":
+		return filepath.Join(home, ".claude", "skills"), nil
+	default:
+		return "", fmt.Errorf("unknown skill agent %q", agent)
+	}
+}
+
+// installSkills copies the embedded skill files into the agent's skills directory.
+func installSkills(agent string) error {
+	skillsDir, err := agentSkillsDir(agent)
+	if err != nil {
+		return err
+	}
+	return fs.WalkDir(skills.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		dest := filepath.Join(skillsDir, path)
+		if d.IsDir() {
+			return os.MkdirAll(dest, 0755)
+		}
+		data, err := skills.FS.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading embedded %s: %w", path, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(dest, data, 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", dest, err)
+		}
+		fmt.Printf("Installed: %s\n", dest)
+		return nil
+	})
 }
 
 // parseDuration extends time.ParseDuration with support for d (days) and w (weeks).

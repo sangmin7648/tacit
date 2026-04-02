@@ -24,6 +24,7 @@ type Config struct {
 	EnergyThreshold float64       `yaml:"energy_threshold"`
 	LLMProvider     string        `yaml:"llm_provider"`
 	LLMModel        string        `yaml:"llm_model"`
+	SkillAgent      string        `yaml:"skill_agent"`
 }
 
 // DefaultConfig returns a Config populated with default values.
@@ -36,6 +37,7 @@ func DefaultConfig() *Config {
 		EnergyThreshold: 200,
 		LLMProvider:     "ollama",
 		LLMModel:        "qwen3.5",
+		SkillAgent:      "claude",
 	}
 }
 
@@ -108,7 +110,8 @@ func WriteDefault(path string) error {
 			"speech_threshold: %.2f\n"+
 			"energy_threshold: %.0f\n"+
 			"llm_provider: %s\n"+
-			"llm_model: %s\n",
+			"llm_model: %s\n"+
+			"skill_agent: %s\n",
 		cfg.WhisperModel,
 		formatDuration(cfg.MinSpeechDur),
 		formatDuration(cfg.SilenceDuration),
@@ -116,6 +119,7 @@ func WriteDefault(path string) error {
 		cfg.EnergyThreshold,
 		cfg.LLMProvider,
 		cfg.LLMModel,
+		cfg.SkillAgent,
 	)
 	return os.WriteFile(path, []byte(content), 0644)
 }
@@ -137,6 +141,7 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("energy_threshold: %.0f", defaults.EnergyThreshold),
 		fmt.Sprintf("llm_provider: %s", defaults.LLMProvider),
 		fmt.Sprintf("llm_model: %s", defaults.LLMModel),
+		fmt.Sprintf("skill_agent: %s", defaults.SkillAgent),
 	}
 
 	var sb strings.Builder
@@ -192,11 +197,11 @@ func PIDPath() string {
 	return filepath.Join(BaseDir(), "tacit.pid")
 }
 
-// WriteSetupOverride writes a full override template with llm_provider and
-// llm_model set to the given values (uncommented). Other fields are preserved
-// from the existing override file if present; otherwise they remain commented
-// out with their default values so users can easily edit them later.
-func WriteSetupOverride(path string, provider, model string) error {
+// WriteSetupOverride writes a full override template with llm_provider,
+// llm_model, and skill_agent set to the given values (uncommented). Other
+// fields are preserved from the existing override file if present; otherwise
+// they remain commented out with their default values.
+func WriteSetupOverride(path string, provider, model, agent string) error {
 	// Load existing override values to preserve non-LLM user settings.
 	existing := map[string]interface{}{}
 	if data, err := os.ReadFile(path); err == nil {
@@ -224,6 +229,7 @@ func WriteSetupOverride(path string, provider, model string) error {
 		{"energy_threshold", fmt.Sprintf("%.0f", defaults.EnergyThreshold), false},
 		{"llm_provider", provider, true},
 		{"llm_model", model, true},
+		{"skill_agent", agent, true},
 	}
 
 	var sb strings.Builder
