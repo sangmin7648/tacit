@@ -49,12 +49,12 @@ In the main thread:
 
 ### Step 3 — Fetch full content for top entries
 
-For each selected file path, run:
+Run a single command with all selected file paths at once:
 ```bash
-tacit get <file-path>
+tacit get <file-path-1> <file-path-2> <file-path-3> ...
 ```
 
-Read the `Summary` section first. Include the `Content` (raw STT) only if the user's question requires detail or the summary is insufficient.
+This returns all entries in one output, separated by `---`. Read the `Summary` section first. Include the `Content` (raw STT) only if the user's question requires detail or the summary is insufficient.
 
 ### Step 4 — Respond
 

@@ -89,7 +89,7 @@ Usage:
   tacit update                 Update tacit to the latest version
   tacit list [duration]        List knowledge entries (default: 24h)
   tacit search <pattern>       Search knowledge entries by pattern
-  tacit get <file-path>        Print the full content of a knowledge entry
+  tacit get <file-path>...     Print the full content of one or more knowledge entries
   tacit config view            Show current configuration
   tacit config edit            Open configuration in a text editor
 `)
@@ -682,34 +682,42 @@ func cmdSearch() {
 	}
 }
 
-// cmdGet prints the full content of a knowledge entry file.
+// cmdGet prints the full content of one or more knowledge entry files.
 func cmdGet() {
 	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: tacit get <file-path>\n")
+		fmt.Fprintf(os.Stderr, "Usage: tacit get <file-path> [<file-path>...]\n")
 		os.Exit(1)
 	}
 
-	filePath := os.Args[2]
-	entry, err := storage.Read(filePath)
-	if err != nil {
-		log.Fatalf("Failed to read entry: %v", err)
-	}
+	filePaths := os.Args[2:]
+	for i, filePath := range filePaths {
+		if i > 0 {
+			fmt.Println()
+			fmt.Println("---")
+			fmt.Println()
+		}
+		entry, err := storage.Read(filePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to read entry %s: %v\n", filePath, err)
+			continue
+		}
 
-	fmt.Printf("Title:    %s\n", entry.Title)
-	fmt.Printf("Category: %s\n", entry.Category)
-	fmt.Printf("Created:  %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("File:     %s\n", entry.FilePath)
-	fmt.Println()
-	if entry.Summary != "" {
-		fmt.Println("## Summary")
+		fmt.Printf("Title:    %s\n", entry.Title)
+		fmt.Printf("Category: %s\n", entry.Category)
+		fmt.Printf("Created:  %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("File:     %s\n", entry.FilePath)
 		fmt.Println()
-		fmt.Println(entry.Summary)
-		fmt.Println()
-	}
-	if entry.Content != "" {
-		fmt.Println("## Content")
-		fmt.Println()
-		fmt.Println(entry.Content)
+		if entry.Summary != "" {
+			fmt.Println("## Summary")
+			fmt.Println()
+			fmt.Println(entry.Summary)
+			fmt.Println()
+		}
+		if entry.Content != "" {
+			fmt.Println("## Content")
+			fmt.Println()
+			fmt.Println(entry.Content)
+		}
 	}
 }
 
