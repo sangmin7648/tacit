@@ -8,9 +8,9 @@ description: |
 
 # tacit Knowledge Base Query
 
-You are retrieving relevant knowledge from multiple sources: the local tacit knowledge database and any external knowledge MCPs available in the current session.
+You are retrieving relevant knowledge from the user's local tacit knowledge database using the `tacit` CLI.
 
-## Available tacit Commands
+## Available Commands
 
 ```
 tacit list [duration]                    — List entries created within duration (default: 1h). Supports: 30m, 1h, 24h, 1d, 7d, 2w
@@ -22,53 +22,52 @@ tacit get <file-path>                    — Print full content of a specific en
 
 When the user invokes `/tacit.knowledge <prompt>`, extract the time window from the prompt if mentioned (e.g. "오늘", "이번 주", "지난 1시간"). If no time is specified, default to **1h** for list.
 
-### Step 0 — Identify available external knowledge sources
+### Step 1 — Run list agent and search agent IN PARALLEL
 
-Review the tools available in the current session. Identify MCP tools that provide **search or query** capabilities over knowledge repositories — such as messaging platforms, wikis, note-taking apps, project management tools, email, calendars, or issue trackers.
+**List agent** — retrieves recent entries:
+```bash
+tacit list <duration>
+```
+- Use the time window from the prompt if specified; otherwise use `1h`
+- Parse the output: each entry has `[datetime] category / title`, `File: <path>`, and optionally `Summary: <first line>`
+- Collect all file paths from the output
 
-Criteria for inclusion:
-- The tool name or description contains keywords like `search`, `query`, `find`, `list`, `read`
-- The tool belongs to a service where knowledge, decisions, or discussions are likely stored
-- Do **not** hardcode specific tool names — evaluate based on what is actually available
+**Search agent** — finds topically relevant entries:
+1. Extract 2–4 keywords from the user's prompt (nouns, domain terms, key verbs)
+2. Run `tacit search <keyword>` for each keyword to maximize recall. If a time window was identified, pass `--duration <d>` to narrow results (e.g. `tacit search --duration 1h <keyword>`)
+3. Collect all unique file paths from results
+4. Deduplicate across keywords
 
-### Step 1 — Launch sub-agents in parallel
+Each agent returns: a list of `{ file_path, title, category, created_at, summary_snippet }` objects.
 
-Launch one sub-agent per source, all in parallel using the Agent tool. Each sub-agent is isolated and does not pollute the main context.
+### Step 2 — Merge results
 
-**tacit sub-agent** — retrieves from local knowledge base:
-1. Run `tacit list <duration>` to get recent entries
-2. Extract 2–4 keywords from the user's prompt and run `tacit search <keyword>` for each. If a time window was identified, pass `--duration <d>` to narrow results (e.g. `tacit search --duration 1h <keyword>`)
-3. Merge all unique file paths, prioritizing entries that appear in both list and search results
-4. Fetch full content: `tacit get <path1> <path2> ...`
-5. Return structured results: `{ source: "tacit", items: [{ title, file_path, date, category, summary, content }] }`
+In the main thread:
+- Union the file paths from both agents, deduplicated
+- If a file path appears in both, it is high-confidence relevant — prioritize it
+- Limit to the **5 most relevant** entries to avoid context overload (prefer recent + multi-source matches)
 
-**External source sub-agent(s)** — one per identified MCP source:
-- Use the available search/query tools for that source
-- Extract keywords from the user's prompt and run targeted queries
-- Perform follow-up queries or pagination as needed to explore deeply
-- Return structured results: `{ source: "<service name>", items: [{ title, url_or_ref, date, snippet }] }`
-- If a tool is unavailable or returns an error, return an empty result silently
+### Step 3 — Fetch full content for top entries
 
-### Step 2 — Merge results in the main thread
+Run a single command with all selected file paths at once:
+```bash
+tacit get <file-path-1> <file-path-2> <file-path-3> ...
+```
 
-Collect all sub-agent results and merge:
-- Tag each item with its source (e.g. `tacit`, `Slack`, `Notion`, etc.)
-- Items appearing in multiple sources are high-confidence — surface them first
-- No item count limit — use everything the sub-agents returned
+This returns all entries in one output, separated by `---`. Read the `Summary` section first. Include the `Content` (raw STT) only if the user's question requires detail or the summary is insufficient.
 
-### Step 3 — Respond
+### Step 4 — Respond
 
-Synthesize all retrieved knowledge into a direct answer to the user's prompt:
-- Group or sequence results naturally (by topic, time, or source)
-- For each item, cite: **title**, **date**, and **source** (channel, page, tacit category, etc.)
-- Use summaries for concise context; include raw content only when the user's question requires detail
-- If no relevant entries are found across any source, briefly note this and answer from general knowledge
+Synthesize the retrieved knowledge into a direct answer to the user's prompt:
+- Reference each entry by title and date
+- Use summary for concise context; raw content only when needed
+- If no relevant entries are found, briefly note this and answer from general knowledge
 
 ## Important
 
-- tacit content is captured from real-time speech (STT) — expect transcription artifacts
-- tacit categories and content are primarily in Korean
+- Knowledge content is captured from real-time speech (STT) — expect transcription artifacts
+- Categories and content are primarily in Korean
 - Do NOT fabricate knowledge entries — only reference what actually exists
+- The `Summary` section is the AI-processed version; `Content` is raw STT output
 - `tacit search` supports regex-compatible patterns — you can use `tacit search "키워드1\|키워드2"` to search multiple terms at once
 - `tacit search --duration` accepts the same units as `tacit list`: `30m`, `1h`, `24h`, `1d`, `7d`, `2w`
-- When launching external source sub-agents, pass the user's original prompt and extracted keywords so each sub-agent can independently determine the best query strategy for its source
