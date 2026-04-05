@@ -17,22 +17,39 @@ type SegmentBuffer struct {
 	startTime   time.Time
 	sampleRate  int           // typically 16000
 	minDuration time.Duration // minimum speech duration to keep
+	maxDuration time.Duration // pre-allocation cap; 0 = no pre-alloc
 	isActive    bool
 }
 
-// NewSegmentBuffer creates a buffer with the given sample rate and minimum duration.
-func NewSegmentBuffer(sampleRate int, minDuration time.Duration) *SegmentBuffer {
+// NewSegmentBuffer creates a buffer with the given sample rate, minimum
+// duration, and optional maximum duration. When maxDuration > 0 the backing
+// array is pre-allocated to exactly that size at Start() and reused across
+// segments, eliminating append-induced reallocations.
+func NewSegmentBuffer(sampleRate int, minDuration, maxDuration time.Duration) *SegmentBuffer {
 	return &SegmentBuffer{
 		sampleRate:  sampleRate,
 		minDuration: minDuration,
+		maxDuration: maxDuration,
 	}
 }
 
 // Start marks the beginning of a speech segment and records the start time.
+// If maxDuration was set, the backing array is pre-allocated to that capacity
+// (or reused from the previous segment) so no reallocation happens during
+// Append calls.
 func (b *SegmentBuffer) Start() {
 	b.isActive = true
 	b.startTime = time.Now()
-	b.samples = b.samples[:0]
+	if b.maxDuration > 0 {
+		maxSamples := int(b.maxDuration.Seconds() * float64(b.sampleRate))
+		if cap(b.samples) < maxSamples {
+			b.samples = make([]float32, 0, maxSamples)
+		} else {
+			b.samples = b.samples[:0]
+		}
+	} else {
+		b.samples = b.samples[:0]
+	}
 }
 
 // Append adds samples to the buffer.

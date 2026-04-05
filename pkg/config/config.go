@@ -32,6 +32,12 @@ type Config struct {
 	// When true, audio from speakers (Google Meet, YouTube, etc.) is also
 	// transcribed and stored. Requires Screen Recording permission.
 	CaptureSpeaker bool `yaml:"capture_speaker"`
+	// MaxSegmentDur caps the maximum length of a single speech segment sent to
+	// STT. When a segment grows beyond this, it is force-split and transcribed
+	// immediately even if speech is still ongoing. This prevents unbounded
+	// memory growth when capturing continuous audio (e.g. long videos).
+	// 0 disables the cap. Default: 30s.
+	MaxSegmentDur time.Duration `yaml:"max_segment_duration"`
 }
 
 // DefaultConfig returns a Config populated with default values.
@@ -47,6 +53,7 @@ func DefaultConfig() *Config {
 		SkillAgent:      "claude",
 		CaptureMic:      true,
 		CaptureSpeaker:  true,
+		MaxSegmentDur:   30 * time.Second,
 	}
 }
 
@@ -122,7 +129,8 @@ func WriteDefault(path string) error {
 			"llm_model: %s\n"+
 			"skill_agent: %s\n"+
 			"capture_mic: %v\n"+
-			"capture_speaker: %v\n",
+			"capture_speaker: %v\n"+
+			"max_segment_duration: %s\n",
 		cfg.WhisperModel,
 		formatDuration(cfg.MinSpeechDur),
 		formatDuration(cfg.SilenceDuration),
@@ -133,6 +141,7 @@ func WriteDefault(path string) error {
 		cfg.SkillAgent,
 		cfg.CaptureMic,
 		cfg.CaptureSpeaker,
+		formatDuration(cfg.MaxSegmentDur),
 	)
 	return os.WriteFile(path, []byte(content), 0644)
 }
@@ -157,6 +166,7 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("skill_agent: %s", defaults.SkillAgent),
 		fmt.Sprintf("capture_mic: %v", defaults.CaptureMic),
 		fmt.Sprintf("capture_speaker: %v", defaults.CaptureSpeaker),
+		fmt.Sprintf("max_segment_duration: %s", formatDuration(defaults.MaxSegmentDur)),
 	}
 
 	var sb strings.Builder
@@ -247,6 +257,7 @@ func WriteSetupOverride(path string, provider, model, agent string, captureMic, 
 		{"skill_agent", agent, true},
 		{"capture_mic", fmt.Sprintf("%v", captureMic), true},
 		{"capture_speaker", fmt.Sprintf("%v", captureSpeaker), true},
+		{"max_segment_duration", formatDuration(defaults.MaxSegmentDur), false},
 	}
 
 	var sb strings.Builder

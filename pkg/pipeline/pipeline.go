@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"strings"
+
 	"github.com/sangmin7648/tacit/pkg/audio"
 	"github.com/sangmin7648/tacit/pkg/capture"
 	"github.com/sangmin7648/tacit/pkg/config"
@@ -131,10 +133,15 @@ func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label
 		return fmt.Errorf("start stream: %w", err)
 	}
 
-	segBuf := audio.NewSegmentBuffer(audio.SampleRate, p.cfg.MinSpeechDur)
+	segBuf := audio.NewSegmentBuffer(audio.SampleRate, p.cfg.MinSpeechDur, p.cfg.MaxSegmentDur)
 	var frameBuf []int16
 	silenceFrames := 0
 	silenceLimit := int(p.cfg.SilenceDuration.Seconds() * float64(audio.SampleRate) / float64(hopSize))
+
+	// textBuf accumulates STT results from split chunks within one speech session.
+	// All chunks are joined and sent as a single classify item when silence is detected.
+	var textBuf []string
+	var sessionStart time.Time
 
 	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
 
@@ -167,10 +174,26 @@ func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label
 			if isSpeech {
 				silenceFrames = 0
 				if !segBuf.IsActive() {
+					if len(textBuf) == 0 {
+						sessionStart = time.Now()
+					}
 					segBuf.Start()
 					log.Printf("[%s] speech started", label)
 				}
 				segBuf.Append(audio.Int16ToFloat32(frame))
+
+				// Force-split long segments to cap memory usage; accumulate
+				// the resulting text to merge into one file at session end.
+				if p.cfg.MaxSegmentDur > 0 && segBuf.Duration() >= p.cfg.MaxSegmentDur {
+					log.Printf("[%s] segment capped at %.1fs, splitting", label, segBuf.Duration().Seconds())
+					seg, ok := segBuf.Finish()
+					if ok {
+						if text := p.transcribeSync(ctx, seg, label); text != "" {
+							textBuf = append(textBuf, text)
+						}
+					}
+					segBuf.Start() // speech is still ongoing; restart immediately
+				}
 			} else if segBuf.IsActive() {
 				segBuf.Append(audio.Int16ToFloat32(frame))
 				silenceFrames++
@@ -180,9 +203,16 @@ func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label
 					seg, ok := segBuf.Finish()
 					silenceFrames = 0
 					if ok {
-						p.transcribeAndQueue(ctx, seg, label, classifyCh)
-					} else {
+						if text := p.transcribeSync(ctx, seg, label); text != "" {
+							textBuf = append(textBuf, text)
+						}
+					} else if len(textBuf) == 0 {
 						log.Printf("[%s] segment too short, discarding", label)
+					}
+					// Flush accumulated text as a single classify item.
+					if len(textBuf) > 0 {
+						classifyCh <- classifyItem{text: strings.Join(textBuf, " "), timestamp: sessionStart}
+						textBuf = textBuf[:0]
 					}
 				}
 			}
@@ -195,9 +225,9 @@ func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label
 	return nil
 }
 
-// transcribeAndQueue runs STT (serialised across sources) then queues text
-// for async classification.
-func (p *Pipeline) transcribeAndQueue(ctx context.Context, seg *audio.AudioSegment, label string, ch chan<- classifyItem) {
+// transcribeSync runs STT (serialised across sources) and returns the
+// transcribed text, or "" on error or empty result.
+func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, label string) string {
 	log.Printf("[%s] transcribing %.1fs of audio", label, seg.Duration.Seconds())
 
 	p.whisperMu.Lock()
@@ -206,15 +236,14 @@ func (p *Pipeline) transcribeAndQueue(ctx context.Context, seg *audio.AudioSegme
 
 	if err != nil {
 		log.Printf("[%s] STT error: %v", label, err)
-		return
+		return ""
 	}
 	if text == "" {
 		log.Printf("[%s] STT produced empty text, skipping", label)
-		return
+		return ""
 	}
 	log.Printf("[%s] STT: %s", label, text)
-
-	ch <- classifyItem{text: text, timestamp: time.Now()}
+	return text
 }
 
 // classifyLoop processes classify items from the channel, batching when
