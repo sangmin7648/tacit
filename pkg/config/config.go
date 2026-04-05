@@ -25,6 +25,10 @@ type Config struct {
 	LLMProvider     string        `yaml:"llm_provider"`
 	LLMModel        string        `yaml:"llm_model"`
 	SkillAgent      string        `yaml:"skill_agent"`
+	// CaptureSpeaker enables system-audio capture via ScreenCaptureKit (macOS 13+).
+	// When true, audio from speakers (Google Meet, YouTube, etc.) is also
+	// transcribed and stored. Requires Screen Recording permission.
+	CaptureSpeaker bool `yaml:"capture_speaker"`
 }
 
 // DefaultConfig returns a Config populated with default values.
@@ -38,6 +42,7 @@ func DefaultConfig() *Config {
 		LLMProvider:     "ollama",
 		LLMModel:        "qwen3.5",
 		SkillAgent:      "claude",
+		CaptureSpeaker:  true,
 	}
 }
 
@@ -111,7 +116,8 @@ func WriteDefault(path string) error {
 			"energy_threshold: %.0f\n"+
 			"llm_provider: %s\n"+
 			"llm_model: %s\n"+
-			"skill_agent: %s\n",
+			"skill_agent: %s\n"+
+			"capture_speaker: %v\n",
 		cfg.WhisperModel,
 		formatDuration(cfg.MinSpeechDur),
 		formatDuration(cfg.SilenceDuration),
@@ -120,6 +126,7 @@ func WriteDefault(path string) error {
 		cfg.LLMProvider,
 		cfg.LLMModel,
 		cfg.SkillAgent,
+		cfg.CaptureSpeaker,
 	)
 	return os.WriteFile(path, []byte(content), 0644)
 }
@@ -142,6 +149,7 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("llm_provider: %s", defaults.LLMProvider),
 		fmt.Sprintf("llm_model: %s", defaults.LLMModel),
 		fmt.Sprintf("skill_agent: %s", defaults.SkillAgent),
+		fmt.Sprintf("capture_speaker: %v", defaults.CaptureSpeaker),
 	}
 
 	var sb strings.Builder
@@ -230,6 +238,7 @@ func WriteSetupOverride(path string, provider, model, agent string) error {
 		{"llm_provider", provider, true},
 		{"llm_model", model, true},
 		{"skill_agent", agent, true},
+		{"capture_speaker", fmt.Sprintf("%v", defaults.CaptureSpeaker), false},
 	}
 
 	var sb strings.Builder

@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sangmin7648/tacit/pkg/capture"
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/pipeline"
@@ -342,6 +343,27 @@ func cmdListen(cfg *config.Config) {
 	}
 	defer p.Close()
 
+	// Build audio sources.
+	mic, err := capture.New()
+	if err != nil {
+		log.Fatalf("Failed to init microphone: %v", err)
+	}
+	defer mic.Close()
+
+	sources := []capture.AudioSource{mic}
+
+	if cfg.CaptureSpeaker {
+		spk, err := capture.NewSpeaker()
+		if err != nil {
+			log.Printf("Warning: system audio capture unavailable: %v", err)
+			log.Printf("Continuing with microphone only.")
+		} else {
+			defer spk.Close()
+			sources = append(sources, spk)
+			log.Printf("System audio capture enabled (requires Screen Recording permission)")
+		}
+	}
+
 	// Setup signal handling for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	sigCh := make(chan os.Signal, 1)
@@ -357,7 +379,7 @@ func cmdListen(cfg *config.Config) {
 	log.Printf("Knowledge base: %s", config.BaseDir())
 	log.Printf("Press Ctrl+C to stop")
 
-	if err := p.Run(ctx); err != nil {
+	if err := p.Run(ctx, sources); err != nil {
 		log.Printf("Pipeline error: %v", err)
 	}
 	log.Printf("tacit daemon stopped")
