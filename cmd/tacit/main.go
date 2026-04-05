@@ -455,6 +455,7 @@ func cmdListen(cfg *config.Config) {
 
 	// Build audio sources.
 	var sources []capture.AudioSource
+	var sourceLabels []string
 
 	if cfg.CaptureMic {
 		mic, err := capture.New()
@@ -463,6 +464,7 @@ func cmdListen(cfg *config.Config) {
 		}
 		defer mic.Close()
 		sources = append(sources, mic)
+		sourceLabels = append(sourceLabels, "mic")
 	}
 
 	if cfg.CaptureSpeaker {
@@ -476,6 +478,7 @@ func cmdListen(cfg *config.Config) {
 		} else {
 			defer spk.Close()
 			sources = append(sources, spk)
+			sourceLabels = append(sourceLabels, "speaker")
 			log.Printf("System audio capture enabled (requires Screen Recording permission)")
 		}
 	}
@@ -499,7 +502,7 @@ func cmdListen(cfg *config.Config) {
 	log.Printf("Knowledge base: %s", config.BaseDir())
 	log.Printf("Press Ctrl+C to stop")
 
-	if err := p.Run(ctx, sources); err != nil {
+	if err := p.Run(ctx, sources, sourceLabels); err != nil {
 		log.Printf("Pipeline error: %v", err)
 	}
 	log.Printf("tacit daemon stopped")

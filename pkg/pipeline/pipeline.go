@@ -78,8 +78,9 @@ type classifyItem struct {
 // Run starts one or more audio sources through the VAD→STT→classify→store
 // loop.  Each source runs in its own goroutine; STT calls are serialised by a
 // mutex so the shared Whisper instance is used safely.
+// labels[i] is the display name for sources[i] used in log messages.
 // It blocks until ctx is cancelled or all sources exit.
-func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource) error {
+func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource, labels []string) error {
 	if len(sources) == 0 {
 		return fmt.Errorf("no audio sources configured")
 	}
@@ -98,7 +99,7 @@ func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource) error
 	var sourceWg sync.WaitGroup
 	for i, src := range sources {
 		sourceWg.Add(1)
-		label := sourceLabel(i, len(sources))
+		label := labels[i]
 		go func(src capture.AudioSource, label string) {
 			defer sourceWg.Done()
 			if err := p.runSource(ctx, src, label, classifyCh); err != nil {
@@ -111,21 +112,6 @@ func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource) error
 	close(classifyCh)
 	classifyWg.Wait()
 	return nil
-}
-
-// sourceLabel returns a short display name for the nth source.
-func sourceLabel(i, total int) string {
-	if total == 1 {
-		return "mic"
-	}
-	switch i {
-	case 0:
-		return "mic"
-	case 1:
-		return "speaker"
-	default:
-		return fmt.Sprintf("src%d", i)
-	}
 }
 
 // runSource runs a single audio source through VAD→STT and enqueues results

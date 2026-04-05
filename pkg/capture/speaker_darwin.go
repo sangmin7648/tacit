@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"log"
 	"runtime/cgo"
-	"sync/atomic"
 	"unsafe"
 )
 
@@ -27,9 +26,8 @@ type Speaker struct {
 	cap *C.SpeakerCapture
 }
 
-// NewSpeaker creates a new system-audio capture instance and starts the
-// ScreenCaptureKit stream.  Returns an error if macOS < 13, permission is
-// denied, or the stream cannot be initialised.
+// NewSpeaker creates a new system-audio capture instance.
+// The ScreenCaptureKit stream is started lazily in Stream().
 func NewSpeaker() (*Speaker, error) {
 	// We create a temporary placeholder handle; the real handle is set in
 	// Stream() once we have a channel to deliver samples into.
@@ -41,7 +39,6 @@ func NewSpeaker() (*Speaker, error) {
 // The channel is closed when ctx is cancelled.
 func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
 	ch := make(chan []int16, 128)
-	var stopped atomic.Bool
 
 	// Register the channel in the cgo handle registry.
 	handle := cgo.NewHandle(ch)
@@ -65,7 +62,6 @@ func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
 
 	go func() {
 		<-ctx.Done()
-		stopped.Store(true)
 		C.speaker_stop(cap)
 		s.cap = nil
 		handle.Delete()
