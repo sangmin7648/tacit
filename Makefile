@@ -95,6 +95,10 @@ install: build
 ifeq ($(UNAME_S),Darwin)
 	rm -rf $(INSTALL_DIR)/ten_vad.framework
 	cp -R ten_vad.framework $(INSTALL_DIR)/ten_vad.framework
+	xattr -dr com.apple.quarantine $(INSTALL_DIR)/tacit-dev 2>/dev/null || true
+	xattr -dr com.apple.quarantine $(INSTALL_DIR)/ten_vad.framework 2>/dev/null || true
+	codesign --force --deep --sign - $(INSTALL_DIR)/tacit-dev 2>/dev/null || true
+	codesign --force --deep --sign - $(INSTALL_DIR)/ten_vad.framework 2>/dev/null || true
 endif
 	@echo "Installed to $(INSTALL_DIR)/tacit-dev"
 

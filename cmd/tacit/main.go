@@ -109,7 +109,7 @@ func cmdSetup() {
 	var llmProvider, llmModel string
 
 	// Step 1: LLM provider
-	fmt.Println("Step 1/3: Select LLM provider for summarization")
+	fmt.Println("Step 1/4: Select LLM provider for summarization")
 	providerIdx := selectOption([]string{"ollama", "claude"}, 0)
 	fmt.Println()
 
@@ -118,7 +118,7 @@ func cmdSetup() {
 		llmProvider = "claude"
 
 		// Step 2: Claude model
-		fmt.Println("Step 2/3: Select Claude model")
+		fmt.Println("Step 2/4: Select Claude model")
 		modelIdx := selectOption([]string{"haiku", "sonnet", "opus"}, 0)
 		fmt.Println()
 		switch modelIdx {
@@ -135,7 +135,7 @@ func cmdSetup() {
 
 		// Step 2: Ollama model (text input)
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Println("Step 2/3: Enter Ollama model name")
+		fmt.Println("Step 2/4: Enter Ollama model name")
 		fmt.Print("  Model name [qwen3.5]: ")
 		input := strings.TrimSpace(readLine(reader))
 		fmt.Println()
@@ -147,24 +147,40 @@ func cmdSetup() {
 	}
 
 	// Step 3: AI agent for skill installation (only claude supported)
-	fmt.Println("Step 3/3: Select AI agent for skill installation")
+	fmt.Println("Step 3/4: Select AI agent for skill installation")
 	agentNames := []string{"claude"}
 	agentIdx := selectOption(agentNames, 0)
 	skillAgent := agentNames[agentIdx]
 	fmt.Println()
 
+	// Step 4: Audio sources (multi-select) — at least one must be selected.
+	var captureMic, captureSpeaker bool
+	for {
+		fmt.Println("Step 4/4: Select audio sources to listen  (Space to toggle, Enter to confirm)")
+		sourceSelected := selectMultiple([]string{"mic", "speaker"}, []bool{true, true})
+		fmt.Println()
+		captureMic, captureSpeaker = sourceSelected[0], sourceSelected[1]
+		if captureMic || captureSpeaker {
+			break
+		}
+		fmt.Println("  At least one source must be selected. Please try again.")
+		fmt.Println()
+	}
+
 	fmt.Println()
-	fmt.Printf("  LLM provider : %s\n", llmProvider)
-	fmt.Printf("  LLM model    : %s\n", llmModel)
-	fmt.Printf("  Skill agent  : %s\n", skillAgent)
+	fmt.Printf("  LLM provider   : %s\n", llmProvider)
+	fmt.Printf("  LLM model      : %s\n", llmModel)
+	fmt.Printf("  Skill agent    : %s\n", skillAgent)
+	fmt.Printf("  Capture mic    : %v\n", captureMic)
+	fmt.Printf("  Capture speaker: %v\n", captureSpeaker)
 	fmt.Println()
 
-	// Write LLM settings to config-override.yaml
+	// Write settings to config-override.yaml
 	overridePath := config.OverridePath()
 	if err := os.MkdirAll(filepath.Dir(overridePath), 0755); err != nil {
 		log.Fatalf("Failed to create config directory: %v", err)
 	}
-	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel, skillAgent); err != nil {
+	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel, skillAgent, captureMic, captureSpeaker); err != nil {
 		log.Fatalf("Failed to write config override: %v", err)
 	}
 	fmt.Printf("Saved settings: %s\n", overridePath)
@@ -286,6 +302,100 @@ func selectOption(options []string, defaultIdx int) int {
 	return cur
 }
 
+// selectMultiple presents an interactive checkbox menu on stdout. Arrow keys
+// move the cursor; Space toggles the current item; Enter confirms. Returns a
+// slice of booleans aligned with options indicating the selected state.
+// defaultSelected sets the initial checked state for each option.
+func selectMultiple(options []string, defaultSelected []bool) []bool {
+	selected := make([]bool, len(options))
+	copy(selected, defaultSelected)
+	cur := 0
+
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		// Fallback: numbered list
+		for i, o := range options {
+			mark := " "
+			if selected[i] {
+				mark = "x"
+			}
+			fmt.Printf("  [%s] %d) %s\n", mark, i+1, o)
+		}
+		fmt.Print("Toggle items by number (space-separated), then press Enter: ")
+		reader := bufio.NewReader(os.Stdin)
+		line := strings.TrimSpace(readLine(reader))
+		for _, tok := range strings.Fields(line) {
+			for i := range options {
+				if tok == fmt.Sprintf("%d", i+1) {
+					selected[i] = !selected[i]
+				}
+			}
+		}
+		return selected
+	}
+	defer term.Restore(fd, oldState)
+
+	draw := func(atTop bool) {
+		if !atTop {
+			fmt.Printf("\033[%dA", len(options))
+		}
+		for i, o := range options {
+			fmt.Print("\r\033[2K")
+			mark := " "
+			if selected[i] {
+				mark = "x"
+			}
+			if i == cur {
+				fmt.Printf("  \033[36m> [%s] %s\033[0m\n", mark, o)
+			} else {
+				fmt.Printf("    [%s] %s\n", mark, o)
+			}
+		}
+	}
+
+	draw(true)
+
+	buf := make([]byte, 4)
+	for {
+		n, readErr := os.Stdin.Read(buf)
+		if readErr != nil || n == 0 {
+			break
+		}
+		switch {
+		case n == 1 && (buf[0] == '\r' || buf[0] == '\n'): // Enter — confirm
+			fmt.Printf("\033[%dA", len(options))
+			for range options {
+				fmt.Print("\r\033[2K\n")
+			}
+			fmt.Printf("\033[%dA", len(options))
+			for i, o := range options {
+				mark := " "
+				if selected[i] {
+					mark = "x"
+				}
+				fmt.Printf("\r\033[2K  [%s] %s\n", mark, o)
+			}
+			return selected
+		case n == 1 && buf[0] == ' ': // Space — toggle
+			selected[cur] = !selected[cur]
+			draw(false)
+		case n >= 3 && buf[0] == 0x1b && buf[1] == '[' && buf[2] == 'A': // Up
+			if cur > 0 {
+				cur--
+				draw(false)
+			}
+		case n >= 3 && buf[0] == 0x1b && buf[1] == '[' && buf[2] == 'B': // Down
+			if cur < len(options)-1 {
+				cur++
+				draw(false)
+			}
+		}
+	}
+
+	return selected
+}
+
 // cmdProcess handles the "process" subcommand: audio file → knowledge entry.
 func cmdProcess(cfg *config.Config) {
 	if len(os.Args) < 3 {
@@ -344,24 +454,34 @@ func cmdListen(cfg *config.Config) {
 	defer p.Close()
 
 	// Build audio sources.
-	mic, err := capture.New()
-	if err != nil {
-		log.Fatalf("Failed to init microphone: %v", err)
-	}
-	defer mic.Close()
+	var sources []capture.AudioSource
 
-	sources := []capture.AudioSource{mic}
+	if cfg.CaptureMic {
+		mic, err := capture.New()
+		if err != nil {
+			log.Fatalf("Failed to init microphone: %v", err)
+		}
+		defer mic.Close()
+		sources = append(sources, mic)
+	}
 
 	if cfg.CaptureSpeaker {
 		spk, err := capture.NewSpeaker()
 		if err != nil {
 			log.Printf("Warning: system audio capture unavailable: %v", err)
+			if len(sources) == 0 {
+				log.Fatalf("No audio sources available.")
+			}
 			log.Printf("Continuing with microphone only.")
 		} else {
 			defer spk.Close()
 			sources = append(sources, spk)
 			log.Printf("System audio capture enabled (requires Screen Recording permission)")
 		}
+	}
+
+	if len(sources) == 0 {
+		log.Fatalf("No audio sources configured. Enable capture_mic or capture_speaker in config.")
 	}
 
 	// Setup signal handling for graceful shutdown
@@ -447,6 +567,8 @@ func cmdConfigView(cfg *config.Config) {
 	fmt.Printf("%-22s %-20s %s\n", "llm_provider:", cfg.LLMProvider, tag("llm_provider"))
 	fmt.Printf("%-22s %-20s %s\n", "llm_model:", cfg.LLMModel, tag("llm_model"))
 	fmt.Printf("%-22s %-20s %s\n", "skill_agent:", cfg.SkillAgent, tag("skill_agent"))
+	fmt.Printf("%-22s %-20v %s\n", "capture_mic:", cfg.CaptureMic, tag("capture_mic"))
+	fmt.Printf("%-22s %-20v %s\n", "capture_speaker:", cfg.CaptureSpeaker, tag("capture_speaker"))
 }
 
 // cmdConfigEdit opens the user override config file in a text editor.

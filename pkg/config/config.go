@@ -25,6 +25,9 @@ type Config struct {
 	LLMProvider     string        `yaml:"llm_provider"`
 	LLMModel        string        `yaml:"llm_model"`
 	SkillAgent      string        `yaml:"skill_agent"`
+	// CaptureMic enables microphone capture. When true, speech from the
+	// microphone is transcribed and stored. Defaults to true.
+	CaptureMic bool `yaml:"capture_mic"`
 	// CaptureSpeaker enables system-audio capture via ScreenCaptureKit (macOS 13+).
 	// When true, audio from speakers (Google Meet, YouTube, etc.) is also
 	// transcribed and stored. Requires Screen Recording permission.
@@ -42,6 +45,7 @@ func DefaultConfig() *Config {
 		LLMProvider:     "ollama",
 		LLMModel:        "qwen3.5",
 		SkillAgent:      "claude",
+		CaptureMic:      true,
 		CaptureSpeaker:  true,
 	}
 }
@@ -117,6 +121,7 @@ func WriteDefault(path string) error {
 			"llm_provider: %s\n"+
 			"llm_model: %s\n"+
 			"skill_agent: %s\n"+
+			"capture_mic: %v\n"+
 			"capture_speaker: %v\n",
 		cfg.WhisperModel,
 		formatDuration(cfg.MinSpeechDur),
@@ -126,6 +131,7 @@ func WriteDefault(path string) error {
 		cfg.LLMProvider,
 		cfg.LLMModel,
 		cfg.SkillAgent,
+		cfg.CaptureMic,
 		cfg.CaptureSpeaker,
 	)
 	return os.WriteFile(path, []byte(content), 0644)
@@ -149,6 +155,7 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("llm_provider: %s", defaults.LLMProvider),
 		fmt.Sprintf("llm_model: %s", defaults.LLMModel),
 		fmt.Sprintf("skill_agent: %s", defaults.SkillAgent),
+		fmt.Sprintf("capture_mic: %v", defaults.CaptureMic),
 		fmt.Sprintf("capture_speaker: %v", defaults.CaptureSpeaker),
 	}
 
@@ -206,10 +213,10 @@ func PIDPath() string {
 }
 
 // WriteSetupOverride writes a full override template with llm_provider,
-// llm_model, and skill_agent set to the given values (uncommented). Other
-// fields are preserved from the existing override file if present; otherwise
-// they remain commented out with their default values.
-func WriteSetupOverride(path string, provider, model, agent string) error {
+// llm_model, skill_agent, capture_mic, and capture_speaker set to the given
+// values (uncommented). Other fields are preserved from the existing override
+// file if present; otherwise they remain commented out with their default values.
+func WriteSetupOverride(path string, provider, model, agent string, captureMic, captureSpeaker bool) error {
 	// Load existing override values to preserve non-LLM user settings.
 	existing := map[string]interface{}{}
 	if data, err := os.ReadFile(path); err == nil {
@@ -238,7 +245,8 @@ func WriteSetupOverride(path string, provider, model, agent string) error {
 		{"llm_provider", provider, true},
 		{"llm_model", model, true},
 		{"skill_agent", agent, true},
-		{"capture_speaker", fmt.Sprintf("%v", defaults.CaptureSpeaker), false},
+		{"capture_mic", fmt.Sprintf("%v", captureMic), true},
+		{"capture_speaker", fmt.Sprintf("%v", captureSpeaker), true},
 	}
 
 	var sb strings.Builder
