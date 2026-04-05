@@ -54,8 +54,7 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32, initialProm
 	params := C.whisper_full_default_params(C.WHISPER_SAMPLING_BEAM_SEARCH)
 	params.beam_search.beam_size = 5
 
-	// Set language to Korean
-	lang := C.CString("ko")
+	lang := C.CString("auto")
 	defer C.free(unsafe.Pointer(lang))
 	params.language = lang
 	params.translate = C.bool(false)
