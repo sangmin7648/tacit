@@ -82,6 +82,9 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 e2e-test: build
 	./tacit process testdata/test_voice_recording.m4a
 	go test -tags integration -v -count=1 ./pkg/process/ -run TestClassifier
+ifeq ($(UNAME_S),Darwin)
+	go test -tags "integration darwin" -v -count=1 -timeout 30s ./pkg/capture/ -run TestSpeaker_Stream_E2E
+endif
 
 INSTALL_DIR := $(HOME)/.local/bin
 
@@ -92,6 +95,10 @@ install: build
 ifeq ($(UNAME_S),Darwin)
 	rm -rf $(INSTALL_DIR)/ten_vad.framework
 	cp -R ten_vad.framework $(INSTALL_DIR)/ten_vad.framework
+	xattr -dr com.apple.quarantine $(INSTALL_DIR)/tacit-dev 2>/dev/null || true
+	xattr -dr com.apple.quarantine $(INSTALL_DIR)/ten_vad.framework 2>/dev/null || true
+	codesign --force --deep --sign - $(INSTALL_DIR)/tacit-dev 2>/dev/null || true
+	codesign --force --deep --sign - $(INSTALL_DIR)/ten_vad.framework 2>/dev/null || true
 endif
 	@echo "Installed to $(INSTALL_DIR)/tacit-dev"
 

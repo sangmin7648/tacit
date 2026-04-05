@@ -18,7 +18,7 @@ func makeSamples(n int, v float32) []float32 {
 
 func TestNewSegmentBuffer(t *testing.T) {
 	minDur := 2 * time.Second
-	buf := NewSegmentBuffer(testSampleRate, minDur)
+	buf := NewSegmentBuffer(testSampleRate, minDur, 0)
 
 	if buf.sampleRate != testSampleRate {
 		t.Errorf("expected sampleRate %d, got %d", testSampleRate, buf.sampleRate)
@@ -36,7 +36,7 @@ func TestNewSegmentBuffer(t *testing.T) {
 
 func TestSegmentBuffer_ShortSpeech(t *testing.T) {
 	minDur := 2 * time.Second
-	buf := NewSegmentBuffer(testSampleRate, minDur)
+	buf := NewSegmentBuffer(testSampleRate, minDur, 0)
 
 	buf.Start()
 
@@ -58,7 +58,7 @@ func TestSegmentBuffer_ShortSpeech(t *testing.T) {
 
 func TestSegmentBuffer_ValidSpeech(t *testing.T) {
 	minDur := 2 * time.Second
-	buf := NewSegmentBuffer(testSampleRate, minDur)
+	buf := NewSegmentBuffer(testSampleRate, minDur, 0)
 
 	buf.Start()
 
@@ -95,7 +95,7 @@ func TestSegmentBuffer_ValidSpeech(t *testing.T) {
 }
 
 func TestSegmentBuffer_Duration(t *testing.T) {
-	buf := NewSegmentBuffer(testSampleRate, time.Second)
+	buf := NewSegmentBuffer(testSampleRate, time.Second, 0)
 
 	buf.Start()
 
@@ -125,7 +125,7 @@ func TestSegmentBuffer_Duration(t *testing.T) {
 }
 
 func TestSegmentBuffer_Reset(t *testing.T) {
-	buf := NewSegmentBuffer(testSampleRate, time.Second)
+	buf := NewSegmentBuffer(testSampleRate, time.Second, 0)
 
 	buf.Start()
 	buf.Append(makeSamples(testSampleRate*2, 0.5))
@@ -155,7 +155,7 @@ func TestSegmentBuffer_Reset(t *testing.T) {
 
 func TestSegmentBuffer_MultipleSegments(t *testing.T) {
 	minDur := time.Second
-	buf := NewSegmentBuffer(testSampleRate, minDur)
+	buf := NewSegmentBuffer(testSampleRate, minDur, 0)
 
 	// First segment: 2 seconds.
 	buf.Start()

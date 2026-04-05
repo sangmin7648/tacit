@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"strings"
+
 	"github.com/sangmin7648/tacit/pkg/audio"
 	"github.com/sangmin7648/tacit/pkg/capture"
 	"github.com/sangmin7648/tacit/pkg/config"
@@ -27,6 +29,7 @@ var ErrSkipped = errors.New("content classified as meaningless, skipping")
 type Pipeline struct {
 	cfg        *config.Config
 	whisper    *stt.Whisper
+	whisperMu  sync.Mutex // serialises concurrent STT calls from multiple sources
 	classifier process.Classifier
 	baseDir    string
 }
@@ -74,34 +77,19 @@ type classifyItem struct {
 	timestamp time.Time
 }
 
-// Run starts the real-time capture→VAD→STT→classify→store loop.
-// STT runs synchronously; classification runs asynchronously in background
-// with batching to amortize CLI startup cost.
-// It blocks until ctx is cancelled.
-func (p *Pipeline) Run(ctx context.Context) error {
-	// Init VAD (256 samples = 16ms at 16kHz)
-	const hopSize = 256
-	v, err := vad.New(hopSize, float32(p.cfg.SpeechThreshold))
-	if err != nil {
-		return fmt.Errorf("init vad: %w", err)
-	}
-	defer v.Close()
-	log.Printf("VAD initialized (hop=%d, threshold=%.2f, energy=%.0f)", hopSize, p.cfg.SpeechThreshold, p.cfg.EnergyThreshold)
-
-	// Init microphone capture
-	mic, err := capture.New()
-	if err != nil {
-		return fmt.Errorf("init capture: %w", err)
-	}
-	defer mic.Close()
-
-	stream, err := mic.Stream(ctx)
-	if err != nil {
-		return fmt.Errorf("start capture stream: %w", err)
+// Run starts one or more audio sources through the VAD→STT→classify→store
+// loop.  Each source runs in its own goroutine; STT calls are serialised by a
+// mutex so the shared Whisper instance is used safely.
+// labels[i] is the display name for sources[i] used in log messages.
+// It blocks until ctx is cancelled or all sources exit.
+func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource, labels []string) error {
+	if len(sources) == 0 {
+		return fmt.Errorf("no audio sources configured")
 	}
 
-	// Start async classify worker
-	classifyCh := make(chan classifyItem, 32)
+	// Single shared classify channel / worker so batching still works across
+	// multiple capture sources.
+	classifyCh := make(chan classifyItem, 64)
 	var classifyWg sync.WaitGroup
 	classifyWg.Add(1)
 	go func() {
@@ -109,15 +97,53 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		p.classifyLoop(ctx, classifyCh)
 	}()
 
-	// Segment buffer for accumulating speech audio
-	segBuf := audio.NewSegmentBuffer(audio.SampleRate, p.cfg.MinSpeechDur)
+	// Start one VAD+STT goroutine per source.
+	var sourceWg sync.WaitGroup
+	for i, src := range sources {
+		sourceWg.Add(1)
+		label := labels[i]
+		go func(src capture.AudioSource, label string) {
+			defer sourceWg.Done()
+			if err := p.runSource(ctx, src, label, classifyCh); err != nil {
+				log.Printf("[%s] source error: %v", label, err)
+			}
+		}(src, label)
+	}
 
-	// VAD frame buffer: accumulate samples until we have hopSize
+	sourceWg.Wait()
+	close(classifyCh)
+	classifyWg.Wait()
+	return nil
+}
+
+// runSource runs a single audio source through VAD→STT and enqueues results
+// onto classifyCh.  It returns when ctx is cancelled or the source stream
+// closes.
+func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label string, classifyCh chan<- classifyItem) error {
+	// Init per-source VAD (256 samples = 16 ms at 16 kHz).
+	const hopSize = 256
+	v, err := vad.New(hopSize, float32(p.cfg.SpeechThreshold))
+	if err != nil {
+		return fmt.Errorf("init vad: %w", err)
+	}
+	defer v.Close()
+
+	stream, err := src.Stream(ctx)
+	if err != nil {
+		return fmt.Errorf("start stream: %w", err)
+	}
+
+	segBuf := audio.NewSegmentBuffer(audio.SampleRate, p.cfg.MinSpeechDur, p.cfg.MaxSegmentDur)
 	var frameBuf []int16
 	silenceFrames := 0
 	silenceLimit := int(p.cfg.SilenceDuration.Seconds() * float64(audio.SampleRate) / float64(hopSize))
 
-	log.Printf("Listening for speech... (silence timeout: %v, min speech: %v)", p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
+	// textBuf accumulates STT results from split chunks within one speech session.
+	// All chunks are joined and sent as a single classify item when silence is detected.
+	var textBuf []string
+	var sessionStart time.Time
+
+	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
 
 	for chunk := range stream {
 		frameBuf = append(frameBuf, chunk...)
@@ -129,11 +155,11 @@ func (p *Pipeline) Run(ctx context.Context) error {
 
 			_, isSpeech, err := v.Process(frame)
 			if err != nil {
-				log.Printf("VAD error: %v", err)
+				log.Printf("[%s] VAD error: %v", label, err)
 				continue
 			}
 
-			// Energy gate: ignore VAD result if frame RMS is below threshold
+			// Energy gate.
 			if isSpeech && p.cfg.EnergyThreshold > 0 {
 				var sum float64
 				for _, s := range frame {
@@ -148,65 +174,87 @@ func (p *Pipeline) Run(ctx context.Context) error {
 			if isSpeech {
 				silenceFrames = 0
 				if !segBuf.IsActive() {
+					if len(textBuf) == 0 {
+						sessionStart = time.Now()
+					}
 					segBuf.Start()
-					log.Printf("Speech started")
+					log.Printf("[%s] speech started", label)
 				}
 				segBuf.Append(audio.Int16ToFloat32(frame))
+
+				// Force-split long segments to cap memory usage; accumulate
+				// the resulting text to merge into one file at session end.
+				if p.cfg.MaxSegmentDur > 0 && segBuf.Duration() >= p.cfg.MaxSegmentDur {
+					log.Printf("[%s] segment capped at %.1fs, splitting", label, segBuf.Duration().Seconds())
+					seg, ok := segBuf.Finish()
+					if ok {
+						if text := p.transcribeSync(ctx, seg, label); text != "" {
+							textBuf = append(textBuf, text)
+						}
+					}
+					segBuf.Start() // speech is still ongoing; restart immediately
+				}
 			} else if segBuf.IsActive() {
 				segBuf.Append(audio.Int16ToFloat32(frame))
 				silenceFrames++
 
 				if silenceFrames >= silenceLimit {
-					log.Printf("Speech ended (%.1fs)", segBuf.Duration().Seconds())
+					log.Printf("[%s] speech ended (%.1fs)", label, segBuf.Duration().Seconds())
 					seg, ok := segBuf.Finish()
 					silenceFrames = 0
 					if ok {
-						p.transcribeAndQueue(ctx, seg, classifyCh)
-					} else {
-						log.Printf("Segment too short, discarding")
+						if text := p.transcribeSync(ctx, seg, label); text != "" {
+							textBuf = append(textBuf, text)
+						}
+					} else if len(textBuf) == 0 {
+						log.Printf("[%s] segment too short, discarding", label)
+					}
+					// Flush accumulated text as a single classify item.
+					if len(textBuf) > 0 {
+						classifyCh <- classifyItem{text: strings.Join(textBuf, " "), timestamp: sessionStart}
+						textBuf = textBuf[:0]
 					}
 				}
 			}
 		}
-		// Compact: move unprocessed samples to front to prevent memory leak
+		// Compact: move unprocessed samples to front to prevent memory leak.
 		n := copy(frameBuf, frameBuf[processed:])
 		frameBuf = frameBuf[:n]
 	}
 
-	close(classifyCh)
-	classifyWg.Wait()
 	return nil
 }
 
-// transcribeAndQueue runs STT synchronously and queues the text for async classification.
-func (p *Pipeline) transcribeAndQueue(ctx context.Context, seg *audio.AudioSegment, ch chan<- classifyItem) {
-	log.Printf("Processing segment: %.1fs of audio", seg.Duration.Seconds())
+// transcribeSync runs STT (serialised across sources) and returns the
+// transcribed text, or "" on error or empty result.
+func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, label string) string {
+	log.Printf("[%s] transcribing %.1fs of audio", label, seg.Duration.Seconds())
 
+	p.whisperMu.Lock()
 	text, err := p.whisper.Transcribe(ctx, seg.Samples, p.cfg.InitialPrompt)
+	p.whisperMu.Unlock()
+
 	if err != nil {
-		log.Printf("STT error: %v", err)
-		return
+		log.Printf("[%s] STT error: %v", label, err)
+		return ""
 	}
 	if text == "" {
-		log.Printf("STT produced empty text, skipping")
-		return
+		log.Printf("[%s] STT produced empty text, skipping", label)
+		return ""
 	}
-	log.Printf("STT: %s", text)
-
-	ch <- classifyItem{text: text, timestamp: time.Now()}
+	log.Printf("[%s] STT: %s", label, text)
+	return text
 }
 
-// classifyLoop processes classify items from the channel, batching when multiple
-// items are queued up (e.g. during a long classification call).
+// classifyLoop processes classify items from the channel, batching when
+// multiple items are queued (e.g. during a long classification call).
 func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 	for {
-		// Block waiting for first item
 		item, ok := <-ch
 		if !ok {
 			return
 		}
 
-		// Drain any additional queued items for batching
 		batch := []classifyItem{item}
 	drain:
 		for {
@@ -309,7 +357,9 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 	}
 
 	log.Printf("Running STT...")
+	p.whisperMu.Lock()
 	text, err := p.whisper.Transcribe(ctx, samples, p.cfg.InitialPrompt)
+	p.whisperMu.Unlock()
 	if err != nil {
 		return "", fmt.Errorf("transcribe: %w", err)
 	}
@@ -341,4 +391,3 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 
 	return filePath, nil
 }
-
