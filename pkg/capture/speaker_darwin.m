@@ -84,8 +84,14 @@ API_AVAILABLE(macos(13.0))
 }
 
 - (void)stream:(SCStream *)stream didStopWithError:(NSError *)error API_AVAILABLE(macos(12.3)) {
-    if (error && !self.stopped) {
-        NSLog(@"[tacit] speaker stream stopped with error: %@", error.localizedDescription);
+    if (!self.stopped) {
+        if (error) {
+            NSLog(@"[tacit] speaker stream stopped with error: %@", error.localizedDescription);
+        } else {
+            NSLog(@"[tacit] speaker stream stopped unexpectedly (no error)");
+        }
+        // Notify Go so it can close the channel and let the pipeline restart.
+        tacitSpeakerStoppedCallback(self.goHandle);
     }
 }
 

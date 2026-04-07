@@ -117,9 +117,32 @@ func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource, label
 }
 
 // runSource runs a single audio source through VAD→STT and enqueues results
-// onto classifyCh.  It returns when ctx is cancelled or the source stream
-// closes.
+// onto classifyCh.  It retries automatically when the source stream closes
+// unexpectedly (e.g. SCStream stopped by macOS), and returns only when ctx is
+// cancelled or a fatal initialisation error occurs.
 func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label string, classifyCh chan<- classifyItem) error {
+	const retryDelay = 5 * time.Second
+	for {
+		err := p.runSourceOnce(ctx, src, label, classifyCh)
+		if err != nil {
+			return err
+		}
+		if ctx.Err() != nil {
+			return nil
+		}
+		// Stream closed unexpectedly — wait briefly then restart.
+		log.Printf("[%s] stream closed unexpectedly, restarting in %v", label, retryDelay)
+		select {
+		case <-time.After(retryDelay):
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+// runSourceOnce runs one capture session for a source.  It returns when ctx is
+// cancelled or the source's stream channel is closed (normal or unexpected).
+func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, label string, classifyCh chan<- classifyItem) error {
 	// Init per-source VAD (256 samples = 16 ms at 16 kHz).
 	const hopSize = 256
 	v, err := vad.New(hopSize, float32(p.cfg.SpeechThreshold))
@@ -130,6 +153,9 @@ func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label
 
 	stream, err := src.Stream(ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil // ctx cancelled during restart, not a real error
+		}
 		return fmt.Errorf("start stream: %w", err)
 	}
 
