@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log"
 	"runtime/cgo"
+	"sync"
 	"unsafe"
 )
 
@@ -35,26 +36,40 @@ func NewSpeaker() (*Speaker, error) {
 	return &Speaker{}, nil
 }
 
-// Stream starts system-audio capture and returns a channel of int16 chunks.
-// The channel is closed when ctx is cancelled.
-func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
-	ch := make(chan []int16, 128)
+// speakerChan wraps the audio channel with a once-guarded close so both the
+// context-cancellation path and the unexpected-stop callback can safely signal
+// the pipeline without a double-close panic.
+type speakerChan struct {
+	data   chan []int16
+	handle cgo.Handle // points back to itself; used for self-deletion
+	once   sync.Once
+}
 
-	// Register the channel in the cgo handle registry.
-	handle := cgo.NewHandle(ch)
+func (sc *speakerChan) closeAndFree() {
+	sc.once.Do(func() {
+		close(sc.data)
+		sc.handle.Delete()
+	})
+}
+
+// Stream starts system-audio capture and returns a channel of int16 chunks.
+// The channel is closed when ctx is cancelled or when SCStream stops unexpectedly.
+func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
+	sc := &speakerChan{data: make(chan []int16, 128)}
+	// Register sc in the cgo handle registry; the handle value is stored in sc
+	// itself so the ObjC callbacks can call closeAndFree via a single pointer.
+	sc.handle = cgo.NewHandle(sc)
 
 	var errCStr *C.char
-	cap := C.speaker_create(C.uintptr_t(handle), &errCStr)
+	cap := C.speaker_create(C.uintptr_t(sc.handle), &errCStr)
 	if errCStr != nil {
 		msg := C.GoString(errCStr)
 		C.free(unsafe.Pointer(errCStr))
-		handle.Delete()
-		close(ch)
+		sc.closeAndFree()
 		return nil, fmt.Errorf("speaker capture: %s", msg)
 	}
 	if cap == nil {
-		handle.Delete()
-		close(ch)
+		sc.closeAndFree()
 		return nil, fmt.Errorf("speaker capture: unknown error")
 	}
 
@@ -62,14 +77,15 @@ func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
 
 	go func() {
 		<-ctx.Done()
+		// Set output.stopped = YES before stopping so didStopWithError won't
+		// fire the Go callback again after we deliberately stop the stream.
 		C.speaker_stop(cap)
 		s.cap = nil
-		handle.Delete()
-		close(ch)
+		sc.closeAndFree()
 	}()
 
 	log.Printf("System audio capture started (ScreenCaptureKit, 16kHz mono)")
-	return ch, nil
+	return sc.data, nil
 }
 
 // Close stops capture and releases resources if Stream was called.
@@ -86,7 +102,7 @@ func (s *Speaker) Close() {
 //export tacitSpeakerSamplesCallback
 func tacitSpeakerSamplesCallback(h C.uintptr_t, samples *C.int16_t, count C.int) {
 	handle := cgo.Handle(h)
-	ch, ok := handle.Value().(chan []int16)
+	sc, ok := handle.Value().(*speakerChan)
 	if !ok {
 		return
 	}
@@ -97,8 +113,24 @@ func tacitSpeakerSamplesCallback(h C.uintptr_t, samples *C.int16_t, count C.int)
 	copy(dst, buf)
 
 	select {
-	case ch <- dst:
+	case sc.data <- dst:
 	default:
 		// Drop frame if the pipeline is slow — prevents audio thread stall.
 	}
+}
+
+// tacitSpeakerStoppedCallback is called from Objective-C when SCStream stops
+// unexpectedly (not due to an explicit speaker_stop call).  Closing the channel
+// unblocks the pipeline's "for chunk := range stream" loop so it can detect
+// the outage and restart if desired.
+//
+//export tacitSpeakerStoppedCallback
+func tacitSpeakerStoppedCallback(h C.uintptr_t) {
+	handle := cgo.Handle(h)
+	sc, ok := handle.Value().(*speakerChan)
+	if !ok {
+		return
+	}
+	log.Printf("System audio capture: SCStream stopped unexpectedly, closing stream channel")
+	sc.closeAndFree()
 }
