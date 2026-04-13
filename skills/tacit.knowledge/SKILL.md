@@ -13,9 +13,9 @@ You are retrieving relevant knowledge from multiple sources: the local tacit kno
 ## Available tacit Commands
 
 ```
-tacit list [duration]     — List entries created within duration (default: 1h). Supports: 30m, 1h, 24h, 1d, 7d, 2w
-tacit search <pattern>    — Full-text search across all entries (title + summary + content)
-tacit get <file-path>     — Print full content of a specific entry
+tacit list [duration]                    — List entries created within duration (default: 1h). Supports: 30m, 1h, 24h, 1d, 7d, 2w
+tacit search [--duration <d>] <pattern>  — Full-text search across all entries (title + summary + content). Optional --duration limits to entries created within that window.
+tacit get <file-path>                    — Print full content of a specific entry
 ```
 
 ## Process
@@ -37,7 +37,7 @@ Launch one sub-agent per source, all in parallel using the Agent tool. Each sub-
 
 **tacit sub-agent** — retrieves from local knowledge base:
 1. Run `tacit list <duration>` to get recent entries
-2. Extract 2–4 keywords from the user's prompt and run `tacit search <keyword>` for each
+2. Extract 2–4 keywords from the user's prompt and run `tacit search <keyword>` for each. If a time window was identified, pass `--duration <d>` to narrow results (e.g. `tacit search --duration 1h <keyword>`)
 3. Merge all unique file paths, prioritizing entries that appear in both list and search results
 4. Fetch full content: `tacit get <path1> <path2> ...`
 5. Return structured results: `{ source: "tacit", items: [{ title, file_path, date, category, summary, content }] }`
@@ -70,4 +70,5 @@ Synthesize all retrieved knowledge into a direct answer to the user's prompt:
 - tacit categories and content are primarily in Korean
 - Do NOT fabricate knowledge entries — only reference what actually exists
 - `tacit search` supports regex-compatible patterns — you can use `tacit search "키워드1\|키워드2"` to search multiple terms at once
+- `tacit search --duration` accepts the same units as `tacit list`: `30m`, `1h`, `24h`, `1d`, `7d`, `2w`
 - When launching external source sub-agents, pass the user's original prompt and extracted keywords so each sub-agent can independently determine the best query strategy for its source
