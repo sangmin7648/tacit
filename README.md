@@ -57,16 +57,6 @@ After `tacit setup`, two skills are available inside Claude Code conversations:
 /tacit.knowledge any ideas about the onboarding flow from last month?
 ```
 
-You can also use the CLI directly:
-
-```bash
-tacit list             # list entries from the last hour
-tacit list 7d          # list entries from the last 7 days
-tacit search "keyword" # full-text search across all entries
-tacit search --duration 24h "deployment"
-tacit get <file-path>  # print full content of a specific entry
-```
-
 ### `/tacit.memorize` — save the current conversation
 
 ```
