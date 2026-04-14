@@ -119,7 +119,7 @@ Entries are stored under `~/.tacit/memory/<category>/YYYYMMDD-HHMMSS.md` — pla
 
 ## Requirements
 
-- macOS (Apple Silicon or Intel)
+- macOS (Apple Silicon)
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 
 ---
