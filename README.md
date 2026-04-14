@@ -1,42 +1,135 @@
 # tacit
 
-What you say becomes AI knowledge. Captures conversations in the background, automatically organizes them so your AI can retrieve them.
+> Harness your tacit knowledge into AI agent context — on-device, always-on transcription.
 
-## Install
+[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](https://github.com/sangmin7648/tacit/releases)
+[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/sangmin7648/tacit)](https://github.com/sangmin7648/tacit/releases/latest)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sangmin7648/tacit/main/install.sh | sh
-```
-
-## Setup
-
-```bash
 tacit setup
+tacit listen   # start capturing
 ```
 
-## Usage
+---
 
-### Keep it running
+You think out loud. The most valuable insights happen in conversation, not in text editors — and most of them disappear. tacit captures what you say, transcribes it on-device with Whisper, classifies it with Claude, and stores it to `~/.tacit/`. Then `/tacit.knowledge` retrieves it directly inside any AI conversation, turning your spoken history into live agent context.
 
-```bash
-tacit listen    # start capturing
+<!-- TODO: Add demo GIF showing tacit listen → speech → /tacit.knowledge retrieval -->
+
+---
+
+## How it works
+
+```
+speak → capture → VAD → STT → classify → store → retrieve
 ```
 
-Leave it on. Whenever speech is detected, it automatically transcribes → classifies → stores.
+1. **Capture** — Records microphone and system audio simultaneously in real time
+2. **Process** — Voice Activity Detection filters silence; Whisper transcribes speech on-device
+3. **Classify** — Claude extracts title, category, keywords, and summary from the transcript
+4. **Store** — Saves a structured Markdown entry to `~/.tacit/memory/<category>/`
+5. **Retrieve** — `/tacit.knowledge` searches your knowledge base from inside any Claude conversation
+
+---
+
+## Features
+
+- **Fully automatic** — speak naturally; tacit handles transcription, classification, and storage without any manual steps
+- **On-device STT** — powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp); no audio ever leaves your machine
+- **Dual audio sources** — captures microphone and system audio simultaneously
+- **Language-agnostic** — Whisper auto-detects language; works with Korean, English, or mixed conversation
+- **AI-native retrieval** — first-class [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) skill integration for in-conversation search
+
+---
 
 ## Use with AI
 
-After `tacit setup`, you can search your spoken conversations directly from any AI agent using the SKILL:
+After `tacit setup`, two skills are available inside Claude Code conversations:
+
+### `/tacit.knowledge` — search your spoken history
 
 ```
 /tacit.knowledge summarize the search ranking discussion from earlier
-"find the API design we talked about last week"
-"any project-related ideas from last month?"
+/tacit.knowledge find the API design we talked about last week
+/tacit.knowledge any ideas about the onboarding flow from last month?
 ```
+
+You can also use the CLI directly:
+
+```bash
+tacit list             # list entries from the last hour
+tacit list 7d          # list entries from the last 7 days
+tacit search "keyword" # full-text search across all entries
+tacit search --duration 24h "deployment"
+tacit get <file-path>  # print full content of a specific entry
+```
+
+### `/tacit.memorize` — save the current conversation
+
+```
+/tacit.memorize
+/tacit.memorize skill development   # optional hint guides categorization
+```
+
+Analyzes the current Claude conversation thread and saves it as a structured knowledge entry — automatically available to future `/tacit.knowledge` queries.
+
+---
+
+## Configuration
+
+`~/.tacit/config.yaml` — all fields are optional.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `whisper_model` | string | `base` | Whisper model size: `tiny`, `base`, `small`, `medium`, `large`. Larger = more accurate, slower. |
+| `min_speech_duration` | duration | `8s` | Minimum segment length to process. Shorter segments are skipped. |
+| `silence_duration` | duration | `1500ms` | Duration of silence required to end a speech segment. |
+| `speech_threshold` | float | `0.5` | VAD confidence threshold (0–1). Higher = more conservative. |
+| `energy_threshold` | int | `200` | Audio energy gate. Frames below this value are rejected before VAD. |
+| `claude_model` | string | `haiku` | Claude model used for classification: `haiku`, `sonnet`, `opus`. |
+
+---
+
+## Architecture
+
+```mermaid
+graph LR
+    MIC[Microphone\n16kHz mono] --> CAP[Capture\nmalgo]
+    SYS[System Audio\nScreenCaptureKit] --> CAP
+    CAP --> VAD[VAD\nten-vad / Silero]
+    VAD --> BUF[Segment Buffer]
+    BUF --> STT[STT\nwhisper.cpp]
+    STT --> CLS[Classify\nClaude CLI]
+    CLS --> KB[Knowledge Base\n~/.tacit/memory/]
+```
+
+**Storage format** — each entry is a plain Markdown file:
+
+```markdown
+---
+title: "Search ranking discussion"
+category: "dev"
+created_at: "2026-04-14T15:30:45+09:00"
+keywords: ["search", "ranking", "BM25", "lexical", "recall"]
+---
+
+One-sentence AI-generated summary.
+
+---
+
+Raw transcribed text from speech.
+```
+
+Entries are stored under `~/.tacit/memory/<category>/YYYYMMDD-HHMMSS.md` — plain files, no proprietary database, fully editable.
+
+---
 
 ## Requirements
 
-- macOS
+- macOS (Apple Silicon or Intel)
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 
 ---
@@ -58,55 +151,24 @@ make install   # installs to ~/.local/bin/tacit
 > export PATH="$HOME/.local/bin:$PATH"
 > ```
 
-</details>
+Run the end-to-end test to verify the full pipeline:
 
-<details>
-<summary>Configuration</summary>
-
-`~/.tacit/config.yaml` (all fields optional):
-
-```yaml
-whisper_model: base        # tiny, base, small, medium, large
-min_speech_duration: 8s
-silence_duration: 1500ms
-speech_threshold: 0.5
-energy_threshold: 200
-claude_model: haiku
+```bash
+make e2e-test
 ```
 
 </details>
 
 <details>
-<summary>Architecture</summary>
+<summary>Contributing</summary>
 
-```
-mic → VAD → STT → AI classify → knowledge base
-```
+Issues and pull requests are welcome. Please open an issue first for significant changes.
 
-```mermaid
-graph LR
-    MIC[Microphone<br/>16kHz mono] --> CAP[Capture<br/>malgo]
-    CAP --> VAD[VAD<br/>ten-vad]
-    VAD --> BUF[Segment Buffer]
-    BUF --> STT[STT<br/>whisper.cpp]
-    STT --> CLS[Classify<br/>Claude CLI]
-    CLS --> KB[Knowledge Base<br/>~/.tacit/]
+```bash
+make test       # run unit tests
+make e2e-test   # build + process test audio through full pipeline
 ```
 
-Storage format: Markdown files with YAML frontmatter
-
-```markdown
----
-title: "Title"
-category: "category"
-created_at: "2026-03-29T15:30:45+09:00"
----
-
-AI-generated summary
-
----
-
-Raw STT transcript
-```
+> **Note:** Do not run `go build ./...` directly — `pkg/stt` uses CGo against whisper.cpp and requires `make build` to compile first.
 
 </details>
