@@ -15,7 +15,7 @@ tacit listen   # start capturing
 
 ---
 
-Spoken ideas disappear. tacit transcribes them on-device, classifies them with Claude, and surfaces them as live context in any AI conversation — automatically.
+Spoken ideas disappear. tacit transcribes them on-device, classifies them with Ollama, and surfaces them as live context in any AI conversation — automatically.
 
 <!-- TODO: Add demo GIF showing tacit listen → speech → /tacit.knowledge retrieval -->
 
@@ -29,7 +29,7 @@ speak → capture → VAD → STT → classify → store → retrieve
 
 1. **Capture** — Records microphone and system audio simultaneously in real time
 2. **Process** — Voice Activity Detection filters silence; Whisper transcribes speech on-device
-3. **Classify** — Claude extracts title, category, keywords, and summary from the transcript
+3. **Classify** — Ollama extracts title, category, keywords, and summary from the transcript
 4. **Store** — Saves a structured Markdown entry to `~/.tacit/memory/<category>/`
 5. **Retrieve** — `/tacit.knowledge` searches your knowledge base from inside any Claude conversation
 
@@ -79,7 +79,6 @@ Analyzes the current Claude conversation thread and saves it as a structured kno
 | `silence_duration` | duration | `1500ms` | Duration of silence required to end a speech segment. |
 | `speech_threshold` | float | `0.5` | VAD confidence threshold (0–1). Higher = more conservative. |
 | `energy_threshold` | int | `200` | Audio energy gate. Frames below this value are rejected before VAD. |
-| `claude_model` | string | `haiku` | Claude model used for classification: `haiku`, `sonnet`, `opus`. |
 
 ---
 
@@ -92,7 +91,7 @@ graph LR
     CAP --> VAD[VAD\nten-vad / Silero]
     VAD --> BUF[Segment Buffer]
     BUF --> STT[STT\nwhisper.cpp]
-    STT --> CLS[Classify\nClaude CLI]
+    STT --> CLS[Classify\nOllama]
     CLS --> KB[Knowledge Base\n~/.tacit/memory/]
 ```
 
