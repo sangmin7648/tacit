@@ -140,6 +140,7 @@ var classifySchema = json.RawMessage(`{
     "title":    {"type": "string"},
     "summary":  {"type": "string"},
     "category": {"type": "string"},
+    "keywords": {"type": "array", "items": {"type": "string"}},
     "skip":     {"type": "boolean"}
   }
 }`)
@@ -157,6 +158,7 @@ var batchClassifySchema = json.RawMessage(`{
           "title":    {"type": "string"},
           "summary":  {"type": "string"},
           "category": {"type": "string"},
+          "keywords": {"type": "array", "items": {"type": "string"}},
           "skip":     {"type": "boolean"}
         }
       }

@@ -361,6 +361,7 @@ func newKnowledgeEntry(classified *process.ClassifyResult, content string, ts ti
 		Title:     classified.Title,
 		Category:  classified.Category,
 		CreatedAt: ts,
+		Keywords:  classified.Keywords,
 		Summary:   classified.Summary,
 		Content:   content,
 	}

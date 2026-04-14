@@ -4,10 +4,11 @@ import "context"
 
 // ClassifyResult holds classification output from an LLM.
 type ClassifyResult struct {
-	Title    string `json:"title"`
-	Summary  string `json:"summary"`
-	Category string `json:"category"`
-	Skip     bool   `json:"skip,omitempty"`
+	Title    string   `json:"title"`
+	Summary  string   `json:"summary"`
+	Category string   `json:"category"`
+	Keywords []string `json:"keywords,omitempty"`
+	Skip     bool     `json:"skip,omitempty"`
 }
 
 // Classifier is the strategy interface for LLM-based text classification.
