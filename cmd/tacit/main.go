@@ -94,7 +94,7 @@ Usage:
   tacit status                 Check daemon status
   tacit update                 Update tacit to the latest version
   tacit list [duration]        List knowledge entries (default: 24h)
-  tacit search <pattern>       Search knowledge entries by pattern
+  tacit search [--duration <d>] <pattern>  Search knowledge entries by pattern
   tacit get <file-path>...     Print the full content of one or more knowledge entries
   tacit config view            Show current configuration
   tacit config edit            Open configuration in a text editor
@@ -832,25 +832,54 @@ func cmdList() {
 
 // cmdSearch searches the knowledge base for entries matching a pattern.
 func cmdSearch() {
-	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: tacit search <pattern>\n")
+	// Parse args: tacit search [--duration <dur>] <pattern>
+	args := os.Args[2:]
+	var since time.Time
+	var patternArgs []string
+
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--duration" && i+1 < len(args) {
+			d, err := parseDuration(args[i+1])
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Invalid duration %q: %v\n", args[i+1], err)
+				fmt.Fprintf(os.Stderr, "Examples: 1h, 30m, 24h, 1d, 7d, 2w\n")
+				os.Exit(1)
+			}
+			since = time.Now().Add(-d)
+			i++ // skip duration value
+		} else {
+			patternArgs = append(patternArgs, args[i])
+		}
+	}
+
+	if len(patternArgs) == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: tacit search [--duration <duration>] <pattern>\n")
+		fmt.Fprintf(os.Stderr, "Examples: tacit search meeting, tacit search --duration 1h meeting\n")
 		os.Exit(1)
 	}
 
-	pattern := os.Args[2]
+	pattern := patternArgs[0]
 	baseDir := config.BaseDir()
 
-	results, err := search.Search(baseDir, pattern)
+	results, err := search.Search(baseDir, pattern, since)
 	if err != nil {
 		log.Fatalf("Search failed: %v", err)
 	}
 
 	if len(results) == 0 {
-		fmt.Printf("No results found for %q.\n", pattern)
+		if !since.IsZero() {
+			fmt.Printf("No results found for %q in the last %s.\n", pattern, formatDuration(time.Since(since)))
+		} else {
+			fmt.Printf("No results found for %q.\n", pattern)
+		}
 		return
 	}
 
-	fmt.Printf("Found %d result(s) for %q:\n\n", len(results), pattern)
+	if !since.IsZero() {
+		fmt.Printf("Found %d result(s) for %q in the last %s:\n\n", len(results), pattern, formatDuration(time.Since(since)))
+	} else {
+		fmt.Printf("Found %d result(s) for %q:\n\n", len(results), pattern)
+	}
 	for _, r := range results {
 		fmt.Printf("[%s] %s / %s\n", r.CreatedAt.Format("2006-01-02 15:04:05"), r.Category, r.Title)
 		fmt.Printf("  File:  %s\n", r.FilePath)

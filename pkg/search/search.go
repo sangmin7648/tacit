@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sangmin7648/tacit/pkg/storage"
 )
@@ -82,8 +83,9 @@ func isFrontmatterLine(s string) bool {
 }
 
 // Search searches the knowledge base at baseDir for pattern (case-insensitive).
+// If since is non-zero, only entries created after that time are included.
 // Returns results sorted by relevance score descending.
-func Search(baseDir, pattern string) ([]*SearchResult, error) {
+func Search(baseDir, pattern string, since time.Time) ([]*SearchResult, error) {
 	rg, err := extractRg()
 	if err != nil {
 		return nil, err
@@ -149,6 +151,10 @@ func Search(baseDir, pattern string) ([]*SearchResult, error) {
 		fd := byFile[path]
 		entry, err := storage.Read(path)
 		if err != nil {
+			continue
+		}
+
+		if !since.IsZero() && !entry.CreatedAt.After(since) {
 			continue
 		}
 
