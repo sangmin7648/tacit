@@ -15,7 +15,7 @@ tacit listen   # start capturing
 
 ---
 
-You think out loud. The most valuable insights happen in conversation, not in text editors — and most of them disappear. tacit captures what you say, transcribes it on-device with Whisper, classifies it with Claude, and stores it to `~/.tacit/`. Then `/tacit.knowledge` retrieves it directly inside any AI conversation, turning your spoken history into live agent context.
+Spoken ideas disappear. tacit transcribes them on-device, classifies them with Claude, and surfaces them as live context in any AI conversation — automatically.
 
 <!-- TODO: Add demo GIF showing tacit listen → speech → /tacit.knowledge retrieval -->
 
