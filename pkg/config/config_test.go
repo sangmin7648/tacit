@@ -25,8 +25,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.LLMProvider != "ollama" {
 		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "ollama")
 	}
-	if cfg.LLMModel != "qwen3.5" {
-		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "qwen3.5")
+	if cfg.LLMModel != "gemma4" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "gemma4")
 	}
 }
 

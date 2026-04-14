@@ -136,11 +136,11 @@ func cmdSetup() {
 		// Step 2: Ollama model (text input)
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Println("Step 2/4: Enter Ollama model name")
-		fmt.Print("  Model name [qwen3.5]: ")
+		fmt.Print("  Model name [gemma4]: ")
 		input := strings.TrimSpace(readLine(reader))
 		fmt.Println()
 		if input == "" {
-			llmModel = "qwen3.5"
+			llmModel = "gemma4"
 		} else {
 			llmModel = input
 		}

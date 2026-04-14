@@ -49,7 +49,7 @@ func DefaultConfig() *Config {
 		SpeechThreshold: 0.5,
 		EnergyThreshold: 200,
 		LLMProvider:     "ollama",
-		LLMModel:        "qwen3.5",
+		LLMModel:        "gemma4",
 		SkillAgent:      "claude",
 		CaptureMic:      true,
 		CaptureSpeaker:  true,
