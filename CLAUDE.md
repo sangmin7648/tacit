@@ -34,17 +34,17 @@ make clean          # Clean build artifacts
 
 ## Build Verification
 
-- `go build ./...` 로 빌드 검증하지 말 것 — `pkg/stt`가 CGo로 whisper.h를 참조하므로 `make build` 전에는 항상 실패한다
-- 빌드 검증은 반드시 `make build` 또는 `make e2e-test` 사용
-- CGo와 무관한 순수 Go 패키지(예: `./skills/`)만 `go build ./skills/` 로 개별 확인 가능
+- Do NOT verify builds with `go build ./...` — `pkg/stt` references `whisper.h` via CGo and will always fail before `make build`
+- Always use `make build` or `make e2e-test` to verify builds
+- Pure Go packages unrelated to CGo (e.g. `./skills/`) can be individually verified with `go build ./skills/`
 
 ## Build Principles
 
-- AI agent(Claude Code CLI)를 제외한 모든 의존성(whisper.cpp, ten-vad, miniaudio, AudioToolbox 등)은 바이너리에 정적 링크/번들되어야 한다. 빌드 결과물은 반드시 포터블 바이너리여야 하며, 런타임에 외부 라이브러리 설치를 요구해서는 안 된다.
+- All dependencies (whisper.cpp, ten-vad, miniaudio, AudioToolbox, etc.) except the AI agent (Claude Code CLI) must be statically linked/bundled into the binary. The build output must be a portable binary that requires no external library installation at runtime.
 
 ## Workflow
 
-- 코드 수정 후 반드시 `make e2e-test`를 실행하여 파이프라인 동작을 확인할 것
+- After modifying code, always run `make e2e-test` to verify pipeline behavior
 
 ## Code Style
 

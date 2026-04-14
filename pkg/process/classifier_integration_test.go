@@ -20,14 +20,14 @@ var singleTestCases = []classifierTestCase{
 		name:           "일상_점심",
 		text:           "오늘 점심 뭐 먹지? 김치찌개 먹을까 아니면 그냥 편의점 갈까",
 		expectSkip:     false,
-		expectCategory: "잡담",
+		expectCategory: "daily",
 	},
 	{
 		name: "개발_goroutine",
 		text: "Go에서 goroutine leak 방지하려면 context로 cancel 전파해야 해. " +
 			"defer cancel() 꼭 넣어야 되고 done 채널 닫는 패턴도 같이 써야 안전함",
 		expectSkip:     false,
-		expectCategory: "개발",
+		expectCategory: "dev",
 	},
 	{
 		name: "회의_스프린트",
@@ -35,13 +35,13 @@ var singleTestCases = []classifierTestCase{
 			"API 설계는 내가 담당하고 프론트엔드 연동은 김대리한테 부탁하기로 했어. " +
 			"목요일까지 PR 올려야 됨",
 		expectSkip:     false,
-		expectCategory: "업무",
+		expectCategory: "work",
 	},
 	{
 		name:           "건강_운동",
 		text:           "오늘 헬스장에서 스쿼트 5세트 했는데 허벅지가 터질 것 같아. 내일 못 걸을 듯",
 		expectSkip:     false,
-		expectCategory: "건강",
+		expectCategory: "health",
 	},
 	{
 		name: "요리_레시피",
@@ -49,7 +49,7 @@ var singleTestCases = []classifierTestCase{
 			"고추장이랑 간장 비율이 2대1이고 설탕 약간 넣으면 됨. " +
 			"마늘은 많이 넣을수록 좋고 참기름은 마지막에",
 		expectSkip:     false,
-		expectCategory: "생활",
+		expectCategory: "lifestyle",
 	},
 	{
 		name: "알고리즘_공부",
@@ -58,7 +58,7 @@ var singleTestCases = []classifierTestCase{
 			"BFS랑 다르게 가중치 있는 그래프에서 최단경로 찾을 때 씀. " +
 			"음수 가중치는 벨만-포드 써야 하고, 다익스트라는 음수 있으면 틀림",
 		expectSkip:     false,
-		expectCategory: "학습",
+		expectCategory: "learning",
 	},
 	{
 		name:           "감정_일기",

@@ -1,6 +1,6 @@
 # tacit
 
-말한 것들이 AI 지식이 된다. 백그라운드에서 대화를 캡처하고, AI가 꺼내 쓸 수 있도록 자동으로 정리한다.
+What you say becomes AI knowledge. Captures conversations in the background, automatically organizes them so your AI can retrieve them.
 
 ## Install
 
@@ -14,24 +14,24 @@ curl -fsSL https://raw.githubusercontent.com/sangmin7648/tacit/main/install.sh |
 tacit setup
 ```
 
-## 사용법
+## Usage
 
-### 항상 켜두기
+### Keep it running
 
 ```bash
-tacit listen    # 캡처 시작
+tacit listen    # start capturing
 ```
 
-켜두면 된다. 말이 감지될 때마다 자동으로 텍스트 변환 → 분류 → 저장한다.
+Leave it on. Whenever speech is detected, it automatically transcribes → classifies → stores.
 
-## AI에서 사용하기
+## Use with AI
 
-`tacit setup` 이후 AI agent에서 SKILL로 구두 대화를 바로 검색할 수 있다.
+After `tacit setup`, you can search your spoken conversations directly from any AI agent using the SKILL:
 
 ```
-/tacit.knowledge 방금 논의에서 검색 랭킹 관련 논의 결과를 정리해줘 
-"저번 주 회의에서 논의한 API 설계 찾아줘"
-"지난달 아이디어 중 프로젝트 관련된 것 있어?"
+/tacit.knowledge summarize the search ranking discussion from earlier
+"find the API design we talked about last week"
+"any project-related ideas from last month?"
 ```
 
 ## Requirements
@@ -42,18 +42,18 @@ tacit listen    # 캡처 시작
 ---
 
 <details>
-<summary>소스 빌드</summary>
+<summary>Build from source</summary>
 
-**요구사항:** Go 1.23+, CMake, macOS
+**Requirements:** Go 1.23+, CMake, macOS
 
 ```bash
 git clone --recursive https://github.com/sangmin7648/tacit.git
 cd tacit
 make build
-make install   # ~/.local/bin/tacit에 설치
+make install   # installs to ~/.local/bin/tacit
 ```
 
-> `~/.local/bin`이 `PATH`에 없다면:
+> If `~/.local/bin` is not in your `PATH`:
 > ```bash
 > export PATH="$HOME/.local/bin:$PATH"
 > ```
@@ -63,7 +63,7 @@ make install   # ~/.local/bin/tacit에 설치
 <details>
 <summary>Configuration</summary>
 
-`~/.tacit/config.yaml` (모든 필드 optional):
+`~/.tacit/config.yaml` (all fields optional):
 
 ```yaml
 whisper_model: base        # tiny, base, small, medium, large
@@ -93,20 +93,20 @@ graph LR
     CLS --> KB[Knowledge Base<br/>~/.tacit/]
 ```
 
-저장 포맷: YAML frontmatter가 포함된 마크다운 파일
+Storage format: Markdown files with YAML frontmatter
 
 ```markdown
 ---
-title: "제목"
-category: "카테고리/서브카테고리"
+title: "Title"
+category: "category"
 created_at: "2026-03-29T15:30:45+09:00"
 ---
 
-AI가 생성한 요약
+AI-generated summary
 
 ---
 
-원본 STT 텍스트
+Raw STT transcript
 ```
 
 </details>

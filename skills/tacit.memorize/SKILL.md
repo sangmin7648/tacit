@@ -15,17 +15,16 @@ Save the current conversation as a structured knowledge entry to `~/.tacit/memor
 ### Step 1 — Analyze the conversation
 
 Read the current conversation and extract:
-- **title**: A concise Korean title (≤ 100 chars) capturing the main topic
-- **category**: A single Korean noun describing the domain (e.g. `개발`, `회의`, `학습`, `설계`, `아이디어`, `트러블슈팅`)
+- **title**: A concise title (≤ 100 chars) capturing the main topic — write in the conversation's language
+- **category**: A single English word describing the domain (e.g. `dev`, `meeting`, `learning`, `design`, `ideas`, `debugging`) — always English
 - **keywords**: 5–10 search terms to maximize lexical recall in `tacit search`. Include:
-  - Korean synonyms and related concepts
-  - English equivalents and abbreviations
-  - Alternative phrasings someone might search for
+  - Synonyms and related concepts in the conversation's language plus English equivalents
+  - Abbreviations and alternative phrasings someone might search for
   - Specific names: tools, methods, people, places mentioned
-- **summary**: Bullet list of key insights, decisions, and learnings (Korean preferred)
-- **content**: Detailed notes — background, context, rationale, specifics (Korean preferred)
+- **summary**: Bullet list of key insights, decisions, and learnings — write in the conversation's language
+- **content**: Detailed notes — background, context, rationale, specifics — write in the conversation's language
 
-If the user provided a hint with the command (e.g. `/tacit.memorize Claude Code 스킬 개발`), use it to guide the title and category.
+If the user provided a hint with the command (e.g. `/tacit.memorize skill development`), use it to guide the title and category.
 
 ### Step 2 — Determine the file path
 
@@ -91,5 +90,5 @@ Saved to: ~/.tacit/memory/<category>/YYYYMMDD-HHMMSS.md
 - Write to the **absolute path** (expand `~` to the actual home directory path)
 - Do NOT fabricate or embellish — only record what actually appeared in the conversation
 - Summary = concise takeaways; Content = full detail
-- Categories are single-level, no slashes (e.g. `개발` not `개발/백엔드`)
+- Categories are single-level, no slashes (e.g. `dev` not `dev/backend`)
 - The entry will automatically appear in `tacit list` and `tacit search` — no additional steps needed

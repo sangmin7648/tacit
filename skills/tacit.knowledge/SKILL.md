@@ -20,7 +20,7 @@ tacit get <file-path>                    — Print full content of a specific en
 
 ## Process
 
-When the user invokes `/tacit.knowledge <prompt>`, extract the time window from the prompt if mentioned (e.g. "오늘", "이번 주", "지난 1시간"). If no time is specified, default to **1h** for list.
+When the user invokes `/tacit.knowledge <prompt>`, extract the time window from the prompt if mentioned (e.g. "today", "this week", "last hour"). If no time is specified, default to **1h** for list.
 
 ### Step 1 — Run list agent and search agent IN PARALLEL
 
@@ -66,7 +66,6 @@ Synthesize the retrieved knowledge into a direct answer to the user's prompt:
 ## Important
 
 - Knowledge content is captured from real-time speech (STT) — expect transcription artifacts
-- Categories and content are primarily in Korean
 - Do NOT fabricate knowledge entries — only reference what actually exists
 - The `Summary` section is the AI-processed version; `Content` is raw STT output
 - `tacit search` supports regex-compatible patterns — you can use `tacit search "키워드1\|키워드2"` to search multiple terms at once

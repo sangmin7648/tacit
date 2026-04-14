@@ -11,14 +11,20 @@ import (
 const baseURL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
 
 // EnsureModel checks if the model file exists at modelPath.
-// If not, it downloads the model from HuggingFace.
+// If not, it downloads the model from HuggingFace (whisper.cpp base URL).
 func EnsureModel(modelPath string) error {
+	modelFile := filepath.Base(modelPath)
+	return EnsureModelFromURL(modelPath, baseURL+"/"+modelFile)
+}
+
+// EnsureModelFromURL checks if the model file exists at modelPath.
+// If not, it downloads from the given URL.
+func EnsureModelFromURL(modelPath, url string) error {
 	if _, err := os.Stat(modelPath); err == nil {
 		return nil // already exists
 	}
 
 	modelFile := filepath.Base(modelPath)
-	url := baseURL + "/" + modelFile
 
 	// Create parent directory
 	if err := os.MkdirAll(filepath.Dir(modelPath), 0o755); err != nil {
