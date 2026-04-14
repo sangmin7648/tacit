@@ -140,7 +140,6 @@ func runClaude(ctx context.Context, systemPrompt, prompt, model string) ([]byte,
 		"--strict-mcp-config",
 		"--mcp-config", `{"mcpServers":{}}`,
 		"--tools", "",
-		"--effort", "low",
 		"--setting-sources", "user",
 		"--disable-slash-commands",
 	)
