@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,6 +80,10 @@ func buildFileContent(entry *KnowledgeEntry) string {
 	b.WriteString(fmt.Sprintf("title: %q\n", entry.Title))
 	b.WriteString(fmt.Sprintf("category: %q\n", entry.Category))
 	b.WriteString(fmt.Sprintf("created_at: %q\n", entry.CreatedAt.Format("2006-01-02T15:04:05-07:00")))
+	if len(entry.Keywords) > 0 {
+		kwJSON, _ := json.Marshal(entry.Keywords)
+		b.WriteString(fmt.Sprintf("keywords: %s\n", kwJSON))
+	}
 	b.WriteString("---\n")
 
 	// Summary

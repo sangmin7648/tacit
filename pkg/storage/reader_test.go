@@ -58,6 +58,65 @@ func TestWriteAndRead_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestWriteAndRead_Keywords_RoundTrip(t *testing.T) {
+	baseDir := t.TempDir()
+	loc := time.FixedZone("KST", 9*3600)
+
+	original := &KnowledgeEntry{
+		Title:     "파이썬 데코레이터 활용",
+		Category:  "개발",
+		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, loc),
+		Keywords:  []string{"데코레이터", "decorator", "functools.wraps", "파이썬", "python"},
+		Summary:   "Summary text here.",
+		Content:   "Content text here.",
+	}
+
+	path, err := Write(baseDir, original)
+	if err != nil {
+		t.Fatalf("Write() error: %v", err)
+	}
+
+	result, err := Read(path)
+	if err != nil {
+		t.Fatalf("Read() error: %v", err)
+	}
+
+	if len(result.Keywords) != len(original.Keywords) {
+		t.Fatalf("Keywords length: got %d, want %d", len(result.Keywords), len(original.Keywords))
+	}
+	for i, kw := range original.Keywords {
+		if result.Keywords[i] != kw {
+			t.Errorf("Keywords[%d]: got %q, want %q", i, result.Keywords[i], kw)
+		}
+	}
+}
+
+func TestWriteAndRead_NoKeywords_RoundTrip(t *testing.T) {
+	baseDir := t.TempDir()
+
+	original := &KnowledgeEntry{
+		Title:     "No Keywords Entry",
+		Category:  "개발",
+		CreatedAt: time.Now(),
+		Summary:   "Summary.",
+		Content:   "Content.",
+	}
+
+	path, err := Write(baseDir, original)
+	if err != nil {
+		t.Fatalf("Write() error: %v", err)
+	}
+
+	result, err := Read(path)
+	if err != nil {
+		t.Fatalf("Read() error: %v", err)
+	}
+
+	if len(result.Keywords) != 0 {
+		t.Errorf("Keywords should be empty, got %v", result.Keywords)
+	}
+}
+
 func TestRead_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "test.md")
@@ -105,6 +164,43 @@ This is the content section.
 	absPath, _ := filepath.Abs(filePath)
 	if entry.FilePath != absPath {
 		t.Errorf("FilePath: got %q, want %q", entry.FilePath, absPath)
+	}
+}
+
+func TestRead_WithKeywords(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "test.md")
+
+	content := `---
+title: "Test Entry"
+category: "dev"
+created_at: "2026-03-28T14:30:52+09:00"
+keywords: ["키워드1", "keyword2", "abbrev"]
+---
+
+This is the summary section.
+
+---
+
+This is the content section.
+`
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	entry, err := Read(filePath)
+	if err != nil {
+		t.Fatalf("Read() error: %v", err)
+	}
+
+	want := []string{"키워드1", "keyword2", "abbrev"}
+	if len(entry.Keywords) != len(want) {
+		t.Fatalf("Keywords length: got %d, want %d", len(entry.Keywords), len(want))
+	}
+	for i, kw := range want {
+		if entry.Keywords[i] != kw {
+			t.Errorf("Keywords[%d]: got %q, want %q", i, entry.Keywords[i], kw)
+		}
 	}
 }
 

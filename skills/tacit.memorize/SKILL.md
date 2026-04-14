@@ -17,6 +17,11 @@ Save the current conversation as a structured knowledge entry to `~/.tacit/memor
 Read the current conversation and extract:
 - **title**: A concise Korean title (≤ 100 chars) capturing the main topic
 - **category**: A single Korean noun describing the domain (e.g. `개발`, `회의`, `학습`, `설계`, `아이디어`, `트러블슈팅`)
+- **keywords**: 5–10 search terms to maximize lexical recall in `tacit search`. Include:
+  - Korean synonyms and related concepts
+  - English equivalents and abbreviations
+  - Alternative phrasings someone might search for
+  - Specific names: tools, methods, people, places mentioned
 - **summary**: Bullet list of key insights, decisions, and learnings (Korean preferred)
 - **content**: Detailed notes — background, context, rationale, specifics (Korean preferred)
 
@@ -55,6 +60,7 @@ Write the file using the Write tool at the exact path from Step 2. Use this form
 title: "<title>"
 category: "<category>"
 created_at: "<YYYY-MM-DDTHH:MM:SS+HH:MM>"
+keywords: ["<keyword1>", "<keyword2>", ...]
 ---
 
 <summary — bullet list of key points>
@@ -67,6 +73,7 @@ created_at: "<YYYY-MM-DDTHH:MM:SS+HH:MM>"
 **Format rules:**
 - `title` and `category` must be quoted strings in the YAML frontmatter
 - `created_at` must be ISO 8601 with timezone offset (e.g. `"2026-04-02T15:04:05+09:00"`)
+- `keywords` must be a JSON-style inline array of quoted strings on one line
 - Summary and content are plain Markdown (no YAML)
 - Separate frontmatter from summary with `---\n\n` (blank line after)
 - Separate summary from content with `\n\n---\n\n` (blank lines around)

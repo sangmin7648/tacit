@@ -8,6 +8,7 @@ type KnowledgeEntry struct {
 	Title     string    `yaml:"title"`
 	Category  string    `yaml:"category"`
 	CreatedAt time.Time `yaml:"created_at"`
+	Keywords  []string  `yaml:"keywords,omitempty"`
 	Summary   string    // Body first section (before ---)
 	Content   string    // Body second section (after ---)
 	FilePath  string    // Absolute file path (not stored in file, derived)
