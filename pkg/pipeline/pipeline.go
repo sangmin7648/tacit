@@ -164,6 +164,13 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 	silenceFrames := 0
 	silenceLimit := int(p.cfg.SilenceDuration.Seconds() * float64(audio.SampleRate) / float64(hopSize))
 
+	// preRoll keeps a short window of the most recent pre-speech audio so the
+	// onset of a phrase isn't clipped when VAD fires a frame or two late — a
+	// common cause of mis-transcribed first words. Experimental-only.
+	const preRollFrames = 12 // ~192ms at 16ms/frame
+	const preRollMax = preRollFrames * hopSize
+	var preRoll []float32
+
 	// textBuf accumulates STT results from split chunks within one speech session.
 	// All chunks are joined and sent as a single classify item when silence is detected.
 	var textBuf []string
@@ -204,6 +211,11 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 						sessionStart = time.Now()
 					}
 					segBuf.Start()
+					// Prepend buffered pre-speech audio to recover a clipped onset.
+					if p.cfg.Experimental && len(preRoll) > 0 {
+						segBuf.Append(preRoll)
+						preRoll = preRoll[:0]
+					}
 					log.Printf("[%s] speech started", label)
 				}
 				segBuf.Append(audio.Int16ToFloat32(frame))
@@ -241,6 +253,13 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 						textBuf = textBuf[:0]
 					}
 				}
+			} else if p.cfg.Experimental {
+				// Leading silence: keep the most recent frames as pre-roll so a
+				// late-firing VAD onset doesn't clip the first word.
+				preRoll = append(preRoll, audio.Int16ToFloat32(frame)...)
+				if over := len(preRoll) - preRollMax; over > 0 {
+					preRoll = preRoll[:copy(preRoll, preRoll[over:])]
+				}
 			}
 		}
 		// Compact: move unprocessed samples to front to prevent memory leak.
@@ -251,13 +270,22 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 	return nil
 }
 
+// sttOptions builds the per-call whisper options from the pipeline config.
+func (p *Pipeline) sttOptions() stt.Options {
+	return stt.Options{
+		Language:      p.cfg.Language,
+		InitialPrompt: p.cfg.InitialPrompt,
+		Experimental:  p.cfg.Experimental,
+	}
+}
+
 // transcribeSync runs STT (serialised across sources) and returns the
 // transcribed text, or "" on error or empty result.
 func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, label string) string {
 	log.Printf("[%s] transcribing %.1fs of audio", label, seg.Duration.Seconds())
 
 	p.whisperMu.Lock()
-	text, err := p.whisper.Transcribe(ctx, seg.Samples, p.cfg.InitialPrompt)
+	text, err := p.whisper.Transcribe(ctx, seg.Samples, p.sttOptions())
 	p.whisperMu.Unlock()
 
 	if err != nil {
@@ -385,7 +413,7 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 
 	log.Printf("Running STT...")
 	p.whisperMu.Lock()
-	text, err := p.whisper.Transcribe(ctx, samples, p.cfg.InitialPrompt)
+	text, err := p.whisper.Transcribe(ctx, samples, p.sttOptions())
 	p.whisperMu.Unlock()
 	if err != nil {
 		return "", fmt.Errorf("transcribe: %w", err)

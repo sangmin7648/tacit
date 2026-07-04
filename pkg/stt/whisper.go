@@ -41,9 +41,21 @@ func NewWhisper(modelPath string) (*Whisper, error) {
 	return &Whisper{ctx: ctx}, nil
 }
 
-// Transcribe converts float32 PCM samples (16kHz mono) to text.
-// initialPrompt provides optional context to bias the transcription (empty string = no hint).
-func (w *Whisper) Transcribe(ctx context.Context, samples []float32, initialPrompt string) (string, error) {
+// Options configures a single Transcribe call.
+type Options struct {
+	// Language is the whisper language code ("auto" to auto-detect, "en", "ko", ...).
+	// Empty is treated as "auto".
+	Language string
+	// InitialPrompt biases decoding toward the given vocabulary ("" = no hint).
+	InitialPrompt string
+	// Experimental enables anti-hallucination decode settings: no cross-segment
+	// context, confidence thresholds (no_speech / logprob / entropy), non-speech
+	// token suppression, and temperature fallback. Off preserves legacy behavior.
+	Experimental bool
+}
+
+// Transcribe converts float32 PCM samples (16kHz mono) to text using opts.
+func (w *Whisper) Transcribe(ctx context.Context, samples []float32, opts Options) (string, error) {
 	if w.ctx == nil {
 		return "", fmt.Errorf("whisper context is nil")
 	}
@@ -54,7 +66,11 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32, initialProm
 	params := C.whisper_full_default_params(C.WHISPER_SAMPLING_BEAM_SEARCH)
 	params.beam_search.beam_size = 5
 
-	lang := C.CString("auto")
+	langStr := opts.Language
+	if langStr == "" {
+		langStr = "auto"
+	}
+	lang := C.CString(langStr)
 	defer C.free(unsafe.Pointer(lang))
 	params.language = lang
 	params.translate = C.bool(false)
@@ -66,10 +82,22 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32, initialProm
 	params.print_timestamps = C.bool(false)
 	params.n_threads = 4
 
+	// Experimental beta channel: tighten decoding to reject the "hallucinated
+	// text on silence/noise" failure mode and stop one bad segment's output from
+	// poisoning the next.
+	if opts.Experimental {
+		params.no_context = C.bool(true)     // don't carry context across segments
+		params.suppress_nst = C.bool(true)   // suppress non-speech tokens
+		params.no_speech_thold = C.float(0.6)
+		params.logprob_thold = C.float(-1.0)
+		params.entropy_thold = C.float(2.4)  // reject low-diversity (repeated) output
+		params.temperature_inc = C.float(0.2) // enable temperature fallback on failure
+	}
+
 	// Set initial prompt if provided
 	var cPrompt *C.char
-	if initialPrompt != "" {
-		cPrompt = C.CString(initialPrompt)
+	if opts.InitialPrompt != "" {
+		cPrompt = C.CString(opts.InitialPrompt)
 		defer C.free(unsafe.Pointer(cPrompt))
 		params.initial_prompt = cPrompt
 	}

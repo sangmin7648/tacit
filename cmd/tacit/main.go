@@ -109,7 +109,7 @@ func cmdSetup() {
 	var llmProvider, llmModel string
 
 	// Step 1: LLM provider
-	fmt.Println("Step 1/4: Select LLM provider for summarization")
+	fmt.Println("Step 1/6: Select LLM provider for summarization")
 	providerIdx := selectOption([]string{"ollama", "claude"}, 0)
 	fmt.Println()
 
@@ -118,7 +118,7 @@ func cmdSetup() {
 		llmProvider = "claude"
 
 		// Step 2: Claude model
-		fmt.Println("Step 2/4: Select Claude model")
+		fmt.Println("Step 2/6: Select Claude model")
 		modelIdx := selectOption([]string{"haiku", "sonnet", "opus"}, 0)
 		fmt.Println()
 		switch modelIdx {
@@ -135,7 +135,7 @@ func cmdSetup() {
 
 		// Step 2: Ollama model (text input)
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Println("Step 2/4: Enter Ollama model name")
+		fmt.Println("Step 2/6: Enter Ollama model name")
 		fmt.Print("  Model name [qwen3.5]: ")
 		input := strings.TrimSpace(readLine(reader))
 		fmt.Println()
@@ -147,7 +147,7 @@ func cmdSetup() {
 	}
 
 	// Step 3: AI agent for skill installation (only claude supported)
-	fmt.Println("Step 3/4: Select AI agent for skill installation")
+	fmt.Println("Step 3/6: Select AI agent for skill installation")
 	agentNames := []string{"claude"}
 	agentIdx := selectOption(agentNames, 0)
 	skillAgent := agentNames[agentIdx]
@@ -156,7 +156,7 @@ func cmdSetup() {
 	// Step 4: Audio sources (multi-select) — at least one must be selected.
 	var captureMic, captureSpeaker bool
 	for {
-		fmt.Println("Step 4/4: Select audio sources to listen  (Space to toggle, Enter to confirm)")
+		fmt.Println("Step 4/6: Select audio sources to listen  (Space to toggle, Enter to confirm)")
 		sourceSelected := selectMultiple([]string{"mic", "speaker"}, []bool{true, true})
 		fmt.Println()
 		captureMic, captureSpeaker = sourceSelected[0], sourceSelected[1]
@@ -167,12 +167,26 @@ func cmdSetup() {
 		fmt.Println()
 	}
 
+	// Step 5: transcription language. Fixing the language (instead of "auto")
+	// meaningfully reduces wrong-language / hallucinated transcriptions.
+	fmt.Println("Step 5/6: Select transcription language")
+	langIdx := selectOption([]string{"auto (detect)", "english", "korean"}, 0)
+	language := []string{"auto", "en", "ko"}[langIdx]
+	fmt.Println()
+
+	// Step 6: experimental beta channel.
+	fmt.Println("Step 6/6: Enable experimental transcription? (anti-hallucination decode tuning + VAD pre-roll padding)")
+	experimental := selectOption([]string{"no", "yes"}, 0) == 1
+	fmt.Println()
+
 	fmt.Println()
 	fmt.Printf("  LLM provider   : %s\n", llmProvider)
 	fmt.Printf("  LLM model      : %s\n", llmModel)
 	fmt.Printf("  Skill agent    : %s\n", skillAgent)
 	fmt.Printf("  Capture mic    : %v\n", captureMic)
 	fmt.Printf("  Capture speaker: %v\n", captureSpeaker)
+	fmt.Printf("  Language       : %s\n", language)
+	fmt.Printf("  Experimental   : %v\n", experimental)
 	fmt.Println()
 
 	// Write settings to config-override.yaml
@@ -180,7 +194,7 @@ func cmdSetup() {
 	if err := os.MkdirAll(filepath.Dir(overridePath), 0755); err != nil {
 		log.Fatalf("Failed to create config directory: %v", err)
 	}
-	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel, skillAgent, captureMic, captureSpeaker); err != nil {
+	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel, skillAgent, language, captureMic, captureSpeaker, experimental); err != nil {
 		log.Fatalf("Failed to write config override: %v", err)
 	}
 	fmt.Printf("Saved settings: %s\n", overridePath)
@@ -560,6 +574,8 @@ func cmdConfigView(cfg *config.Config) {
 	}
 
 	fmt.Printf("%-22s %-20s %s\n", "whisper_model:", cfg.WhisperModel, tag("whisper_model"))
+	fmt.Printf("%-22s %-20s %s\n", "language:", cfg.Language, tag("language"))
+	fmt.Printf("%-22s %-20v %s\n", "experimental:", cfg.Experimental, tag("experimental"))
 	if cfg.InitialPrompt != "" {
 		fmt.Printf("%-22s %-20s %s\n", "initial_prompt:", cfg.InitialPrompt, tag("initial_prompt"))
 	}
