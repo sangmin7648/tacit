@@ -10,8 +10,14 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if cfg.WhisperModel != "medium" {
-		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "medium")
+	if cfg.WhisperModel != "large-v3-turbo" {
+		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "large-v3-turbo")
+	}
+	if cfg.Language != "auto" {
+		t.Errorf("Language: got %q, want %q", cfg.Language, "auto")
+	}
+	if cfg.Experimental != false {
+		t.Errorf("Experimental: got %v, want %v", cfg.Experimental, false)
 	}
 	if cfg.MinSpeechDur != 5*time.Second {
 		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 5*time.Second)
