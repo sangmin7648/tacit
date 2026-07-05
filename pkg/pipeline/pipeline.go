@@ -116,22 +116,33 @@ func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource, label
 	return nil
 }
 
+// retryDelay is the wait before restarting a source after its stream ends or
+// re-initialisation fails.  stallTimeout is how long runSourceOnce waits for an
+// audio chunk before assuming the stream has silently died (e.g. SCStream torn
+// down by macOS on sleep without firing didStopWithError:).  Both are vars, not
+// consts, so tests can shrink them.
+var (
+	retryDelay   = 5 * time.Second
+	stallTimeout = 15 * time.Second
+)
+
 // runSource runs a single audio source through VAD→STT and enqueues results
-// onto classifyCh.  It retries automatically when the source stream closes
-// unexpectedly (e.g. SCStream stopped by macOS), and returns only when ctx is
-// cancelled or a fatal initialisation error occurs.
+// onto classifyCh.  It restarts the source automatically whenever a capture
+// session ends for any reason other than ctx cancellation — whether the stream
+// closed unexpectedly (SCStream stopped by macOS), stalled with no audio, or
+// re-initialisation failed transiently (common right after sleep/wake).  It
+// returns only when ctx is cancelled.
 func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label string, classifyCh chan<- classifyItem) error {
-	const retryDelay = 5 * time.Second
 	for {
 		err := p.runSourceOnce(ctx, src, label, classifyCh)
-		if err != nil {
-			return err
-		}
 		if ctx.Err() != nil {
 			return nil
 		}
-		// Stream closed unexpectedly — wait briefly then restart.
-		log.Printf("[%s] stream closed unexpectedly, restarting in %v", label, retryDelay)
+		if err != nil {
+			log.Printf("[%s] capture session error: %v; restarting in %v", label, err, retryDelay)
+		} else {
+			log.Printf("[%s] stream ended, restarting in %v", label, retryDelay)
+		}
 		select {
 		case <-time.After(retryDelay):
 		case <-ctx.Done():
@@ -178,7 +189,35 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 
 	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
 
-	for chunk := range stream {
+	// Inactivity watchdog: a live capture stream (mic or SCStream) delivers PCM
+	// chunks continuously, even during silence, so a prolonged absence of chunks
+	// means the stream has died without closing its channel.  When that happens
+	// we return so runSource restarts the source.
+	stall := time.NewTimer(stallTimeout)
+	defer stall.Stop()
+
+	for {
+		var chunk []int16
+		select {
+		case c, ok := <-stream:
+			if !ok {
+				return nil // channel closed (normal or unexpected stop) → restart
+			}
+			chunk = c
+			if !stall.Stop() {
+				select {
+				case <-stall.C:
+				default:
+				}
+			}
+			stall.Reset(stallTimeout)
+		case <-stall.C:
+			log.Printf("[%s] no audio for %v, assuming stream stalled; restarting", label, stallTimeout)
+			return nil
+		case <-ctx.Done():
+			return nil
+		}
+
 		frameBuf = append(frameBuf, chunk...)
 
 		processed := 0
@@ -266,8 +305,6 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 		n := copy(frameBuf, frameBuf[processed:])
 		frameBuf = frameBuf[:n]
 	}
-
-	return nil
 }
 
 // sttOptions builds the per-call whisper options from the pipeline config.
