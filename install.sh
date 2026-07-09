@@ -27,8 +27,15 @@ info "Detected platform: $PLATFORM"
 
 VERSION="${TACIT_VERSION:-latest}"
 if [ "$VERSION" = "latest" ]; then
-  VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)
-  [ -n "$VERSION" ] || error "Failed to fetch latest version."
+  # Resolve the latest tag from the github.com /releases/latest redirect
+  # (302 -> /releases/tag/vX.Y.Z) rather than the api.github.com REST API.
+  # The REST API is rate-limited to 60 requests/hour per IP for unauthenticated
+  # callers and frequently returns 403 behind shared/NAT IPs, which blocked
+  # `tacit update`. The web redirect has no such limit. Pin with TACIT_VERSION
+  # to skip resolution entirely.
+  VERSION=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${REPO}/releases/latest" | sed -n 's#.*/releases/tag/##p')
+  [ -n "$VERSION" ] || error "Failed to resolve latest version. Set TACIT_VERSION=vX.Y.Z to pin a version."
 fi
 info "Installing tacit $VERSION"
 
