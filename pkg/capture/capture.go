@@ -100,7 +100,16 @@ func (m *Mic) Close() {
 
 // Stream starts capture and sends int16 sample chunks to the returned channel.
 // The channel is closed when ctx is cancelled.
+//
+// A single Mic may be Stream()ed repeatedly: the pipeline restarts sources after
+// a stall (e.g. the mic goes silent across sleep/wake and the inactivity watchdog
+// fires).  A restart returns from runSourceOnce without cancelling ctx, so the
+// prior device's ctx-bound stop goroutine never runs and the device stays
+// started.  Release it here before starting a new one, otherwise Start() fails
+// with "already started" on every restart forever.
 func (m *Mic) Stream(ctx context.Context) (<-chan []int16, error) {
+	m.Stop()
+
 	ch := make(chan []int16, 64)
 	var stopped atomic.Bool
 
