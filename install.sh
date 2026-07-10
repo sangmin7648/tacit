@@ -91,4 +91,4 @@ case ":$PATH:" in
     ;;
 esac
 
-info "Done! Run 'tacit --help' to get started."
+info "Done! Run 'tacit' to get started — it'll walk you through setup."

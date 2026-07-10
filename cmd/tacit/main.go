@@ -28,6 +28,14 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
+		// First run (user has never configured tacit): launch setup directly
+		// instead of dumping usage. The whole onboarding flows from here.
+		if _, err := os.Stat(config.OverridePath()); os.IsNotExist(err) {
+			fmt.Println("👋 Welcome to tacit! Let's get you set up.")
+			fmt.Println()
+			cmdSetup()
+			return
+		}
 		printUsage()
 		os.Exit(1)
 	}
@@ -40,6 +48,8 @@ func main() {
 	switch os.Args[1] {
 	case "setup":
 		cmdSetup()
+	case "guide":
+		runOnboarding(cfg)
 	case "process":
 		cmdProcess(cfg)
 	case "listen":
@@ -88,6 +98,7 @@ func printUsage() {
 
 Usage:
   tacit setup                  Install Claude Code skill for knowledge base
+  tacit guide                  Replay the step-by-step getting-started guide
   tacit process <audio-file>   Process an audio file into a knowledge entry
   tacit listen                 Start the voice capture daemon (foreground)
   tacit stop                   Stop the voice capture daemon
@@ -233,6 +244,90 @@ func cmdSetup() {
 	fmt.Printf("Updated reference config: %s\n", cfgPath)
 
 	fmt.Println("Setup complete.")
+
+	// Reload config with the freshly written overrides, then walk the user
+	// through first use step by step.
+	newCfg, err := config.LoadWithOverride(cfgPath, overridePath)
+	if err != nil {
+		log.Printf("Setup saved, but could not reload config for the guide: %v", err)
+		fmt.Println("Run 'tacit guide' any time to see the getting-started walkthrough.")
+		return
+	}
+	runOnboarding(newCfg)
+}
+
+// ANSI helpers for the onboarding walkthrough.
+func bold(s string) string { return "\033[1m" + s + "\033[0m" }
+func cyan(s string) string { return "\033[36m" + s + "\033[0m" }
+func dim(s string) string  { return "\033[2m" + s + "\033[0m" }
+
+// promptContinue pauses the walkthrough until the user presses Enter. When
+// stdin is not a terminal (piped/non-interactive), ReadString returns
+// immediately and the guide simply flows through.
+func promptContinue(r *bufio.Reader) {
+	fmt.Printf("\n  %s ", dim("Press Enter to continue ▸"))
+	r.ReadString('\n')
+}
+
+// runOnboarding prints a paced, step-by-step getting-started walkthrough. It is
+// shown automatically after `tacit setup` and can be replayed via `tacit guide`.
+func runOnboarding(cfg *config.Config) {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println()
+	fmt.Println(bold("  🎉 You're all set — here's a quick tour."))
+	promptContinue(reader)
+
+	// Step 1 — what tacit does + where things live.
+	fmt.Println()
+	fmt.Println(bold("  ① What tacit does"))
+	fmt.Println("     tacit listens to your voice, transcribes it on-device, and")
+	fmt.Println("     saves structured notes to a local knowledge base.")
+	fmt.Printf("     Knowledge base: %s\n", cyan(config.BaseDir()))
+	promptContinue(reader)
+
+	// Step 2 — start capturing.
+	fmt.Println()
+	fmt.Println(bold("  ② Start capturing"))
+	fmt.Printf("     %s\n", cyan("tacit listen"))
+	fmt.Println("     Captures speech in real time (Ctrl+C to stop).")
+	fmt.Printf("     Anytime: %s to check, %s to stop.\n", cyan("tacit status"), cyan("tacit stop"))
+	promptContinue(reader)
+
+	// Step 3 — review captures from the CLI.
+	fmt.Println()
+	fmt.Println(bold("  ③ Review what was captured"))
+	fmt.Printf("     %s            list recent entries (default last 24h)\n", cyan("tacit list"))
+	fmt.Printf("     %s   full-text search across everything\n", cyan("tacit search <word>"))
+	promptContinue(reader)
+
+	// Step 4 — the Claude Code skills. This is the part users most often miss,
+	// so spell out exactly how to invoke them.
+	fmt.Println()
+	fmt.Println(bold("  ④ Use it inside Claude Code"))
+	fmt.Println("     Setup installed two Claude Code skills for you. Open Claude")
+	fmt.Println("     Code and type \"/\" — you'll see them in the skill list:")
+	fmt.Println()
+	fmt.Printf("       %s   ask about anything you've captured\n", cyan("/tacit.knowledge"))
+	fmt.Printf("       %s\n", dim("         e.g. /tacit.knowledge what did we decide about pricing?"))
+	fmt.Println()
+	fmt.Printf("       %s    save the current chat into your knowledge base\n", cyan("/tacit.memorize"))
+	fmt.Printf("       %s\n", dim("         e.g. /tacit.memorize   (run it at the end of a session)"))
+	promptContinue(reader)
+
+	// Wrap up — offer to start the listener right now.
+	fmt.Println()
+	fmt.Println(bold("  That's the whole loop: 🎙️  capture → 🔍 review → 🤖 ask in Claude Code"))
+	fmt.Printf("  Replay this guide any time with %s.\n", cyan("tacit guide"))
+	fmt.Println()
+	fmt.Printf("  Start listening now? This begins capturing your microphone. %s: ", dim("[Y/n]"))
+	ans := strings.ToLower(strings.TrimSpace(readLine(reader)))
+	if ans == "" || ans == "y" || ans == "yes" {
+		fmt.Println()
+		cmdListen(cfg)
+		return
+	}
+	fmt.Printf("\n  No problem. When you're ready, run: %s\n", cyan("tacit listen"))
 }
 
 // readLine reads a single line from r, trimming the trailing newline.
