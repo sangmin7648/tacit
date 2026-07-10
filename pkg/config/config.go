@@ -240,6 +240,12 @@ func PIDPath() string {
 	return filepath.Join(BaseDir(), "tacit.pid")
 }
 
+// OnboardedPath returns the path to the marker file recording that the
+// getting-started walkthrough has been shown (~/.tacit/.onboarded).
+func OnboardedPath() string {
+	return filepath.Join(BaseDir(), ".onboarded")
+}
+
 // WriteSetupOverride writes a full override template with llm_provider,
 // llm_model, skill_agent, capture_mic, and capture_speaker set to the given
 // values (uncommented). Other fields are preserved from the existing override

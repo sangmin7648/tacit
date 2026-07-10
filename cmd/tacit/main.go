@@ -27,10 +27,12 @@ import (
 )
 
 func main() {
+	overrideExists := fileExists(config.OverridePath())
+
 	if len(os.Args) < 2 {
-		// First run (user has never configured tacit): launch setup directly
-		// instead of dumping usage. The whole onboarding flows from here.
-		if _, err := os.Stat(config.OverridePath()); os.IsNotExist(err) {
+		// Brand-new user (never configured): launch setup directly instead of
+		// dumping usage. The whole onboarding flows from here.
+		if !overrideExists {
 			fmt.Println("👋 Welcome to tacit! Let's get you set up.")
 			fmt.Println()
 			cmdSetup()
@@ -45,11 +47,26 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	switch os.Args[1] {
+	cmd := os.Args[1]
+
+	// One-time onboarding for existing users who upgraded into this version.
+	// They already have a config, so the brand-new-user path above never
+	// fires; show the walkthrough once (interactive terminals only, so scripts
+	// and the daemon aren't disrupted), then fall through to their command.
+	// setup/guide run the walkthrough themselves and update spawns a
+	// subprocess, so skip those here.
+	if overrideExists && !fileExists(config.OnboardedPath()) &&
+		cmd != "setup" && cmd != "guide" && cmd != "update" &&
+		term.IsTerminal(int(os.Stdin.Fd())) {
+		runOnboarding(cfg, false)
+		fmt.Println()
+	}
+
+	switch cmd {
 	case "setup":
 		cmdSetup()
 	case "guide":
-		runOnboarding(cfg)
+		runOnboarding(cfg, true)
 	case "process":
 		cmdProcess(cfg)
 	case "listen":
@@ -253,7 +270,13 @@ func cmdSetup() {
 		fmt.Println("Run 'tacit guide' any time to see the getting-started walkthrough.")
 		return
 	}
-	runOnboarding(newCfg)
+	runOnboarding(newCfg, true)
+}
+
+// fileExists reports whether path exists and is readable.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // ANSI helpers for the onboarding walkthrough.
@@ -270,8 +293,17 @@ func promptContinue(r *bufio.Reader) {
 }
 
 // runOnboarding prints a paced, step-by-step getting-started walkthrough. It is
-// shown automatically after `tacit setup` and can be replayed via `tacit guide`.
-func runOnboarding(cfg *config.Config) {
+// shown automatically after `tacit setup`, once for existing users who upgrade,
+// and can be replayed via `tacit guide`. When offerListen is true it ends by
+// offering to start the listener immediately; when false it only points the
+// user at the command (used for the mid-command one-time interstitial so it
+// doesn't swallow the command the user actually typed).
+func runOnboarding(cfg *config.Config, offerListen bool) {
+	// Record that the walkthrough has been shown so the one-time onboarding for
+	// existing users fires at most once. Best-effort; ignore errors.
+	_ = os.MkdirAll(config.BaseDir(), 0755)
+	_ = os.WriteFile(config.OnboardedPath(), []byte(""), 0644)
+
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println()
@@ -319,6 +351,12 @@ func runOnboarding(cfg *config.Config) {
 	fmt.Println()
 	fmt.Println(bold("  That's the whole loop: 🎙️  capture → 🔍 review → 🤖 ask in Claude Code"))
 	fmt.Printf("  Replay this guide any time with %s.\n", cyan("tacit guide"))
+
+	if !offerListen {
+		fmt.Printf("\n  When you're ready to capture, run: %s\n", cyan("tacit listen"))
+		return
+	}
+
 	fmt.Println()
 	fmt.Printf("  Start listening now? This begins capturing your microphone. %s: ", dim("[Y/n]"))
 	ans := strings.ToLower(strings.TrimSpace(readLine(reader)))
