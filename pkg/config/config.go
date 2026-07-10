@@ -27,7 +27,7 @@ type Config struct {
 	// segment context, confidence thresholds, non-speech-token suppression,
 	// temperature fallback) and VAD pre-roll padding. Off by default so existing
 	// users are unaffected.
-	Experimental bool `yaml:"experimental"`
+	Experimental    bool          `yaml:"experimental"`
 	MinSpeechDur    time.Duration `yaml:"min_speech_duration"`
 	SilenceDuration time.Duration `yaml:"silence_duration"`
 	SpeechThreshold float64       `yaml:"speech_threshold"`
@@ -264,8 +264,8 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		"# Run 'tacit config view' to see the current merged configuration.\n\n"
 
 	type field struct {
-		key        string
-		value      string
+		key         string
+		value       string
 		forceActive bool // true = always write uncommented
 	}
 
