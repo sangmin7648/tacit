@@ -48,24 +48,40 @@ type Config struct {
 	// memory growth when capturing continuous audio (e.g. long videos).
 	// 0 disables the cap. Default: 30s.
 	MaxSegmentDur time.Duration `yaml:"max_segment_duration"`
+
+	// Source-specific overrides (mic)
+	MicMinSpeechDur    time.Duration `yaml:"mic_min_speech_duration"`
+	MicSilenceDuration time.Duration `yaml:"mic_silence_duration"`
+	MicMaxSegmentDur   time.Duration `yaml:"mic_max_segment_duration"`
+
+	// Source-specific overrides (speaker)
+	SpeakerMinSpeechDur    time.Duration `yaml:"speaker_min_speech_duration"`
+	SpeakerSilenceDuration time.Duration `yaml:"speaker_silence_duration"`
+	SpeakerMaxSegmentDur   time.Duration `yaml:"speaker_max_segment_duration"`
 }
 
 // DefaultConfig returns a Config populated with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		WhisperModel:    "large-v3-turbo",
-		Language:        "auto",
-		Experimental:    false,
-		MinSpeechDur:    5 * time.Second,
-		SilenceDuration: 3 * time.Second,
-		SpeechThreshold: 0.5,
-		EnergyThreshold: 200,
-		LLMProvider:     "ollama",
-		LLMModel:        "qwen3.5",
-		SkillAgent:      "claude",
-		CaptureMic:      true,
-		CaptureSpeaker:  true,
-		MaxSegmentDur:   30 * time.Second,
+		WhisperModel:           "large-v3-turbo",
+		Language:               "auto",
+		Experimental:           false,
+		MinSpeechDur:           5 * time.Second,
+		SilenceDuration:        3 * time.Second,
+		SpeechThreshold:        0.5,
+		EnergyThreshold:        200,
+		LLMProvider:            "ollama",
+		LLMModel:               "qwen3.5",
+		SkillAgent:             "claude",
+		CaptureMic:             true,
+		CaptureSpeaker:         true,
+		MaxSegmentDur:          30 * time.Second,
+		MicMinSpeechDur:        2 * time.Second,
+		MicSilenceDuration:     10 * time.Second,
+		MicMaxSegmentDur:       30 * time.Second,
+		SpeakerMinSpeechDur:    5 * time.Second,
+		SpeakerSilenceDuration: 3 * time.Second,
+		SpeakerMaxSegmentDur:   30 * time.Second,
 	}
 }
 
@@ -144,7 +160,13 @@ func WriteDefault(path string) error {
 			"skill_agent: %s\n"+
 			"capture_mic: %v\n"+
 			"capture_speaker: %v\n"+
-			"max_segment_duration: %s\n",
+			"max_segment_duration: %s\n"+
+			"mic_min_speech_duration: %s\n"+
+			"mic_silence_duration: %s\n"+
+			"mic_max_segment_duration: %s\n"+
+			"speaker_min_speech_duration: %s\n"+
+			"speaker_silence_duration: %s\n"+
+			"speaker_max_segment_duration: %s\n",
 		cfg.WhisperModel,
 		cfg.Language,
 		cfg.Experimental,
@@ -158,6 +180,12 @@ func WriteDefault(path string) error {
 		cfg.CaptureMic,
 		cfg.CaptureSpeaker,
 		formatDuration(cfg.MaxSegmentDur),
+		formatDuration(cfg.MicMinSpeechDur),
+		formatDuration(cfg.MicSilenceDuration),
+		formatDuration(cfg.MicMaxSegmentDur),
+		formatDuration(cfg.SpeakerMinSpeechDur),
+		formatDuration(cfg.SpeakerSilenceDuration),
+		formatDuration(cfg.SpeakerMaxSegmentDur),
 	)
 	return os.WriteFile(path, []byte(content), 0644)
 }
@@ -185,6 +213,12 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("capture_mic: %v", defaults.CaptureMic),
 		fmt.Sprintf("capture_speaker: %v", defaults.CaptureSpeaker),
 		fmt.Sprintf("max_segment_duration: %s", formatDuration(defaults.MaxSegmentDur)),
+		fmt.Sprintf("mic_min_speech_duration: %s", formatDuration(defaults.MicMinSpeechDur)),
+		fmt.Sprintf("mic_silence_duration: %s", formatDuration(defaults.MicSilenceDuration)),
+		fmt.Sprintf("mic_max_segment_duration: %s", formatDuration(defaults.MicMaxSegmentDur)),
+		fmt.Sprintf("speaker_min_speech_duration: %s", formatDuration(defaults.SpeakerMinSpeechDur)),
+		fmt.Sprintf("speaker_silence_duration: %s", formatDuration(defaults.SpeakerSilenceDuration)),
+		fmt.Sprintf("speaker_max_segment_duration: %s", formatDuration(defaults.SpeakerMaxSegmentDur)),
 	}
 
 	var sb strings.Builder
@@ -278,6 +312,12 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		{"capture_mic", fmt.Sprintf("%v", captureMic), true},
 		{"capture_speaker", fmt.Sprintf("%v", captureSpeaker), true},
 		{"max_segment_duration", formatDuration(defaults.MaxSegmentDur), false},
+		{"mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur), false},
+		{"mic_silence_duration", formatDuration(defaults.MicSilenceDuration), false},
+		{"mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur), false},
+		{"speaker_min_speech_duration", formatDuration(defaults.SpeakerMinSpeechDur), false},
+		{"speaker_silence_duration", formatDuration(defaults.SpeakerSilenceDuration), false},
+		{"speaker_max_segment_duration", formatDuration(defaults.SpeakerMaxSegmentDur), false},
 	}
 
 	var sb strings.Builder

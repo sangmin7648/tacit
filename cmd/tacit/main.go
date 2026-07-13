@@ -573,21 +573,28 @@ func cmdConfigView(cfg *config.Config) {
 		return "[default]"
 	}
 
-	fmt.Printf("%-22s %-20s %s\n", "whisper_model:", cfg.WhisperModel, tag("whisper_model"))
-	fmt.Printf("%-22s %-20s %s\n", "language:", cfg.Language, tag("language"))
-	fmt.Printf("%-22s %-20v %s\n", "experimental:", cfg.Experimental, tag("experimental"))
+	fmt.Printf("%-30s %-20s %s\n", "whisper_model:", cfg.WhisperModel, tag("whisper_model"))
+	fmt.Printf("%-30s %-20s %s\n", "language:", cfg.Language, tag("language"))
+	fmt.Printf("%-30s %-20v %s\n", "experimental:", cfg.Experimental, tag("experimental"))
 	if cfg.InitialPrompt != "" {
-		fmt.Printf("%-22s %-20s %s\n", "initial_prompt:", cfg.InitialPrompt, tag("initial_prompt"))
+		fmt.Printf("%-30s %-20s %s\n", "initial_prompt:", cfg.InitialPrompt, tag("initial_prompt"))
 	}
-	fmt.Printf("%-22s %-20s %s\n", "min_speech_duration:", cfg.MinSpeechDur, tag("min_speech_duration"))
-	fmt.Printf("%-22s %-20s %s\n", "silence_duration:", cfg.SilenceDuration, tag("silence_duration"))
-	fmt.Printf("%-22s %-20.2f %s\n", "speech_threshold:", cfg.SpeechThreshold, tag("speech_threshold"))
-	fmt.Printf("%-22s %-20.0f %s\n", "energy_threshold:", cfg.EnergyThreshold, tag("energy_threshold"))
-	fmt.Printf("%-22s %-20s %s\n", "llm_provider:", cfg.LLMProvider, tag("llm_provider"))
-	fmt.Printf("%-22s %-20s %s\n", "llm_model:", cfg.LLMModel, tag("llm_model"))
-	fmt.Printf("%-22s %-20s %s\n", "skill_agent:", cfg.SkillAgent, tag("skill_agent"))
-	fmt.Printf("%-22s %-20v %s\n", "capture_mic:", cfg.CaptureMic, tag("capture_mic"))
-	fmt.Printf("%-22s %-20v %s\n", "capture_speaker:", cfg.CaptureSpeaker, tag("capture_speaker"))
+	fmt.Printf("%-30s %-20s %s\n", "min_speech_duration:", cfg.MinSpeechDur, tag("min_speech_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "silence_duration:", cfg.SilenceDuration, tag("silence_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "max_segment_duration:", cfg.MaxSegmentDur, tag("max_segment_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "mic_min_speech_duration:", cfg.MicMinSpeechDur, tag("mic_min_speech_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "mic_silence_duration:", cfg.MicSilenceDuration, tag("mic_silence_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "mic_max_segment_duration:", cfg.MicMaxSegmentDur, tag("mic_max_segment_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "speaker_min_speech_duration:", cfg.SpeakerMinSpeechDur, tag("speaker_min_speech_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "speaker_silence_duration:", cfg.SpeakerSilenceDuration, tag("speaker_silence_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "speaker_max_segment_duration:", cfg.SpeakerMaxSegmentDur, tag("speaker_max_segment_duration"))
+	fmt.Printf("%-30s %-20.2f %s\n", "speech_threshold:", cfg.SpeechThreshold, tag("speech_threshold"))
+	fmt.Printf("%-30s %-20.0f %s\n", "energy_threshold:", cfg.EnergyThreshold, tag("energy_threshold"))
+	fmt.Printf("%-30s %-20s %s\n", "llm_provider:", cfg.LLMProvider, tag("llm_provider"))
+	fmt.Printf("%-30s %-20s %s\n", "llm_model:", cfg.LLMModel, tag("llm_model"))
+	fmt.Printf("%-30s %-20s %s\n", "skill_agent:", cfg.SkillAgent, tag("skill_agent"))
+	fmt.Printf("%-30s %-20v %s\n", "capture_mic:", cfg.CaptureMic, tag("capture_mic"))
+	fmt.Printf("%-30s %-20v %s\n", "capture_speaker:", cfg.CaptureSpeaker, tag("capture_speaker"))
 }
 
 // cmdConfigEdit opens the user override config file in a text editor.

@@ -25,6 +25,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.SilenceDuration != 3*time.Second {
 		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, 3*time.Second)
 	}
+	if cfg.MaxSegmentDur != 30*time.Second {
+		t.Errorf("MaxSegmentDur: got %v, want %v", cfg.MaxSegmentDur, 30*time.Second)
+	}
 	if cfg.SpeechThreshold != 0.5 {
 		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.5)
 	}
@@ -33,6 +36,24 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.LLMModel != "qwen3.5" {
 		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "qwen3.5")
+	}
+	if cfg.MicMinSpeechDur != 2*time.Second {
+		t.Errorf("MicMinSpeechDur: got %v, want %v", cfg.MicMinSpeechDur, 2*time.Second)
+	}
+	if cfg.MicSilenceDuration != 10*time.Second {
+		t.Errorf("MicSilenceDuration: got %v, want %v", cfg.MicSilenceDuration, 10*time.Second)
+	}
+	if cfg.MicMaxSegmentDur != 30*time.Second {
+		t.Errorf("MicMaxSegmentDur: got %v, want %v", cfg.MicMaxSegmentDur, 30*time.Second)
+	}
+	if cfg.SpeakerMinSpeechDur != 5*time.Second {
+		t.Errorf("SpeakerMinSpeechDur: got %v, want %v", cfg.SpeakerMinSpeechDur, 5*time.Second)
+	}
+	if cfg.SpeakerSilenceDuration != 3*time.Second {
+		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, 3*time.Second)
+	}
+	if cfg.SpeakerMaxSegmentDur != 30*time.Second {
+		t.Errorf("SpeakerMaxSegmentDur: got %v, want %v", cfg.SpeakerMaxSegmentDur, 30*time.Second)
 	}
 }
 
@@ -260,6 +281,31 @@ func TestWriteOverrideTemplate(t *testing.T) {
 	}
 	if !containsLine(content, defaults.LLMModel) {
 		t.Errorf("expected template to mention default llm_model %q", defaults.LLMModel)
+	}
+}
+
+func TestWriteDefault(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	if err := WriteDefault(path); err != nil {
+		t.Fatalf("WriteDefault returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to load written config: %v", err)
+	}
+
+	defaults := DefaultConfig()
+	if cfg.MicMinSpeechDur != defaults.MicMinSpeechDur {
+		t.Errorf("MicMinSpeechDur: got %v, want %v", cfg.MicMinSpeechDur, defaults.MicMinSpeechDur)
+	}
+	if cfg.MicSilenceDuration != defaults.MicSilenceDuration {
+		t.Errorf("MicSilenceDuration: got %v, want %v", cfg.MicSilenceDuration, defaults.MicSilenceDuration)
+	}
+	if cfg.SpeakerSilenceDuration != defaults.SpeakerSilenceDuration {
+		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, defaults.SpeakerSilenceDuration)
 	}
 }
 
