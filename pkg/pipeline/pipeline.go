@@ -170,10 +170,36 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 		return fmt.Errorf("start stream: %w", err)
 	}
 
-	segBuf := audio.NewSegmentBuffer(audio.SampleRate, p.cfg.MinSpeechDur, p.cfg.MaxSegmentDur)
+	minSpeechDur := p.cfg.MinSpeechDur
+	silenceDuration := p.cfg.SilenceDuration
+	maxSegmentDur := p.cfg.MaxSegmentDur
+
+	if label == "mic" {
+		if p.cfg.MicMinSpeechDur != 0 {
+			minSpeechDur = p.cfg.MicMinSpeechDur
+		}
+		if p.cfg.MicSilenceDuration != 0 {
+			silenceDuration = p.cfg.MicSilenceDuration
+		}
+		if p.cfg.MicMaxSegmentDur != 0 {
+			maxSegmentDur = p.cfg.MicMaxSegmentDur
+		}
+	} else if label == "speaker" {
+		if p.cfg.SpeakerMinSpeechDur != 0 {
+			minSpeechDur = p.cfg.SpeakerMinSpeechDur
+		}
+		if p.cfg.SpeakerSilenceDuration != 0 {
+			silenceDuration = p.cfg.SpeakerSilenceDuration
+		}
+		if p.cfg.SpeakerMaxSegmentDur != 0 {
+			maxSegmentDur = p.cfg.SpeakerMaxSegmentDur
+		}
+	}
+
+	segBuf := audio.NewSegmentBuffer(audio.SampleRate, minSpeechDur, maxSegmentDur)
 	var frameBuf []int16
 	silenceFrames := 0
-	silenceLimit := int(p.cfg.SilenceDuration.Seconds() * float64(audio.SampleRate) / float64(hopSize))
+	silenceLimit := int(silenceDuration.Seconds() * float64(audio.SampleRate) / float64(hopSize))
 
 	// preRoll keeps a short window of the most recent pre-speech audio so the
 	// onset of a phrase isn't clipped when VAD fires a frame or two late — a
@@ -187,7 +213,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 	var textBuf []string
 	var sessionStart time.Time
 
-	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
+	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, silenceDuration, minSpeechDur)
 
 	// Inactivity watchdog: a live capture stream (mic or SCStream) delivers PCM
 	// chunks continuously, even during silence, so a prolonged absence of chunks
@@ -261,7 +287,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 
 				// Force-split long segments to cap memory usage; accumulate
 				// the resulting text to merge into one file at session end.
-				if p.cfg.MaxSegmentDur > 0 && segBuf.Duration() >= p.cfg.MaxSegmentDur {
+				if maxSegmentDur > 0 && segBuf.Duration() >= maxSegmentDur {
 					log.Printf("[%s] segment capped at %.1fs, splitting", label, segBuf.Duration().Seconds())
 					seg, ok := segBuf.Finish()
 					if ok {

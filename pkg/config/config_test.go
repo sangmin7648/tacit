@@ -25,6 +25,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.SilenceDuration != 3*time.Second {
 		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, 3*time.Second)
 	}
+	if cfg.MaxSegmentDur != 30*time.Second {
+		t.Errorf("MaxSegmentDur: got %v, want %v", cfg.MaxSegmentDur, 30*time.Second)
+	}
 	if cfg.SpeechThreshold != 0.5 {
 		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.5)
 	}
@@ -33,6 +36,24 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.LLMModel != "qwen3.5" {
 		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "qwen3.5")
+	}
+	if cfg.MicMinSpeechDur != 2*time.Second {
+		t.Errorf("MicMinSpeechDur: got %v, want %v", cfg.MicMinSpeechDur, 2*time.Second)
+	}
+	if cfg.MicSilenceDuration != 10*time.Second {
+		t.Errorf("MicSilenceDuration: got %v, want %v", cfg.MicSilenceDuration, 10*time.Second)
+	}
+	if cfg.MicMaxSegmentDur != 30*time.Second {
+		t.Errorf("MicMaxSegmentDur: got %v, want %v", cfg.MicMaxSegmentDur, 30*time.Second)
+	}
+	if cfg.SpeakerMinSpeechDur != 5*time.Second {
+		t.Errorf("SpeakerMinSpeechDur: got %v, want %v", cfg.SpeakerMinSpeechDur, 5*time.Second)
+	}
+	if cfg.SpeakerSilenceDuration != 3*time.Second {
+		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, 3*time.Second)
+	}
+	if cfg.SpeakerMaxSegmentDur != 30*time.Second {
+		t.Errorf("SpeakerMaxSegmentDur: got %v, want %v", cfg.SpeakerMaxSegmentDur, 30*time.Second)
 	}
 }
 
@@ -260,6 +281,158 @@ func TestWriteOverrideTemplate(t *testing.T) {
 	}
 	if !containsLine(content, defaults.LLMModel) {
 		t.Errorf("expected template to mention default llm_model %q", defaults.LLMModel)
+	}
+}
+
+func TestWriteDefault(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	if err := WriteDefault(path); err != nil {
+		t.Fatalf("WriteDefault returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to load written config: %v", err)
+	}
+
+	defaults := DefaultConfig()
+	if cfg.MicMinSpeechDur != defaults.MicMinSpeechDur {
+		t.Errorf("MicMinSpeechDur: got %v, want %v", cfg.MicMinSpeechDur, defaults.MicMinSpeechDur)
+	}
+	if cfg.MicSilenceDuration != defaults.MicSilenceDuration {
+		t.Errorf("MicSilenceDuration: got %v, want %v", cfg.MicSilenceDuration, defaults.MicSilenceDuration)
+	}
+	if cfg.SpeakerSilenceDuration != defaults.SpeakerSilenceDuration {
+		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, defaults.SpeakerSilenceDuration)
+	}
+}
+
+func TestWriteSetupOverride_AcceptingDefaultsWritesNoActiveOverrides(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+	defaults := DefaultConfig()
+
+	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
+		defaults.Language, defaults.CaptureMic, defaults.CaptureSpeaker, defaults.Experimental); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.LLMProvider != "" || cfg.LLMModel != "" || cfg.SkillAgent != "" || cfg.Language != "" {
+		t.Errorf("expected wizard choices matching defaults to stay commented out, got %+v", cfg)
+	}
+}
+
+func TestWriteSetupOverride_NonDefaultChoicesAreActive(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+
+	if err := WriteSetupOverride(path, "claude", "opus", "claude", "ko", false, false, true); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.LLMProvider != "claude" || cfg.LLMModel != "opus" || cfg.Language != "ko" {
+		t.Errorf("expected non-default wizard choices to be active, got %+v", cfg)
+	}
+
+	// CaptureMic/CaptureSpeaker are both false here (differing from the true/true
+	// default), but that's also Go's zero value for an unset field — parsing the
+	// merged config can't distinguish "active: false" from "commented out", so
+	// check the raw file for the uncommented line instead.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read override file: %v", err)
+	}
+	if !containsLine(string(data), "\ncapture_mic: false\n") {
+		t.Errorf("expected capture_mic: false to be active (uncommented), got:\n%s", data)
+	}
+	if !containsLine(string(data), "\ncapture_speaker: false\n") {
+		t.Errorf("expected capture_speaker: false to be active (uncommented), got:\n%s", data)
+	}
+}
+
+// TestWriteSetupOverride_UpgradeClearsStaleDefaultPin simulates a user
+// upgrading from an older tacit whose setup wizard unconditionally pinned
+// llm_provider even when the user just accepted the default. Re-running setup
+// and accepting today's default should clear that stale pin so the override
+// file stops shadowing DefaultConfig() — future default changes then apply
+// automatically without the user needing to edit anything by hand.
+func TestWriteSetupOverride_UpgradeClearsStaleDefaultPin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+	defaults := DefaultConfig()
+
+	// Old override file (pre-upgrade): explicitly pinned, but the value happens
+	// to equal today's default — i.e. it was never a deliberate customization.
+	if err := os.WriteFile(path, []byte("llm_provider: "+defaults.LLMProvider+"\n"), 0644); err != nil {
+		t.Fatalf("failed to seed override file: %v", err)
+	}
+
+	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
+		defaults.Language, defaults.CaptureMic, defaults.CaptureSpeaker, defaults.Experimental); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read override file: %v", err)
+	}
+	if containsLine(string(data), "\nllm_provider: "+defaults.LLMProvider+"\n") {
+		t.Errorf("expected stale llm_provider pin to be cleared (commented out) on re-setup, got:\n%s", data)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.LLMProvider != "" {
+		t.Errorf("expected llm_provider to no longer be pinned in the override, got %q", cfg.LLMProvider)
+	}
+}
+
+func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+	defaults := DefaultConfig()
+
+	// User previously hand-edited durations that setup never asks about.
+	seed := "whisper_model: small\n" +
+		"min_speech_duration: 7s\n" +
+		"mic_silence_duration: 12s\n" +
+		"initial_prompt: \"hello, world\"\n"
+	if err := os.WriteFile(path, []byte(seed), 0644); err != nil {
+		t.Fatalf("failed to seed override file: %v", err)
+	}
+
+	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
+		defaults.Language, defaults.CaptureMic, defaults.CaptureSpeaker, defaults.Experimental); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.WhisperModel != "small" {
+		t.Errorf("WhisperModel: got %q, want %q (should survive re-running setup)", cfg.WhisperModel, "small")
+	}
+	if cfg.MinSpeechDur != 7*time.Second {
+		t.Errorf("MinSpeechDur: got %v, want 7s (should survive re-running setup)", cfg.MinSpeechDur)
+	}
+	if cfg.MicSilenceDuration != 12*time.Second {
+		t.Errorf("MicSilenceDuration: got %v, want 12s (should survive re-running setup)", cfg.MicSilenceDuration)
+	}
+	if cfg.InitialPrompt != "hello, world" {
+		t.Errorf("InitialPrompt: got %q, want %q (should survive re-running setup)", cfg.InitialPrompt, "hello, world")
 	}
 }
 

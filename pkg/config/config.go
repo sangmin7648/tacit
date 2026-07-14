@@ -48,24 +48,40 @@ type Config struct {
 	// memory growth when capturing continuous audio (e.g. long videos).
 	// 0 disables the cap. Default: 30s.
 	MaxSegmentDur time.Duration `yaml:"max_segment_duration"`
+
+	// Source-specific overrides (mic)
+	MicMinSpeechDur    time.Duration `yaml:"mic_min_speech_duration"`
+	MicSilenceDuration time.Duration `yaml:"mic_silence_duration"`
+	MicMaxSegmentDur   time.Duration `yaml:"mic_max_segment_duration"`
+
+	// Source-specific overrides (speaker)
+	SpeakerMinSpeechDur    time.Duration `yaml:"speaker_min_speech_duration"`
+	SpeakerSilenceDuration time.Duration `yaml:"speaker_silence_duration"`
+	SpeakerMaxSegmentDur   time.Duration `yaml:"speaker_max_segment_duration"`
 }
 
 // DefaultConfig returns a Config populated with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		WhisperModel:    "large-v3-turbo",
-		Language:        "auto",
-		Experimental:    false,
-		MinSpeechDur:    5 * time.Second,
-		SilenceDuration: 3 * time.Second,
-		SpeechThreshold: 0.5,
-		EnergyThreshold: 200,
-		LLMProvider:     "ollama",
-		LLMModel:        "qwen3.5",
-		SkillAgent:      "claude",
-		CaptureMic:      true,
-		CaptureSpeaker:  true,
-		MaxSegmentDur:   30 * time.Second,
+		WhisperModel:           "large-v3-turbo",
+		Language:               "auto",
+		Experimental:           false,
+		MinSpeechDur:           5 * time.Second,
+		SilenceDuration:        3 * time.Second,
+		SpeechThreshold:        0.5,
+		EnergyThreshold:        200,
+		LLMProvider:            "ollama",
+		LLMModel:               "qwen3.5",
+		SkillAgent:             "claude",
+		CaptureMic:             true,
+		CaptureSpeaker:         true,
+		MaxSegmentDur:          30 * time.Second,
+		MicMinSpeechDur:        2 * time.Second,
+		MicSilenceDuration:     10 * time.Second,
+		MicMaxSegmentDur:       30 * time.Second,
+		SpeakerMinSpeechDur:    5 * time.Second,
+		SpeakerSilenceDuration: 3 * time.Second,
+		SpeakerMaxSegmentDur:   30 * time.Second,
 	}
 }
 
@@ -144,7 +160,13 @@ func WriteDefault(path string) error {
 			"skill_agent: %s\n"+
 			"capture_mic: %v\n"+
 			"capture_speaker: %v\n"+
-			"max_segment_duration: %s\n",
+			"max_segment_duration: %s\n"+
+			"mic_min_speech_duration: %s\n"+
+			"mic_silence_duration: %s\n"+
+			"mic_max_segment_duration: %s\n"+
+			"speaker_min_speech_duration: %s\n"+
+			"speaker_silence_duration: %s\n"+
+			"speaker_max_segment_duration: %s\n",
 		cfg.WhisperModel,
 		cfg.Language,
 		cfg.Experimental,
@@ -158,6 +180,12 @@ func WriteDefault(path string) error {
 		cfg.CaptureMic,
 		cfg.CaptureSpeaker,
 		formatDuration(cfg.MaxSegmentDur),
+		formatDuration(cfg.MicMinSpeechDur),
+		formatDuration(cfg.MicSilenceDuration),
+		formatDuration(cfg.MicMaxSegmentDur),
+		formatDuration(cfg.SpeakerMinSpeechDur),
+		formatDuration(cfg.SpeakerSilenceDuration),
+		formatDuration(cfg.SpeakerMaxSegmentDur),
 	)
 	return os.WriteFile(path, []byte(content), 0644)
 }
@@ -185,6 +213,12 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("capture_mic: %v", defaults.CaptureMic),
 		fmt.Sprintf("capture_speaker: %v", defaults.CaptureSpeaker),
 		fmt.Sprintf("max_segment_duration: %s", formatDuration(defaults.MaxSegmentDur)),
+		fmt.Sprintf("mic_min_speech_duration: %s", formatDuration(defaults.MicMinSpeechDur)),
+		fmt.Sprintf("mic_silence_duration: %s", formatDuration(defaults.MicSilenceDuration)),
+		fmt.Sprintf("mic_max_segment_duration: %s", formatDuration(defaults.MicMaxSegmentDur)),
+		fmt.Sprintf("speaker_min_speech_duration: %s", formatDuration(defaults.SpeakerMinSpeechDur)),
+		fmt.Sprintf("speaker_silence_duration: %s", formatDuration(defaults.SpeakerSilenceDuration)),
+		fmt.Sprintf("speaker_max_segment_duration: %s", formatDuration(defaults.SpeakerMaxSegmentDur)),
 	}
 
 	var sb strings.Builder
@@ -258,33 +292,64 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		"# Run 'tacit config view' to see the current merged configuration.\n\n"
 
 	type field struct {
-		key        string
-		value      string
-		forceActive bool // true = always write uncommented
+		key    string
+		value  string
+		active bool
+	}
+
+	// setupChoice marks a field active only when the value picked in the setup
+	// wizard differs from the current code default. This is intentionally based
+	// on the fresh wizard answer alone, ignoring whatever the override file had
+	// before: a user upgrading from an older tacit (whose setup unconditionally
+	// pinned these 7 fields, even when they just accepted the default) should
+	// have that stale pin cleared as soon as they re-run setup and accept the
+	// new default, so future DefaultConfig() changes take effect automatically.
+	setupChoice := func(key, chosen, def string) field {
+		return field{key, chosen, chosen != def}
+	}
+
+	// preserved marks a field active only when the override file already had it
+	// explicitly set, in which case that existing value is kept verbatim rather
+	// than being silently replaced by the current code default.
+	preserved := func(key, def string) field {
+		if v, ok := existing[key]; ok {
+			return field{key, fmt.Sprintf("%v", v), true}
+		}
+		return field{key, def, false}
 	}
 
 	fields := []field{
-		{"whisper_model", defaults.WhisperModel, false},
-		{"language", language, true},
-		{"experimental", fmt.Sprintf("%v", experimental), true},
-		{"initial_prompt", "\"\"", false},
-		{"min_speech_duration", formatDuration(defaults.MinSpeechDur), false},
-		{"silence_duration", formatDuration(defaults.SilenceDuration), false},
-		{"speech_threshold", fmt.Sprintf("%.2f", defaults.SpeechThreshold), false},
-		{"energy_threshold", fmt.Sprintf("%.0f", defaults.EnergyThreshold), false},
-		{"llm_provider", provider, true},
-		{"llm_model", model, true},
-		{"skill_agent", agent, true},
-		{"capture_mic", fmt.Sprintf("%v", captureMic), true},
-		{"capture_speaker", fmt.Sprintf("%v", captureSpeaker), true},
-		{"max_segment_duration", formatDuration(defaults.MaxSegmentDur), false},
+		preserved("whisper_model", defaults.WhisperModel),
+		setupChoice("language", language, defaults.Language),
+		setupChoice("experimental", fmt.Sprintf("%v", experimental), fmt.Sprintf("%v", defaults.Experimental)),
+		func() field {
+			if v, ok := existing["initial_prompt"]; ok {
+				return field{"initial_prompt", fmt.Sprintf("%q", fmt.Sprintf("%v", v)), true}
+			}
+			return field{"initial_prompt", "\"\"", false}
+		}(),
+		preserved("min_speech_duration", formatDuration(defaults.MinSpeechDur)),
+		preserved("silence_duration", formatDuration(defaults.SilenceDuration)),
+		preserved("speech_threshold", fmt.Sprintf("%.2f", defaults.SpeechThreshold)),
+		preserved("energy_threshold", fmt.Sprintf("%.0f", defaults.EnergyThreshold)),
+		setupChoice("llm_provider", provider, defaults.LLMProvider),
+		setupChoice("llm_model", model, defaults.LLMModel),
+		setupChoice("skill_agent", agent, defaults.SkillAgent),
+		setupChoice("capture_mic", fmt.Sprintf("%v", captureMic), fmt.Sprintf("%v", defaults.CaptureMic)),
+		setupChoice("capture_speaker", fmt.Sprintf("%v", captureSpeaker), fmt.Sprintf("%v", defaults.CaptureSpeaker)),
+		preserved("max_segment_duration", formatDuration(defaults.MaxSegmentDur)),
+		preserved("mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur)),
+		preserved("mic_silence_duration", formatDuration(defaults.MicSilenceDuration)),
+		preserved("mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur)),
+		preserved("speaker_min_speech_duration", formatDuration(defaults.SpeakerMinSpeechDur)),
+		preserved("speaker_silence_duration", formatDuration(defaults.SpeakerSilenceDuration)),
+		preserved("speaker_max_segment_duration", formatDuration(defaults.SpeakerMaxSegmentDur)),
 	}
 
 	var sb strings.Builder
 	sb.WriteString(header)
 	for _, f := range fields {
-		active := f.forceActive || existing[f.key] != nil
-		if active {
+		if f.active {
 			sb.WriteString(f.key + ": " + f.value + "\n")
 		} else {
 			sb.WriteString("# " + f.key + ": " + f.value + "\n")
