@@ -292,39 +292,64 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		"# Run 'tacit config view' to see the current merged configuration.\n\n"
 
 	type field struct {
-		key        string
-		value      string
-		forceActive bool // true = always write uncommented
+		key    string
+		value  string
+		active bool
+	}
+
+	// setupChoice marks a field active only when the value picked in the setup
+	// wizard differs from the current code default. This is intentionally based
+	// on the fresh wizard answer alone, ignoring whatever the override file had
+	// before: a user upgrading from an older tacit (whose setup unconditionally
+	// pinned these 7 fields, even when they just accepted the default) should
+	// have that stale pin cleared as soon as they re-run setup and accept the
+	// new default, so future DefaultConfig() changes take effect automatically.
+	setupChoice := func(key, chosen, def string) field {
+		return field{key, chosen, chosen != def}
+	}
+
+	// preserved marks a field active only when the override file already had it
+	// explicitly set, in which case that existing value is kept verbatim rather
+	// than being silently replaced by the current code default.
+	preserved := func(key, def string) field {
+		if v, ok := existing[key]; ok {
+			return field{key, fmt.Sprintf("%v", v), true}
+		}
+		return field{key, def, false}
 	}
 
 	fields := []field{
-		{"whisper_model", defaults.WhisperModel, false},
-		{"language", language, true},
-		{"experimental", fmt.Sprintf("%v", experimental), true},
-		{"initial_prompt", "\"\"", false},
-		{"min_speech_duration", formatDuration(defaults.MinSpeechDur), false},
-		{"silence_duration", formatDuration(defaults.SilenceDuration), false},
-		{"speech_threshold", fmt.Sprintf("%.2f", defaults.SpeechThreshold), false},
-		{"energy_threshold", fmt.Sprintf("%.0f", defaults.EnergyThreshold), false},
-		{"llm_provider", provider, true},
-		{"llm_model", model, true},
-		{"skill_agent", agent, true},
-		{"capture_mic", fmt.Sprintf("%v", captureMic), true},
-		{"capture_speaker", fmt.Sprintf("%v", captureSpeaker), true},
-		{"max_segment_duration", formatDuration(defaults.MaxSegmentDur), false},
-		{"mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur), false},
-		{"mic_silence_duration", formatDuration(defaults.MicSilenceDuration), false},
-		{"mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur), false},
-		{"speaker_min_speech_duration", formatDuration(defaults.SpeakerMinSpeechDur), false},
-		{"speaker_silence_duration", formatDuration(defaults.SpeakerSilenceDuration), false},
-		{"speaker_max_segment_duration", formatDuration(defaults.SpeakerMaxSegmentDur), false},
+		preserved("whisper_model", defaults.WhisperModel),
+		setupChoice("language", language, defaults.Language),
+		setupChoice("experimental", fmt.Sprintf("%v", experimental), fmt.Sprintf("%v", defaults.Experimental)),
+		func() field {
+			if v, ok := existing["initial_prompt"]; ok {
+				return field{"initial_prompt", fmt.Sprintf("%q", fmt.Sprintf("%v", v)), true}
+			}
+			return field{"initial_prompt", "\"\"", false}
+		}(),
+		preserved("min_speech_duration", formatDuration(defaults.MinSpeechDur)),
+		preserved("silence_duration", formatDuration(defaults.SilenceDuration)),
+		preserved("speech_threshold", fmt.Sprintf("%.2f", defaults.SpeechThreshold)),
+		preserved("energy_threshold", fmt.Sprintf("%.0f", defaults.EnergyThreshold)),
+		setupChoice("llm_provider", provider, defaults.LLMProvider),
+		setupChoice("llm_model", model, defaults.LLMModel),
+		setupChoice("skill_agent", agent, defaults.SkillAgent),
+		setupChoice("capture_mic", fmt.Sprintf("%v", captureMic), fmt.Sprintf("%v", defaults.CaptureMic)),
+		setupChoice("capture_speaker", fmt.Sprintf("%v", captureSpeaker), fmt.Sprintf("%v", defaults.CaptureSpeaker)),
+		preserved("max_segment_duration", formatDuration(defaults.MaxSegmentDur)),
+		preserved("mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur)),
+		preserved("mic_silence_duration", formatDuration(defaults.MicSilenceDuration)),
+		preserved("mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur)),
+		preserved("speaker_min_speech_duration", formatDuration(defaults.SpeakerMinSpeechDur)),
+		preserved("speaker_silence_duration", formatDuration(defaults.SpeakerSilenceDuration)),
+		preserved("speaker_max_segment_duration", formatDuration(defaults.SpeakerMaxSegmentDur)),
 	}
 
 	var sb strings.Builder
 	sb.WriteString(header)
 	for _, f := range fields {
-		active := f.forceActive || existing[f.key] != nil
-		if active {
+		if f.active {
 			sb.WriteString(f.key + ": " + f.value + "\n")
 		} else {
 			sb.WriteString("# " + f.key + ": " + f.value + "\n")
