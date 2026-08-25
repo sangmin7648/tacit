@@ -134,25 +134,37 @@ type ollamaGenerateRequest struct {
 
 // classifySchema is the JSON schema for a single classification result.
 //
-// The content fields are required: without that, smaller models answer with a
-// bare {"skip": false} — claiming the transcript is meaningful while supplying
-// nothing to store — and the transcript used to be discarded as a result.
-// Pure-filler input is rejected in Go before the model is ever called, so the
-// model no longer needs a way to opt out. The skip field stays allowed (but
-// unrequired) so a model that volunteers it is still understood.
+// Every field is required, skip included, and the two requirements do
+// different jobs.
+//
+// Requiring the content fields stops a bare {"skip": false} — a model claiming
+// the transcript is meaningful while supplying nothing to store, which is how
+// issue #12 lost speech. Requiring skip is what keeps that from going too far
+// the other way: with skip merely optional, qwen3.5 stopped volunteering it
+// almost entirely (1 of 6 worthless transcripts skipped, measured), so filler
+// and bare acknowledgements piled into the knowledge base. Made explicit, the
+// same model got 6 of 6 right without any loss on the transcripts that matter.
+//
+// Requiring both together is the point: skip cannot become the cheap way out of
+// filling the fields, so it stays a judgement about content rather than an
+// escape hatch — which is what made an anyOf-style skip branch collapse into
+// always skipping when it was tried on #12.
 var classifySchema = json.RawMessage(`{
   "type": "object",
-  "required": ["title", "summary", "category", "keywords"],
+  "required": ["skip", "title", "summary", "category", "keywords"],
   "properties": {
+    "skip":     {"type": "boolean"},
     "title":    {"type": "string"},
     "summary":  {"type": "string"},
     "category": {"type": "string"},
-    "keywords": {"type": "array", "items": {"type": "string"}},
-    "skip":     {"type": "boolean"}
+    "keywords": {"type": "array", "items": {"type": "string"}}
   }
 }`)
 
 // batchClassifySchema is the JSON schema for a batch classification result.
+// Its items require the same fields as classifySchema: leaving the batch path
+// the escape hatches classifySchema closes would just move the failure rather
+// than fix it.
 var batchClassifySchema = json.RawMessage(`{
   "type": "object",
   "required": ["results"],
@@ -161,12 +173,13 @@ var batchClassifySchema = json.RawMessage(`{
       "type": "array",
       "items": {
         "type": "object",
+        "required": ["skip", "title", "summary", "category", "keywords"],
         "properties": {
+          "skip":     {"type": "boolean"},
           "title":    {"type": "string"},
           "summary":  {"type": "string"},
           "category": {"type": "string"},
-          "keywords": {"type": "array", "items": {"type": "string"}},
-          "skip":     {"type": "boolean"}
+          "keywords": {"type": "array", "items": {"type": "string"}}
         }
       }
     }

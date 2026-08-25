@@ -1,6 +1,9 @@
 package process
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The A/B case from issue #12: real transcripts were dropped only when a
 // hallucinated outro was mixed in, so the filter has to remove the outro while
@@ -155,5 +158,67 @@ func TestUsable(t *testing.T) {
 		if got := tt.r.Usable(); got != tt.want {
 			t.Errorf("%s: Usable() = %v, want %v", tt.name, got, tt.want)
 		}
+	}
+}
+
+// Finalize is the last thing between a classification and storage.Write, so
+// every field it produces has to satisfy that validation.
+func TestFinalize_AlwaysStorable(t *testing.T) {
+	const text = "태그 롤백 논의를 했고 CDC 파이프라인부터 다시 봐야 한다"
+	tests := []struct {
+		name         string
+		in           *ClassifyResult
+		wantCategory string
+		wantTitle    string
+	}{
+		{"nil", nil, UnsortedCategory, ""},
+		{"empty", &ClassifyResult{}, UnsortedCategory, ""},
+		{"empty title keeps category", &ClassifyResult{Category: "daily", Summary: "s"}, "daily", ""},
+		{"whitespace title", &ClassifyResult{Title: "   ", Category: "daily"}, "daily", ""},
+		{"empty category", &ClassifyResult{Title: "제목"}, UnsortedCategory, "제목"},
+		{"slash category", &ClassifyResult{Title: "제목", Category: "dev/backend"}, "dev", "제목"},
+		{"backslash category", &ClassifyResult{Title: "제목", Category: `dev\backend`}, "dev", "제목"},
+		{"traversal category", &ClassifyResult{Title: "제목", Category: "../../etc"}, UnsortedCategory, "제목"},
+		{"chat alias", &ClassifyResult{Title: "제목", Category: "chat"}, "daily", "제목"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Finalize(tt.in, text)
+			if got.Title == "" {
+				t.Error("title is empty; storage.Write would reject it")
+			}
+			if n := len([]rune(got.Title)); n > 100 {
+				t.Errorf("title is %d runes; storage.Write rejects over 100", n)
+			}
+			if got.Category != tt.wantCategory {
+				t.Errorf("category = %q, want %q", got.Category, tt.wantCategory)
+			}
+			if tt.wantTitle != "" && got.Title != tt.wantTitle {
+				t.Errorf("title = %q, want %q", got.Title, tt.wantTitle)
+			}
+		})
+	}
+}
+
+func TestFinalize_TruncatesOverlongTitle(t *testing.T) {
+	long := strings.Repeat("아", 400)
+	got := Finalize(&ClassifyResult{Title: long, Category: "work"}, "본문")
+	if n := len([]rune(got.Title)); n != 100 {
+		t.Errorf("title = %d runes, want exactly the 100-rune limit", n)
+	}
+	if !strings.HasSuffix(got.Title, "…") {
+		t.Errorf("truncated title should be marked as truncated: %q", got.Title)
+	}
+}
+
+// Finalize must not overwrite a perfectly good classification.
+func TestFinalize_LeavesGoodResultAlone(t *testing.T) {
+	in := &ClassifyResult{Title: "제목", Summary: "요약", Category: "work", Keywords: []string{"a"}}
+	got := Finalize(in, "본문")
+	if got.Title != "제목" || got.Summary != "요약" || got.Category != "work" || len(got.Keywords) != 1 {
+		t.Errorf("Finalize altered a valid result: %+v", got)
+	}
+	if in.Title != "제목" || in.Category != "work" {
+		t.Errorf("Finalize mutated its argument: %+v", in)
 	}
 }

@@ -337,6 +337,21 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		return field{key, def, false}
 	}
 
+	// preservedList is preserved for list-valued fields. %v would render a slice
+	// as "[a b]", which YAML reads back as a single-element list, so the entries
+	// are re-emitted as a quoted flow sequence instead.
+	preservedList := func(key string) field {
+		raw, ok := existing[key].([]interface{})
+		if !ok || len(raw) == 0 {
+			return field{key, "[]", false}
+		}
+		quoted := make([]string, 0, len(raw))
+		for _, v := range raw {
+			quoted = append(quoted, fmt.Sprintf("%q", fmt.Sprintf("%v", v)))
+		}
+		return field{key, "[" + strings.Join(quoted, ", ") + "]", true}
+	}
+
 	fields := []field{
 		preserved("whisper_model", defaults.WhisperModel),
 		setupChoice("language", language, defaults.Language),
@@ -358,6 +373,7 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		setupChoice("capture_speaker", fmt.Sprintf("%v", captureSpeaker), fmt.Sprintf("%v", defaults.CaptureSpeaker)),
 		preserved("max_segment_duration", formatDuration(defaults.MaxSegmentDur)),
 		preserved("max_session_duration", formatDuration(defaults.MaxSessionDur)),
+		preservedList("transcript_denylist"),
 		preserved("mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur)),
 		preserved("mic_silence_duration", formatDuration(defaults.MicSilenceDuration)),
 		preserved("mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur)),

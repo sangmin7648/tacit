@@ -10,7 +10,9 @@ import (
 
 const singleSystemPrompt = `You classify speech-to-text transcripts into structured data.
 
-SKIP CONDITION: Text with ONLY filler sounds (음, 어, 그, 아, 응, um, uh...) and no real words → set skip=true and leave other fields empty.
+SKIP DECISION: Always fill in every field, then set skip accordingly — never answer with skip alone.
+Set skip=true ONLY when the transcript contains no statement at all — filler sounds (음, 어, 그, 아, um, uh), bare acknowledgements on their own ("네 알겠습니다", "아 그렇군요"), counting, or call-connection chatter ("여보세요, 들리세요").
+Set skip=false for everything else. Any complete sentence that states something is kept, however mundane, brief or self-evident — judging a transcript unimportant is not your call to make, and dropping one is unrecoverable.
 
 NORMAL CLASSIFICATION:
 - title: specific topic of what was discussed — write in the same language as the input
@@ -53,8 +55,8 @@ EXAMPLES:
 [8] "파이썬에서 데코레이터로 함수 실행 시간 측정하는 법 공부했어. functools.wraps 꼭 써야 원본 함수 이름 유지됨"
 → {"title":"파이썬 데코레이터 활용","summary":"파이썬 데코레이터로 실행 시간을 측정할 때 functools.wraps를 사용해야 원본 함수 정보가 유지된다","category":"dev","keywords":["데코레이터","decorator","functools.wraps","실행시간 측정","profiling","파이썬","python","함수 래퍼","wrapper","메타데이터 보존"]}
 
-[9] "uh... so... um..."
-→ {"skip":true}`
+[9] "uh... so... um... yeah, right, okay."
+→ {"title":"Filler with no content","summary":"Hesitation sounds and bare acknowledgement with nothing said","category":"noise","keywords":["filler","hesitation","acknowledgement","noise","empty"],"skip":true}`
 
 const batchSystemPrompt = `You classify multiple speech-to-text transcripts. Return a JSON object with a "results" array preserving input order.
 
@@ -68,7 +70,7 @@ Each entry has:
 - keywords: array of 5–10 strings for lexical search recall.
   Include synonyms, abbreviations, related concepts, and alternative phrasings — use the input language plus English equivalents.
 
-Set skip=true only for pure filler sounds with no meaningful content.
+- skip: always present. true ONLY when the entry contains no statement at all (filler sounds, bare acknowledgements on their own, counting, call-connection chatter); false for everything else, including mundane or self-evident sentences. Fill in the other fields either way — never answer with skip alone.
 
 EXAMPLE — two VAD-split segments from the same conversation:
 --- text 1 ---
@@ -195,20 +197,11 @@ func sanitizeResult(r *ClassifyResult) {
 	if r == nil || r.Skip {
 		return
 	}
-	// If the model still returned a slash despite instructions, keep only the first segment.
-	if idx := strings.Index(r.Category, "/"); idx >= 0 {
-		r.Category = r.Category[:idx]
-	}
-	// Strip leading chat/ prefix (already handled above, but keep as safety)
-	r.Category = strings.TrimPrefix(r.Category, "chat/")
-	// If category is exactly "chat", replace with daily
-	if r.Category == "chat" {
-		r.Category = "daily"
-	}
-	// Trim extra whitespace from all fields
+	// Category cleanup is shared with Finalize so both the classify-time and the
+	// store-time path agree on what a category may look like.
+	r.Category = NormalizeCategory(r.Category)
 	r.Title = strings.TrimSpace(r.Title)
 	r.Summary = strings.TrimSpace(r.Summary)
-	r.Category = strings.TrimSpace(r.Category)
 }
 
 func truncate(s string, maxLen int) string {

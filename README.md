@@ -94,7 +94,7 @@ Run `tacit setup` to generate two files in `~/.tacit/`:
 | `min_speech_duration` | duration | `5s` | Minimum segment length to process. Shorter segments are discarded. |
 | `silence_duration` | duration | `3s` | Silence required to end a speech segment. |
 | `max_segment_duration` | duration | `30s` | Caps a single segment sent to Whisper. Longer speech is split and transcribed as it goes, keeping memory bounded. `0` disables the cap. |
-| `max_session_duration` | duration | `5m` | Caps how long transcribed text accumulates before it is classified. Continuous speech never triggers the silence-based flush, so this keeps a long meeting from becoming one giant entry. `0` disables the cap. |
+| `max_session_duration` | duration | `5m` | Caps how long transcribed text accumulates before it is classified. Continuous speech never triggers the silence-based flush, so this keeps a long meeting from becoming one giant entry. With `max_segment_duration` at `0` this doubles as the split boundary, since text only accumulates at a split. `0` disables the cap. |
 | `speech_threshold` | float | `0.5` | VAD confidence threshold (0–1). Higher = more conservative. |
 | `energy_threshold` | int | `200` | Audio energy gate. Frames below this value are rejected before VAD. |
 
@@ -116,7 +116,9 @@ The three segmentation durations can be set per source, since a microphone and a
 | `llm_model` | string | `qwen3.5` | Model used for classification. For `claude`, a Claude Code CLI model name such as `haiku`. |
 | `skill_agent` | string | `claude` | Agent the `/tacit.*` skills are installed for. |
 
-A transcript that reaches classification is always stored. If the classifier errors out or returns nothing usable, the entry is saved under the `unsorted` category with a title taken from its opening words, rather than being dropped — so nothing you actually said goes missing from `tacit list`.
+A transcript that reaches classification is always stored. If the classifier errors out, returns nothing usable, or fills in only some of the fields, the entry is repaired — a missing title is taken from its opening words, a missing category becomes `unsorted` — rather than being dropped, so nothing you actually said goes missing from `tacit list`.
+
+The one exception is a deliberate skip: the classifier still discards a transcript it judges to carry nothing worth keeping (filler sounds, bare acknowledgements, call-connection chatter), and logs the text it dropped.
 
 ---
 

@@ -196,7 +196,18 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 		}
 	}
 
-	segBuf := audio.NewSegmentBuffer(audio.SampleRate, minSpeechDur, maxSegmentDur)
+	// The session cap can only act on text that already exists, and text only
+	// reaches textBuf when a segment is split or speech ends. With segment
+	// splitting off, an uninterrupted meeting therefore produces nothing to
+	// flush and max_session_duration would silently do nothing — so fall back
+	// to splitting at the session cap instead.
+	maxSessionDur := p.cfg.MaxSessionDur
+	splitDur := maxSegmentDur
+	if splitDur == 0 && maxSessionDur > 0 {
+		splitDur = maxSessionDur
+	}
+
+	segBuf := audio.NewSegmentBuffer(audio.SampleRate, minSpeechDur, splitDur)
 	var frameBuf []int16
 	silenceFrames := 0
 	silenceLimit := int(silenceDuration.Seconds() * float64(audio.SampleRate) / float64(hopSize))
@@ -216,7 +227,6 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 	// the whole thing down with it.
 	var textBuf []string
 	var sessionStart time.Time
-	maxSessionDur := p.cfg.MaxSessionDur
 
 	// flush hands the accumulated transcript to the classifier and starts a new
 	// session. Filler-only text is dropped here rather than by the LLM, so the
@@ -311,7 +321,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 
 				// Force-split long segments to cap memory usage; accumulate
 				// the resulting text to merge into one file at session end.
-				if maxSegmentDur > 0 && segBuf.Duration() >= maxSegmentDur {
+				if splitDur > 0 && segBuf.Duration() >= splitDur {
 					log.Printf("[%s] segment capped at %.1fs, splitting", label, segBuf.Duration().Seconds())
 					seg, ok := segBuf.Finish()
 					if ok {
@@ -499,13 +509,19 @@ func (p *Pipeline) storeEntry(classified *process.ClassifyResult, item classifyI
 	log.Printf("Knowledge entry saved: %s", filePath)
 }
 
+// newKnowledgeEntry builds the entry to write. It runs the classification
+// through process.Finalize first: this is the single point every stored entry
+// passes through, and a result that Usable() accepted can still be rejected by
+// storage.Write (empty title, empty or multi-level category), which would drop
+// a successfully transcribed segment for the same reason issue #12 did.
 func newKnowledgeEntry(classified *process.ClassifyResult, content string, ts time.Time) *storage.KnowledgeEntry {
+	final := process.Finalize(classified, content)
 	return &storage.KnowledgeEntry{
-		Title:     classified.Title,
-		Category:  classified.Category,
+		Title:     final.Title,
+		Category:  final.Category,
 		CreatedAt: ts,
-		Keywords:  classified.Keywords,
-		Summary:   classified.Summary,
+		Keywords:  final.Keywords,
+		Summary:   final.Summary,
 		Content:   content,
 	}
 }

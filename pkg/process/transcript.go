@@ -189,3 +189,51 @@ func TruncateForLog(text string) string {
 	}
 	return string(r[:maxRunes]) + "…"
 }
+
+// maxTitleRunes mirrors the limit storage.Write enforces. Finalize truncates to
+// it so a verbose model cannot make an entry unwritable.
+const maxTitleRunes = 100
+
+// NormalizeCategory reduces whatever the model returned to the single-level,
+// traversal-free name storage.Write will accept. It returns "" when nothing
+// usable is left; Finalize substitutes UnsortedCategory in that case.
+func NormalizeCategory(category string) string {
+	// Keep only the first segment: models return "dev/backend" despite being
+	// told not to, and storage rejects a slash outright.
+	if idx := strings.IndexAny(category, `/\`); idx >= 0 {
+		category = category[:idx]
+	}
+	category = strings.ReplaceAll(category, "..", "")
+	category = strings.TrimSpace(category)
+	if category == "chat" {
+		return "daily"
+	}
+	return category
+}
+
+// Finalize makes a classification storable. storage.Write rejects an empty or
+// over-long title and an empty or multi-level category, and Usable() is true as
+// soon as any one field is filled — so a result with, say, a category but no
+// title passed the usable check and then died at the write, losing the
+// transcript exactly the way issue #12 did. Every field is repaired here
+// instead, keeping whatever the model did manage to produce.
+func Finalize(r *ClassifyResult, text string) *ClassifyResult {
+	if r == nil {
+		return FallbackResult(text)
+	}
+	out := *r
+	out.Title = strings.TrimSpace(out.Title)
+	out.Summary = strings.TrimSpace(out.Summary)
+	out.Category = NormalizeCategory(out.Category)
+
+	if out.Title == "" {
+		out.Title = DeriveTitle(text)
+	}
+	if n := []rune(out.Title); len(n) > maxTitleRunes {
+		out.Title = strings.TrimSpace(string(n[:maxTitleRunes-1])) + "…"
+	}
+	if out.Category == "" {
+		out.Category = UnsortedCategory
+	}
+	return &out
+}

@@ -280,3 +280,39 @@ func TestClassifyLoop_ExplicitSkipIsHonoured(t *testing.T) {
 		t.Errorf("stored %d entries for an explicit skip, want 0: %v", len(got), got)
 	}
 }
+
+// A result that Usable() accepts can still be rejected by storage.Write. The
+// real qwen3.5 returns exactly this — a category with an empty title — and it
+// used to die at the write with only a "Write error" line, losing the
+// transcript the same way issue #12 did.
+func TestClassifyLoop_PartialResultIsRepairedNotDropped(t *testing.T) {
+	tests := []struct {
+		name         string
+		result       process.ClassifyResult
+		wantCategory string
+	}{
+		{"empty title", process.ClassifyResult{Summary: "요약", Category: "daily"}, "daily"},
+		{"empty category", process.ClassifyResult{Title: "제목", Summary: "요약"}, process.UnsortedCategory},
+		{"multi-level category", process.ClassifyResult{Title: "제목", Category: "dev/backend"}, "dev"},
+		{"path traversal category", process.ClassifyResult{Title: "제목", Category: ".."}, process.UnsortedCategory},
+		{"overlong title", process.ClassifyResult{Title: strings.Repeat("아주긴제목", 40), Category: "work"}, "work"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := tt.result
+			fake := &fakeClassifier{
+				singleFn: func(call int, text string) (*process.ClassifyResult, error) { return &r, nil },
+			}
+			p := newTestPipeline(t, fake)
+
+			runClassify(t, p, items("태그 롤백 논의를 했고 CDC 파이프라인부터 다시 봐야 한다")...)
+
+			if got := storedEntries(t, p); len(got) != 1 {
+				t.Fatalf("transcript was dropped at the write: stored %d entries, want 1", len(got))
+			}
+			if _, err := os.Stat(filepath.Join(p.baseDir, tt.wantCategory)); err != nil {
+				t.Errorf("expected entry under %q: %v", tt.wantCategory, err)
+			}
+		})
+	}
+}
