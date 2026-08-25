@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -465,4 +466,48 @@ func containsRaw(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// tacit setup rewrites config-override.yaml from a fixed field list, so a field
+// missing from that list is silently wiped. transcript_denylist was.
+func TestWriteSetupOverride_PreservesDenylist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config-override.yaml")
+	original := "experimental: true\ntranscript_denylist:\n  - \"내 커스텀 환각 문구\"\n  - \"another phrase\"\n"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", true, true, true); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadWithOverride("", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"내 커스텀 환각 문구", "another phrase"}
+	if len(cfg.TranscriptDenylist) != len(want) {
+		t.Fatalf("tacit setup wiped transcript_denylist: got %v, want %v", cfg.TranscriptDenylist, want)
+	}
+	for i, w := range want {
+		if cfg.TranscriptDenylist[i] != w {
+			t.Errorf("entry %d = %q, want %q", i, cfg.TranscriptDenylist[i], w)
+		}
+	}
+}
+
+// A user who never set the field should still see it in the generated file, so
+// it is discoverable without reading the docs.
+func TestWriteSetupOverride_MentionsDenylistWhenUnset(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config-override.yaml")
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", true, true, false); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "transcript_denylist") {
+		t.Error("transcript_denylist is absent from the generated override file")
+	}
 }

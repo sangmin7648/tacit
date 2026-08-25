@@ -22,12 +22,12 @@ type Config struct {
 	// significantly reduces hallucinated / wrong-language transcriptions.
 	Language      string `yaml:"language"`
 	InitialPrompt string `yaml:"initial_prompt"`
-	// Experimental opts into the beta transcription channel: a stronger default
-	// model (large-v3-turbo) plus anti-hallucination decode tuning (no cross-
-	// segment context, confidence thresholds, non-speech-token suppression,
-	// temperature fallback) and VAD pre-roll padding. Off by default so existing
-	// users are unaffected.
-	Experimental bool `yaml:"experimental"`
+	// Experimental opts into the beta transcription channel: non-speech-token
+	// suppression during decoding plus VAD pre-roll padding. The other decode
+	// settings this used to claim (no cross-segment context, the confidence
+	// thresholds, temperature fallback) are whisper.cpp defaults already, so
+	// they applied whether or not this was set. Off by default.
+	Experimental    bool          `yaml:"experimental"`
 	MinSpeechDur    time.Duration `yaml:"min_speech_duration"`
 	SilenceDuration time.Duration `yaml:"silence_duration"`
 	SpeechThreshold float64       `yaml:"speech_threshold"`
@@ -48,6 +48,16 @@ type Config struct {
 	// memory growth when capturing continuous audio (e.g. long videos).
 	// 0 disables the cap. Default: 30s.
 	MaxSegmentDur time.Duration `yaml:"max_segment_duration"`
+	// MaxSessionDur caps how long transcribed text accumulates before it is sent
+	// for classification. Continuous speech never triggers the silence-based
+	// flush, so without this a long meeting becomes one giant item and a single
+	// classification failure loses all of it. 0 disables the cap. Default: 5m.
+	MaxSessionDur time.Duration `yaml:"max_session_duration"`
+	// TranscriptDenylist adds phrases to the built-in list of stock sentences
+	// whisper hallucinates over silence (video outros and the like). A sentence
+	// is dropped when a listed phrase makes up most of it. Matching ignores
+	// case, spacing and punctuation.
+	TranscriptDenylist []string `yaml:"transcript_denylist"`
 
 	// Source-specific overrides (mic)
 	MicMinSpeechDur    time.Duration `yaml:"mic_min_speech_duration"`
@@ -76,6 +86,7 @@ func DefaultConfig() *Config {
 		CaptureMic:             true,
 		CaptureSpeaker:         true,
 		MaxSegmentDur:          30 * time.Second,
+		MaxSessionDur:          5 * time.Minute,
 		MicMinSpeechDur:        2 * time.Second,
 		MicSilenceDuration:     10 * time.Second,
 		MicMaxSegmentDur:       30 * time.Second,
@@ -161,6 +172,8 @@ func WriteDefault(path string) error {
 			"capture_mic: %v\n"+
 			"capture_speaker: %v\n"+
 			"max_segment_duration: %s\n"+
+			"max_session_duration: %s\n"+
+			"transcript_denylist: []\n"+
 			"mic_min_speech_duration: %s\n"+
 			"mic_silence_duration: %s\n"+
 			"mic_max_segment_duration: %s\n"+
@@ -180,6 +193,7 @@ func WriteDefault(path string) error {
 		cfg.CaptureMic,
 		cfg.CaptureSpeaker,
 		formatDuration(cfg.MaxSegmentDur),
+		formatDuration(cfg.MaxSessionDur),
 		formatDuration(cfg.MicMinSpeechDur),
 		formatDuration(cfg.MicSilenceDuration),
 		formatDuration(cfg.MicMaxSegmentDur),
@@ -213,6 +227,8 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("capture_mic: %v", defaults.CaptureMic),
 		fmt.Sprintf("capture_speaker: %v", defaults.CaptureSpeaker),
 		fmt.Sprintf("max_segment_duration: %s", formatDuration(defaults.MaxSegmentDur)),
+		fmt.Sprintf("max_session_duration: %s", formatDuration(defaults.MaxSessionDur)),
+		"transcript_denylist: []",
 		fmt.Sprintf("mic_min_speech_duration: %s", formatDuration(defaults.MicMinSpeechDur)),
 		fmt.Sprintf("mic_silence_duration: %s", formatDuration(defaults.MicSilenceDuration)),
 		fmt.Sprintf("mic_max_segment_duration: %s", formatDuration(defaults.MicMaxSegmentDur)),
@@ -236,6 +252,9 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 func formatDuration(d time.Duration) string {
 	if d == 0 {
 		return "0s"
+	}
+	if d%time.Minute == 0 {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
 	}
 	if d%time.Second == 0 {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
@@ -318,6 +337,21 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		return field{key, def, false}
 	}
 
+	// preservedList is preserved for list-valued fields. %v would render a slice
+	// as "[a b]", which YAML reads back as a single-element list, so the entries
+	// are re-emitted as a quoted flow sequence instead.
+	preservedList := func(key string) field {
+		raw, ok := existing[key].([]interface{})
+		if !ok || len(raw) == 0 {
+			return field{key, "[]", false}
+		}
+		quoted := make([]string, 0, len(raw))
+		for _, v := range raw {
+			quoted = append(quoted, fmt.Sprintf("%q", fmt.Sprintf("%v", v)))
+		}
+		return field{key, "[" + strings.Join(quoted, ", ") + "]", true}
+	}
+
 	fields := []field{
 		preserved("whisper_model", defaults.WhisperModel),
 		setupChoice("language", language, defaults.Language),
@@ -338,6 +372,8 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		setupChoice("capture_mic", fmt.Sprintf("%v", captureMic), fmt.Sprintf("%v", defaults.CaptureMic)),
 		setupChoice("capture_speaker", fmt.Sprintf("%v", captureSpeaker), fmt.Sprintf("%v", defaults.CaptureSpeaker)),
 		preserved("max_segment_duration", formatDuration(defaults.MaxSegmentDur)),
+		preserved("max_session_duration", formatDuration(defaults.MaxSessionDur)),
+		preservedList("transcript_denylist"),
 		preserved("mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur)),
 		preserved("mic_silence_duration", formatDuration(defaults.MicSilenceDuration)),
 		preserved("mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur)),
