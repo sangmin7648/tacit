@@ -175,7 +175,7 @@ func cmdSetup() {
 	fmt.Println()
 
 	// Step 6: experimental beta channel.
-	fmt.Println("Step 6/6: Enable experimental transcription? (anti-hallucination decode tuning + VAD pre-roll padding)")
+	fmt.Println("Step 6/6: Enable experimental transcription? (non-speech token suppression + VAD pre-roll padding)")
 	experimental := selectOption([]string{"no", "yes"}, 0) == 1
 	fmt.Println()
 
@@ -582,6 +582,7 @@ func cmdConfigView(cfg *config.Config) {
 	fmt.Printf("%-30s %-20s %s\n", "min_speech_duration:", cfg.MinSpeechDur, tag("min_speech_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "silence_duration:", cfg.SilenceDuration, tag("silence_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "max_segment_duration:", cfg.MaxSegmentDur, tag("max_segment_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "max_session_duration:", cfg.MaxSessionDur, tag("max_session_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "mic_min_speech_duration:", cfg.MicMinSpeechDur, tag("mic_min_speech_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "mic_silence_duration:", cfg.MicSilenceDuration, tag("mic_silence_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "mic_max_segment_duration:", cfg.MicMaxSegmentDur, tag("mic_max_segment_duration"))
@@ -595,6 +596,9 @@ func cmdConfigView(cfg *config.Config) {
 	fmt.Printf("%-30s %-20s %s\n", "skill_agent:", cfg.SkillAgent, tag("skill_agent"))
 	fmt.Printf("%-30s %-20v %s\n", "capture_mic:", cfg.CaptureMic, tag("capture_mic"))
 	fmt.Printf("%-30s %-20v %s\n", "capture_speaker:", cfg.CaptureSpeaker, tag("capture_speaker"))
+	if len(cfg.TranscriptDenylist) > 0 {
+		fmt.Printf("%-30s %-20s %s\n", "transcript_denylist:", strings.Join(cfg.TranscriptDenylist, ", "), tag("transcript_denylist"))
+	}
 }
 
 // cmdConfigEdit opens the user override config file in a text editor.

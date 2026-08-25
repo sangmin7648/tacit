@@ -16,8 +16,8 @@ import (
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/model"
 	"github.com/sangmin7648/tacit/pkg/process"
-	"github.com/sangmin7648/tacit/pkg/stt"
 	"github.com/sangmin7648/tacit/pkg/storage"
+	"github.com/sangmin7648/tacit/pkg/stt"
 	"github.com/sangmin7648/tacit/pkg/vad"
 )
 
@@ -209,9 +209,33 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 	var preRoll []float32
 
 	// textBuf accumulates STT results from split chunks within one speech session.
-	// All chunks are joined and sent as a single classify item when silence is detected.
+	// All chunks are joined and sent as a single classify item when silence is
+	// detected, or earlier once the session passes maxSessionDur: an
+	// uninterrupted meeting never fires speech-ended, so without a cap it piles
+	// minutes of speech into one item and a single classification failure takes
+	// the whole thing down with it.
 	var textBuf []string
 	var sessionStart time.Time
+	maxSessionDur := p.cfg.MaxSessionDur
+
+	// flush hands the accumulated transcript to the classifier and starts a new
+	// session. Filler-only text is dropped here rather than by the LLM, so the
+	// classifier is only ever asked about text that has something in it.
+	flush := func(reason string) {
+		if len(textBuf) == 0 {
+			return
+		}
+		text := strings.Join(textBuf, " ")
+		textBuf = textBuf[:0]
+		start := sessionStart
+		sessionStart = time.Now()
+		if process.IsFiller(text) {
+			log.Printf("[%s] transcript is filler only, discarding: %s", label, process.TruncateForLog(text))
+			return
+		}
+		log.Printf("[%s] flushing transcript for classification (%s)", label, reason)
+		classifyCh <- classifyItem{text: text, timestamp: start}
+	}
 
 	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, silenceDuration, minSpeechDur)
 
@@ -295,6 +319,9 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 							textBuf = append(textBuf, text)
 						}
 					}
+					if maxSessionDur > 0 && !sessionStart.IsZero() && time.Since(sessionStart) >= maxSessionDur {
+						flush("session cap reached")
+					}
 					segBuf.Start() // speech is still ongoing; restart immediately
 				}
 			} else if segBuf.IsActive() {
@@ -313,10 +340,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 						log.Printf("[%s] segment too short, discarding", label)
 					}
 					// Flush accumulated text as a single classify item.
-					if len(textBuf) > 0 {
-						classifyCh <- classifyItem{text: strings.Join(textBuf, " "), timestamp: sessionStart}
-						textBuf = textBuf[:0]
-					}
+					flush("speech ended")
 				}
 			} else if p.cfg.Experimental {
 				// Leading silence: keep the most recent frames as pre-roll so a
@@ -356,11 +380,22 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, 
 		return ""
 	}
 	if text == "" {
-		log.Printf("[%s] STT produced empty text, skipping", label)
+		// whisper discards a window outright when it reads as non-speech
+		// (no_speech_prob above threshold together with a low average logprob),
+		// so an empty result is a decode-level rejection rather than a failure.
+		log.Printf("[%s] STT rejected %.1fs as non-speech, nothing transcribed", label, seg.Duration.Seconds())
 		return ""
 	}
 	log.Printf("[%s] STT: %s", label, text)
-	return text
+
+	filtered := process.FilterHallucinations(text, p.cfg.TranscriptDenylist)
+	switch {
+	case filtered == "":
+		log.Printf("[%s] transcript was entirely hallucinated boilerplate, discarding", label)
+	case filtered != text:
+		log.Printf("[%s] stripped hallucinated boilerplate, kept: %s", label, process.TruncateForLog(filtered))
+	}
+	return filtered
 }
 
 // classifyLoop processes classify items from the channel, batching when
@@ -390,49 +425,66 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 
 		if len(batch) == 1 {
 			log.Printf("Classifying 1 segment...")
-			classified, err := p.classifier.Classify(ctx, batch[0].text, existingCategories)
-			if err != nil {
-				log.Printf("Classify error: %v", err)
-				continue
-			}
-			if classified.Skip {
-				log.Printf("Skipping meaningless segment")
-				continue
-			}
-			p.storeEntry(classified, batch[0])
-		} else {
-			log.Printf("Batch classifying %d segments in one CLI call...", len(batch))
-			texts := make([]string, len(batch))
-			for i, b := range batch {
-				texts[i] = b.text
-			}
-			results, err := p.classifier.ClassifyBatch(ctx, texts, existingCategories)
-			if err != nil {
-				log.Printf("Batch classify error, falling back to individual: %v", err)
-				for _, b := range batch {
-					classified, err := p.classifier.Classify(ctx, b.text, existingCategories)
-					if err != nil {
-						log.Printf("Classify error: %v", err)
-						continue
-					}
-					if classified.Skip {
-						log.Printf("Skipping meaningless segment")
-						continue
-					}
-					p.storeEntry(classified, b)
-				}
-				continue
-			}
-			for i, classified := range results {
-				if i < len(batch) {
-					if classified.Skip {
-						log.Printf("Skipping meaningless segment %d", i+1)
-						continue
-					}
-					p.storeEntry(classified, batch[i])
-				}
-			}
+			p.classifyAndStore(ctx, batch[0], existingCategories)
+			continue
 		}
+
+		log.Printf("Batch classifying %d segments in one CLI call...", len(batch))
+		texts := make([]string, len(batch))
+		for i, b := range batch {
+			texts[i] = b.text
+		}
+		results, err := p.classifier.ClassifyBatch(ctx, texts, existingCategories)
+		if err != nil {
+			log.Printf("Batch classify error, falling back to individual: %v", err)
+			results = nil
+		} else if len(results) != len(batch) {
+			log.Printf("Batch returned %d results for %d segments; the remainder fall back to individual classification", len(results), len(batch))
+		}
+
+		// Walk the batch, not the results: ranging over a short response left the
+		// trailing segments unvisited and discarded them without a trace.
+		for i, b := range batch {
+			if i < len(results) && results[i] != nil {
+				p.dispatch(b, results[i])
+				continue
+			}
+			p.classifyAndStore(ctx, b, existingCategories)
+		}
+	}
+}
+
+// classifyAndStore classifies a single item, retrying once, and stores the
+// outcome. A transcript is never discarded because classification failed: if
+// the classifier errors out or answers with nothing usable, the entry is stored
+// unclassified so it still turns up in `tacit list`.
+func (p *Pipeline) classifyAndStore(ctx context.Context, item classifyItem, existingCategories []string) {
+	classified, err := p.classifier.Classify(ctx, item.text, existingCategories)
+	if err != nil && ctx.Err() == nil {
+		log.Printf("Classify error (%v); retrying once", err)
+		classified, err = p.classifier.Classify(ctx, item.text, existingCategories)
+	}
+	if err != nil {
+		log.Printf("Classify failed (%v); storing unclassified: %s", err, process.TruncateForLog(item.text))
+		p.storeEntry(process.FallbackResult(item.text), item)
+		return
+	}
+	p.dispatch(item, classified)
+}
+
+// dispatch stores an already-classified item, substituting a fallback entry
+// when the model asked for neither a skip nor supplied anything to store.
+func (p *Pipeline) dispatch(item classifyItem, classified *process.ClassifyResult) {
+	switch {
+	case classified.Skip:
+		// Log the text: a skip is the one path that intentionally throws speech
+		// away, and until now it left nothing behind to check that against.
+		log.Printf("Skipping segment the classifier called meaningless: %s", process.TruncateForLog(item.text))
+	case !classified.Usable():
+		log.Printf("Classifier returned no content fields; storing unclassified: %s", process.TruncateForLog(item.text))
+		p.storeEntry(process.FallbackResult(item.text), item)
+	default:
+		p.storeEntry(classified, item)
 	}
 }
 
@@ -486,17 +538,37 @@ func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, e
 	}
 	log.Printf("STT result: %s", text)
 
+	text = process.FilterHallucinations(text, p.cfg.TranscriptDenylist)
+	if text == "" {
+		log.Printf("Transcript was entirely hallucinated boilerplate")
+		return "", ErrSkipped
+	}
+	if process.IsFiller(text) {
+		log.Printf("Transcript is filler only")
+		return "", ErrSkipped
+	}
+
 	log.Printf("Classifying with LLM...")
 	classifyStart := time.Now()
 	existingCategories := storage.ListCategories(p.baseDir)
 	classified, err := p.classifier.Classify(ctx, text, existingCategories)
 	if err != nil {
-		return "", fmt.Errorf("classify: %w", err)
+		log.Printf("Classify error (%v); retrying once", err)
+		classified, err = p.classifier.Classify(ctx, text, existingCategories)
 	}
-	log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
-
-	if classified.Skip {
+	switch {
+	case err != nil:
+		// Storing the transcript unclassified beats returning an error and
+		// leaving a successful transcription with nowhere to go.
+		log.Printf("Classify failed (%v); storing unclassified", err)
+		classified = process.FallbackResult(text)
+	case classified.Skip:
 		return "", ErrSkipped
+	case !classified.Usable():
+		log.Printf("Classifier returned no content fields; storing unclassified")
+		classified = process.FallbackResult(text)
+	default:
+		log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
 	}
 
 	entry := newKnowledgeEntry(classified, text, time.Now())

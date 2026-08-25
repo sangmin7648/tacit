@@ -79,6 +79,8 @@ Analyzes the current Claude conversation thread and saves it as a structured kno
 | `silence_duration` | duration | `1500ms` | Duration of silence required to end a speech segment. |
 | `speech_threshold` | float | `0.5` | VAD confidence threshold (0–1). Higher = more conservative. |
 | `energy_threshold` | int | `200` | Audio energy gate. Frames below this value are rejected before VAD. |
+| `max_session_duration` | duration | `5m` | Caps how long transcribed text accumulates before it is classified. Continuous speech never triggers the silence-based flush, so this stops a long meeting from becoming one giant entry. `0` disables the cap. |
+| `transcript_denylist` | list | `[]` | Extra phrases to strip from transcripts, added to a built-in list of stock sentences Whisper hallucinates over silence (video outros and the like). A sentence is dropped when a listed phrase makes up most of it; matching ignores case, spacing and punctuation. |
 
 ---
 

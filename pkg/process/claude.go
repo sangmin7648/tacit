@@ -185,13 +185,14 @@ func parseJSONFromText(data []byte, v interface{}) error {
 }
 
 // sanitizeResult cleans up LLM output artifacts.
+//
+// It deliberately does NOT turn an empty result into a skip. A model that
+// answers skip=false while leaving the content fields blank has failed to
+// classify, which is not the same as saying the transcript is noise — treating
+// the two alike silently destroyed successfully transcribed speech. Callers
+// check Usable() and fall back to storing the transcript unclassified instead.
 func sanitizeResult(r *ClassifyResult) {
 	if r == nil || r.Skip {
-		return
-	}
-	// If all content fields are empty, the model indicated noise — treat as skip.
-	if r.Title == "" && r.Summary == "" && r.Category == "" {
-		r.Skip = true
 		return
 	}
 	// If the model still returned a slash despite instructions, keep only the first segment.

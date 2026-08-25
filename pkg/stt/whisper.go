@@ -48,9 +48,9 @@ type Options struct {
 	Language string
 	// InitialPrompt biases decoding toward the given vocabulary ("" = no hint).
 	InitialPrompt string
-	// Experimental enables anti-hallucination decode settings: no cross-segment
-	// context, confidence thresholds (no_speech / logprob / entropy), non-speech
-	// token suppression, and temperature fallback. Off preserves legacy behavior.
+	// Experimental enables non-speech token suppression, which masks symbol
+	// tokens such as "(" and "♪". The other decode settings it used to set are
+	// whisper.cpp defaults already. Off preserves legacy behavior.
 	Experimental bool
 }
 
@@ -65,6 +65,13 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32, opts Option
 
 	params := C.whisper_full_default_params(C.WHISPER_SAMPLING_BEAM_SEARCH)
 	params.beam_search.beam_size = 5
+	// whisper.cpp sizes the decoder pool from greedy.best_of — not beam_size —
+	// as soon as temperature fallback kicks in (see whisper_full_with_state's
+	// per-temperature loop). Temperature fallback is on by default, and
+	// greedy.best_of defaults to -1 for the beam-search strategy, so leaving it
+	// unset collapses decoding to a single greedy decoder exactly on the hard
+	// audio that triggered the fallback.
+	params.greedy.best_of = 5
 
 	langStr := opts.Language
 	if langStr == "" {
@@ -82,16 +89,17 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32, opts Option
 	params.print_timestamps = C.bool(false)
 	params.n_threads = 4
 
-	// Experimental beta channel: tighten decoding to reject the "hallucinated
-	// text on silence/noise" failure mode and stop one bad segment's output from
-	// poisoning the next.
+	// Experimental beta channel.
+	//
+	// The rest of whisper.cpp's anti-hallucination set — no_context, the
+	// no_speech / logprob / entropy thresholds, and temperature fallback — is
+	// already on in whisper_full_default_params, so re-assigning those values
+	// here changed nothing. suppress_nst is the only decode setting this flag
+	// actually flips, and it masks symbol tokens ("(", "♪") rather than whole
+	// sentences; stock hallucinated phrases made of ordinary words are stripped
+	// after transcription instead, in process.FilterHallucinations.
 	if opts.Experimental {
-		params.no_context = C.bool(true)     // don't carry context across segments
-		params.suppress_nst = C.bool(true)   // suppress non-speech tokens
-		params.no_speech_thold = C.float(0.6)
-		params.logprob_thold = C.float(-1.0)
-		params.entropy_thold = C.float(2.4)  // reject low-diversity (repeated) output
-		params.temperature_inc = C.float(0.2) // enable temperature fallback on failure
+		params.suppress_nst = C.bool(true)
 	}
 
 	// Set initial prompt if provided

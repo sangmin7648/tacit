@@ -133,9 +133,16 @@ type ollamaGenerateRequest struct {
 }
 
 // classifySchema is the JSON schema for a single classification result.
-// The skip field is optional; when true the other fields are omitted.
+//
+// The content fields are required: without that, smaller models answer with a
+// bare {"skip": false} — claiming the transcript is meaningful while supplying
+// nothing to store — and the transcript used to be discarded as a result.
+// Pure-filler input is rejected in Go before the model is ever called, so the
+// model no longer needs a way to opt out. The skip field stays allowed (but
+// unrequired) so a model that volunteers it is still understood.
 var classifySchema = json.RawMessage(`{
   "type": "object",
+  "required": ["title", "summary", "category", "keywords"],
   "properties": {
     "title":    {"type": "string"},
     "summary":  {"type": "string"},
