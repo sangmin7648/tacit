@@ -308,6 +308,13 @@ func TestWriteDefault(t *testing.T) {
 	if cfg.SpeakerSilenceDuration != defaults.SpeakerSilenceDuration {
 		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, defaults.SpeakerSilenceDuration)
 	}
+	// dedup_window is written as "3h"; the reader has to parse that back.
+	if cfg.DedupWindow != defaults.DedupWindow {
+		t.Errorf("DedupWindow: got %v, want %v", cfg.DedupWindow, defaults.DedupWindow)
+	}
+	if cfg.MinCharRate != defaults.MinCharRate {
+		t.Errorf("MinCharRate: got %v, want %v", cfg.MinCharRate, defaults.MinCharRate)
+	}
 }
 
 func TestWriteSetupOverride_AcceptingDefaultsWritesNoActiveOverrides(t *testing.T) {

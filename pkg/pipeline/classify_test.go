@@ -67,9 +67,11 @@ func (f *fakeClassifier) counts() (int, int) {
 // nil: these tests drive classification directly and never touch STT.
 func newTestPipeline(t *testing.T, c process.Classifier) *Pipeline {
 	t.Helper()
+	cfg := config.DefaultConfig()
 	return &Pipeline{
-		cfg:        config.DefaultConfig(),
+		cfg:        cfg,
 		classifier: c,
+		deduper:    process.NewTranscriptDeduper(cfg.DedupWindow, dedupKeepFirst),
 		baseDir:    t.TempDir(),
 	}
 }
@@ -261,6 +263,42 @@ func TestClassifyLoop_BatchErrorFallsBackPerItem(t *testing.T) {
 
 	if got := storedEntries(t, p); len(got) != 3 {
 		t.Fatalf("stored %d entries, want 3: %v", len(got), got)
+	}
+}
+
+// Issue #14: a whisper stock hallucination lands verbatim over and over. The
+// first couple are stored; every copy after that is dropped before a classify
+// call is spent on it.
+func TestClassifyLoop_StockRepeatDroppedAfterKeepFirst(t *testing.T) {
+	fake := &fakeClassifier{}
+	p := newTestPipeline(t, fake)
+
+	const stock = "감사합니다."
+	runClassify(t, p, items(stock, stock, stock, stock, stock, stock)...)
+
+	if got := storedEntries(t, p); len(got) != dedupKeepFirst {
+		t.Fatalf("stored %d entries, want %d (first copies kept, the rest dropped): %v", len(got), dedupKeepFirst, got)
+	}
+	single, batch := fake.counts()
+	if single+batch == 0 {
+		t.Error("the kept copies were never classified")
+	}
+}
+
+// Dedup keys on the exact transcript, so a busy stretch of genuinely different
+// speech is untouched.
+func TestClassifyLoop_DistinctTranscriptsAllStored(t *testing.T) {
+	p := newTestPipeline(t, &fakeClassifier{})
+
+	runClassify(t, p, items(
+		"태그 롤백 논의를 했다",
+		"결제 모듈 API 설계 이야기",
+		"제육볶음 고추장 비율은 2대1",
+		"goroutine leak 은 context 로 막는다",
+	)...)
+
+	if got := storedEntries(t, p); len(got) != 4 {
+		t.Fatalf("stored %d entries, want 4 — distinct transcripts must not be deduped: %v", len(got), got)
 	}
 }
 

@@ -25,12 +25,18 @@ import (
 // as meaningless and intentionally not stored. It is not a processing error.
 var ErrSkipped = errors.New("content classified as meaningless, skipping")
 
+// dedupKeepFirst is how many verbatim copies of a transcript are stored per
+// dedup window before the rest are treated as whisper stock hallucinations and
+// dropped. Two leaves room for a real remark that genuinely recurs.
+const dedupKeepFirst = 2
+
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
 type Pipeline struct {
 	cfg        *config.Config
 	whisper    *stt.Whisper
 	whisperMu  sync.Mutex // serialises concurrent STT calls from multiple sources
 	classifier process.Classifier
+	deduper    *process.TranscriptDeduper
 	baseDir    string
 }
 
@@ -60,6 +66,7 @@ func New(cfg *config.Config) (*Pipeline, error) {
 		cfg:        cfg,
 		whisper:    w,
 		classifier: classifier,
+		deduper:    process.NewTranscriptDeduper(cfg.DedupWindow, dedupKeepFirst),
 		baseDir:    baseDir,
 	}, nil
 }
@@ -402,8 +409,22 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, 
 	switch {
 	case filtered == "":
 		log.Printf("[%s] transcript was entirely hallucinated boilerplate, discarding", label)
+		return ""
 	case filtered != text:
 		log.Printf("[%s] stripped hallucinated boilerplate, kept: %s", label, process.TruncateForLog(filtered))
+	}
+
+	// Speech-density gate: too few characters for this much audio means whisper
+	// read most of the segment as silence and left a stock phrase behind.
+	if p.cfg.MinCharRate > 0 {
+		if secs := seg.Duration.Seconds(); secs > 0 {
+			runes := process.NormalizedRuneCount(filtered)
+			if rate := float64(runes) / secs; rate < p.cfg.MinCharRate {
+				log.Printf("[%s] transcript too sparse for %.1fs of audio (%d chars, %.2f/s < %.2f), discarding likely hallucination: %s",
+					label, secs, runes, rate, p.cfg.MinCharRate, process.TruncateForLog(filtered))
+				return ""
+			}
+		}
 	}
 	return filtered
 }
@@ -428,6 +449,26 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 				batch = append(batch, more)
 			default:
 				break drain
+			}
+		}
+
+		// Signal A: a transcript whose normalised text has already landed
+		// several times in the recent window is a whisper stock hallucination,
+		// not speech — drop it before a classify call is spent on it. The first
+		// occurrences pass through, so a genuine repeated remark survives.
+		if p.deduper != nil {
+			kept := batch[:0]
+			for _, b := range batch {
+				if prior, repeat := p.deduper.Seen(b.text, b.timestamp); repeat {
+					log.Printf("Discarding stock repeat (same transcript already stored %d× in the last %s): %s",
+						prior, p.cfg.DedupWindow, process.TruncateForLog(b.text))
+					continue
+				}
+				kept = append(kept, b)
+			}
+			batch = kept
+			if len(batch) == 0 {
+				continue
 			}
 		}
 

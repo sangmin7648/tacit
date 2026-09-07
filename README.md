@@ -86,6 +86,8 @@ Run `tacit setup` to generate two files in `~/.tacit/`:
 | `initial_prompt` | string | `""` | Vocabulary hint biasing decoding — useful for names, jargon, and acronyms Whisper keeps getting wrong. |
 | `experimental` | bool | `false` | Enables non-speech token suppression during decoding plus ~192ms of VAD pre-roll padding, so a late-firing VAD onset doesn't clip the first word. |
 | `transcript_denylist` | list | `[]` | Extra phrases to strip from transcripts, added to a built-in list of stock sentences Whisper hallucinates over silence (video outros and the like). A sentence is dropped only when a listed phrase makes up most of it; matching ignores case, spacing and punctuation. |
+| `dedup_window` | duration | `3h` | Drops a transcript whose text has already been stored several times within this rolling window — the fingerprint of a stock hallucination, which recurs verbatim far more than real speech does. The first two occurrences per window are always kept, so a genuinely repeated remark survives. `0` disables. |
+| `min_char_rate` | float | `0.2` | Drops a live transcript carrying too few characters for the length of audio it came from (letters and digits per second) — what is left when Whisper transcribes a stock phrase over a stretch it otherwise read as silence. Set low, so only unambiguous cases are caught. `0` disables. |
 
 ### Segmentation
 

@@ -58,6 +58,18 @@ type Config struct {
 	// is dropped when a listed phrase makes up most of it. Matching ignores
 	// case, spacing and punctuation.
 	TranscriptDenylist []string `yaml:"transcript_denylist"`
+	// DedupWindow drops a transcript whose normalised text has already been
+	// stored several times within this rolling window — the fingerprint of a
+	// whisper stock hallucination, which recurs verbatim far more than real
+	// speech does. The first two occurrences in any window are always kept, so
+	// a genuinely repeated remark survives. 0 disables. Default 3h.
+	DedupWindow time.Duration `yaml:"dedup_window"`
+	// MinCharRate drops a live transcript carrying too few characters for the
+	// length of audio it came from (letters and digits per second) — what is
+	// left when whisper transcribes a stock phrase over a stretch it otherwise
+	// read as silence. Deliberately low so only unambiguous cases are caught.
+	// 0 disables. Default 0.2.
+	MinCharRate float64 `yaml:"min_char_rate"`
 
 	// Source-specific overrides (mic)
 	MicMinSpeechDur    time.Duration `yaml:"mic_min_speech_duration"`
@@ -87,6 +99,8 @@ func DefaultConfig() *Config {
 		CaptureSpeaker:         true,
 		MaxSegmentDur:          30 * time.Second,
 		MaxSessionDur:          5 * time.Minute,
+		DedupWindow:            3 * time.Hour,
+		MinCharRate:            0.2,
 		MicMinSpeechDur:        2 * time.Second,
 		MicSilenceDuration:     10 * time.Second,
 		MicMaxSegmentDur:       30 * time.Second,
@@ -174,6 +188,8 @@ func WriteDefault(path string) error {
 			"max_segment_duration: %s\n"+
 			"max_session_duration: %s\n"+
 			"transcript_denylist: []\n"+
+			"dedup_window: %s\n"+
+			"min_char_rate: %.2f\n"+
 			"mic_min_speech_duration: %s\n"+
 			"mic_silence_duration: %s\n"+
 			"mic_max_segment_duration: %s\n"+
@@ -194,6 +210,8 @@ func WriteDefault(path string) error {
 		cfg.CaptureSpeaker,
 		formatDuration(cfg.MaxSegmentDur),
 		formatDuration(cfg.MaxSessionDur),
+		formatDuration(cfg.DedupWindow),
+		cfg.MinCharRate,
 		formatDuration(cfg.MicMinSpeechDur),
 		formatDuration(cfg.MicSilenceDuration),
 		formatDuration(cfg.MicMaxSegmentDur),
@@ -229,6 +247,8 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		fmt.Sprintf("max_segment_duration: %s", formatDuration(defaults.MaxSegmentDur)),
 		fmt.Sprintf("max_session_duration: %s", formatDuration(defaults.MaxSessionDur)),
 		"transcript_denylist: []",
+		fmt.Sprintf("dedup_window: %s", formatDuration(defaults.DedupWindow)),
+		fmt.Sprintf("min_char_rate: %.2f", defaults.MinCharRate),
 		fmt.Sprintf("mic_min_speech_duration: %s", formatDuration(defaults.MicMinSpeechDur)),
 		fmt.Sprintf("mic_silence_duration: %s", formatDuration(defaults.MicSilenceDuration)),
 		fmt.Sprintf("mic_max_segment_duration: %s", formatDuration(defaults.MicMaxSegmentDur)),
@@ -252,6 +272,9 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 func formatDuration(d time.Duration) string {
 	if d == 0 {
 		return "0s"
+	}
+	if d%time.Hour == 0 {
+		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 	if d%time.Minute == 0 {
 		return fmt.Sprintf("%dm", int(d.Minutes()))
@@ -374,6 +397,8 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		preserved("max_segment_duration", formatDuration(defaults.MaxSegmentDur)),
 		preserved("max_session_duration", formatDuration(defaults.MaxSessionDur)),
 		preservedList("transcript_denylist"),
+		preserved("dedup_window", formatDuration(defaults.DedupWindow)),
+		preserved("min_char_rate", fmt.Sprintf("%.2f", defaults.MinCharRate)),
 		preserved("mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur)),
 		preserved("mic_silence_duration", formatDuration(defaults.MicSilenceDuration)),
 		preserved("mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur)),

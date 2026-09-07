@@ -44,6 +44,21 @@ func TestFilterHallucinations_RemovesOutroKeepsSpeech(t *testing.T) {
 			in:   "시청해주셔서 감사합니다. 다음 영상에서 만나요.",
 			want: "",
 		},
+		{
+			name: "a sentence looped three or more times is dropped whole",
+			in:   "됐어. 됐어. 됐어. 됐어. 됐어. 됐어. 됐어.",
+			want: "",
+		},
+		{
+			name: "a looped sentence is dropped but the real speech around it stays",
+			in:   "태그 롤백 논의를 했어. 됐어. 됐어. 됐어. 됐어.",
+			want: "태그 롤백 논의를 했어.",
+		},
+		{
+			name: "the same sentence said just twice is left alone",
+			in:   "다시 확인해봐. 다시 확인해봐.",
+			want: "다시 확인해봐. 다시 확인해봐.",
+		},
 	}
 
 	for _, tt := range tests {
@@ -69,6 +84,24 @@ func TestFilterHallucinations_ExtraPhrases(t *testing.T) {
 	want := "회의 정리 끝."
 	if got := FilterHallucinations(in, []string{"오늘도 시청해주셔서 고맙습니다"}); got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestNormalizedRuneCount(t *testing.T) {
+	tests := []struct {
+		in   string
+		want int
+	}{
+		{"감사합니다.", 5},
+		{"  네, 그렇죠!  ", 4},
+		{"...", 0},
+		{"", 0},
+		{"MBC 뉴스", 5},
+	}
+	for _, tt := range tests {
+		if got := NormalizedRuneCount(tt.in); got != tt.want {
+			t.Errorf("NormalizedRuneCount(%q) = %d, want %d", tt.in, got, tt.want)
+		}
 	}
 }
 
