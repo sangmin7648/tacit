@@ -308,6 +308,13 @@ func TestWriteDefault(t *testing.T) {
 	if cfg.SpeakerSilenceDuration != defaults.SpeakerSilenceDuration {
 		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, defaults.SpeakerSilenceDuration)
 	}
+	// dedup_window is written as "3h"; the reader has to parse that back.
+	if cfg.DedupWindow != defaults.DedupWindow {
+		t.Errorf("DedupWindow: got %v, want %v", cfg.DedupWindow, defaults.DedupWindow)
+	}
+	if cfg.MinCharRate != defaults.MinCharRate {
+		t.Errorf("MinCharRate: got %v, want %v", cfg.MinCharRate, defaults.MinCharRate)
+	}
 }
 
 func TestWriteSetupOverride_AcceptingDefaultsWritesNoActiveOverrides(t *testing.T) {
@@ -409,6 +416,8 @@ func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
 	seed := "whisper_model: small\n" +
 		"min_speech_duration: 7s\n" +
 		"mic_silence_duration: 12s\n" +
+		"dedup_window: 6h\n" +
+		"min_char_rate: 0.35\n" +
 		"initial_prompt: \"hello, world\"\n"
 	if err := os.WriteFile(path, []byte(seed), 0644); err != nil {
 		t.Fatalf("failed to seed override file: %v", err)
@@ -434,6 +443,12 @@ func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
 	}
 	if cfg.InitialPrompt != "hello, world" {
 		t.Errorf("InitialPrompt: got %q, want %q (should survive re-running setup)", cfg.InitialPrompt, "hello, world")
+	}
+	if cfg.DedupWindow != 6*time.Hour {
+		t.Errorf("DedupWindow: got %v, want 6h (should survive re-running setup)", cfg.DedupWindow)
+	}
+	if cfg.MinCharRate != 0.35 {
+		t.Errorf("MinCharRate: got %v, want 0.35 (should survive re-running setup)", cfg.MinCharRate)
 	}
 }
 

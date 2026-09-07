@@ -93,6 +93,13 @@ func splitSentences(text string) []string {
 // still catching a hallucinated outro with a stray word attached.
 const hallucinationCoverage = 0.6
 
+// repeatedSentenceRun is how many times one sentence must repeat back to back
+// before the run is read as a whisper decode loop and dropped whole ("됐어.
+// 됐어. 됐어. …"). Two in a row stays — a person can say the same short thing
+// twice — and verbatim recurrence across separate transcripts is the
+// TranscriptDeduper's job, not this filter's.
+const repeatedSentenceRun = 3
+
 // FilterHallucinations removes stock hallucinated phrases from a transcript,
 // sentence by sentence. extra is appended to the built-in denylist so users can
 // add whatever their own setup keeps producing.
@@ -111,27 +118,67 @@ func FilterHallucinations(text string, extra []string) string {
 		}
 	}
 
+	sentences := splitSentences(text)
 	var kept []string
-	for _, sentence := range splitSentences(text) {
-		norm := normalizeForMatch(sentence)
+	for i := 0; i < len(sentences); {
+		norm := normalizeForMatch(sentences[i])
 		if norm == "" {
+			i++
 			continue
 		}
-		drop := false
-		for _, p := range phrases {
-			if !strings.Contains(norm, p) {
-				continue
-			}
-			if float64(len([]rune(p))) >= hallucinationCoverage*float64(len([]rune(norm))) {
-				drop = true
-				break
-			}
+
+		// Fold a run of the same sentence: three or more identical in a row is
+		// a decode loop and the whole run goes; one or two fall through to the
+		// denylist check below.
+		runLen := 1
+		for i+runLen < len(sentences) && normalizeForMatch(sentences[i+runLen]) == norm {
+			runLen++
 		}
-		if !drop {
-			kept = append(kept, sentence)
+		if runLen >= repeatedSentenceRun {
+			i += runLen
+			continue
+		}
+
+		for ; runLen > 0; runLen-- {
+			sentence := sentences[i]
+			i++
+			n := normalizeForMatch(sentence)
+			drop := false
+			for _, p := range phrases {
+				if !strings.Contains(n, p) {
+					continue
+				}
+				if float64(len([]rune(p))) >= hallucinationCoverage*float64(len([]rune(n))) {
+					drop = true
+					break
+				}
+			}
+			if !drop {
+				kept = append(kept, sentence)
+			}
 		}
 	}
 	return strings.TrimSpace(strings.Join(kept, " "))
+}
+
+// NormalizedRuneCount returns the number of letter and digit runes in s — its
+// length once punctuation, whitespace and case-only differences are removed.
+// The pipeline uses it as a content-length measure for the speech-density
+// gate, so a transcript that is mostly punctuation does not read as long.
+func NormalizedRuneCount(s string) int {
+	return len([]rune(normalizeForMatch(s)))
+}
+
+// TooSparse reports whether text carries too few characters for audioSeconds of
+// audio to be genuine speech, rather than a stock phrase whisper left behind
+// over a stretch it otherwise read as silence. minRate is content characters
+// (letters and digits) per second; minRate <= 0 disables the check, as does a
+// non-positive duration.
+func TooSparse(text string, audioSeconds, minRate float64) bool {
+	if minRate <= 0 || audioSeconds <= 0 {
+		return false
+	}
+	return float64(NormalizedRuneCount(text))/audioSeconds < minRate
 }
 
 // IsFiller reports whether text carries no content beyond hesitation sounds.

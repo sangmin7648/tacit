@@ -11,7 +11,7 @@ import (
 const singleSystemPrompt = `You classify speech-to-text transcripts into structured data.
 
 SKIP DECISION: Always fill in every field, then set skip accordingly — never answer with skip alone.
-Set skip=true ONLY when the transcript contains no statement at all — filler sounds (음, 어, 그, 아, um, uh), bare acknowledgements on their own ("네 알겠습니다", "아 그렇군요"), counting, or call-connection chatter ("여보세요, 들리세요").
+Set skip=true ONLY when the transcript contains no statement at all — filler sounds (음, 어, 그, 아, um, uh), bare acknowledgements on their own ("네 알겠습니다", "아 그렇군요"), counting, call-connection chatter ("여보세요, 들리세요"), or a lone stock phrase standing entirely on its own with nothing else around it — a broadcast sign-off ("이 시각 세계였습니다", "OOO 뉴스 OOO입니다"), a video outro ("시청해 주셔서 감사합니다"), or a bare courtesy line ("감사합니다", "수고하셨습니다").
 Set skip=false for everything else. Any complete sentence that states something is kept, however mundane, brief or self-evident — judging a transcript unimportant is not your call to make, and dropping one is unrecoverable.
 
 NORMAL CLASSIFICATION:
@@ -70,7 +70,7 @@ Each entry has:
 - keywords: array of 5–10 strings for lexical search recall.
   Include synonyms, abbreviations, related concepts, and alternative phrasings — use the input language plus English equivalents.
 
-- skip: always present. true ONLY when the entry contains no statement at all (filler sounds, bare acknowledgements on their own, counting, call-connection chatter); false for everything else, including mundane or self-evident sentences. Fill in the other fields either way — never answer with skip alone.
+- skip: always present. true ONLY when the entry contains no statement at all (filler sounds, bare acknowledgements on their own, counting, call-connection chatter, or a lone stock phrase standing entirely on its own — a broadcast sign-off, a video outro, a bare courtesy line); false for everything else, including mundane or self-evident sentences. Fill in the other fields either way — never answer with skip alone.
 
 EXAMPLE — two VAD-split segments from the same conversation:
 --- text 1 ---

@@ -583,6 +583,8 @@ func cmdConfigView(cfg *config.Config) {
 	fmt.Printf("%-30s %-20s %s\n", "silence_duration:", cfg.SilenceDuration, tag("silence_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "max_segment_duration:", cfg.MaxSegmentDur, tag("max_segment_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "max_session_duration:", cfg.MaxSessionDur, tag("max_session_duration"))
+	fmt.Printf("%-30s %-20s %s\n", "dedup_window:", cfg.DedupWindow, tag("dedup_window"))
+	fmt.Printf("%-30s %-20.2f %s\n", "min_char_rate:", cfg.MinCharRate, tag("min_char_rate"))
 	fmt.Printf("%-30s %-20s %s\n", "mic_min_speech_duration:", cfg.MicMinSpeechDur, tag("mic_min_speech_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "mic_silence_duration:", cfg.MicSilenceDuration, tag("mic_silence_duration"))
 	fmt.Printf("%-30s %-20s %s\n", "mic_max_segment_duration:", cfg.MicMaxSegmentDur, tag("mic_max_segment_duration"))
