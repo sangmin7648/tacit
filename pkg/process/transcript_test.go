@@ -55,9 +55,24 @@ func TestFilterHallucinations_RemovesOutroKeepsSpeech(t *testing.T) {
 			want: "태그 롤백 논의를 했어.",
 		},
 		{
+			name: "a run leading the transcript is dropped, trailing speech kept",
+			in:   "네. 네. 네. 그러면 롤백부터 진행하자.",
+			want: "그러면 롤백부터 진행하자.",
+		},
+		{
 			name: "the same sentence said just twice is left alone",
 			in:   "다시 확인해봐. 다시 확인해봐.",
 			want: "다시 확인해봐. 다시 확인해봐.",
+		},
+		{
+			name: "two separate pairs are both kept — neither is a run of three",
+			in:   "확인해봐. 확인해봐. 롤백하자. 롤백하자.",
+			want: "확인해봐. 확인해봐. 롤백하자. 롤백하자.",
+		},
+		{
+			name: "a run and a denylisted outro in one transcript both go",
+			in:   "쿠폰이에요? 쿠폰이에요? 쿠폰이에요? 시청해주셔서 감사합니다.",
+			want: "",
 		},
 	}
 
@@ -102,6 +117,33 @@ func TestNormalizedRuneCount(t *testing.T) {
 		if got := NormalizedRuneCount(tt.in); got != tt.want {
 			t.Errorf("NormalizedRuneCount(%q) = %d, want %d", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestTooSparse(t *testing.T) {
+	tests := []struct {
+		name    string
+		text    string
+		seconds float64
+		minRate float64
+		want    bool
+	}{
+		{"stock phrase over a long window", "감사합니다.", 30, 0.2, true},
+		{"same phrase in a short window is fine", "감사합니다.", 10, 0.2, false},
+		{"a real sentence clears the bar easily", "태그 롤백 논의를 했고 CDC 파이프라인부터 다시 봐야 한다", 12, 0.2, false},
+		{"outro stripped from real speech still clears at 0.2", "태그 롤백 논의를 했어", 25, 0.2, false},
+		{"news sign-off is a near miss at the default rate", "이 시각 세계였습니다.", 40, 0.2, false},
+		{"the same sign-off is caught once the rate is tuned up", "이 시각 세계였습니다.", 40, 0.3, true},
+		{"disabled by minRate 0", "감사합니다.", 300, 0, false},
+		{"guarded against zero duration", "감사합니다.", 0, 0.2, false},
+		{"exactly at the threshold is not sparse", "12345", 25, 0.2, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := TooSparse(tt.text, tt.seconds, tt.minRate); got != tt.want {
+				t.Errorf("TooSparse(%q, %v, %v) = %v, want %v", tt.text, tt.seconds, tt.minRate, got, tt.want)
+			}
+		})
 	}
 }
 

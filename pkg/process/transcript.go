@@ -169,6 +169,18 @@ func NormalizedRuneCount(s string) int {
 	return len([]rune(normalizeForMatch(s)))
 }
 
+// TooSparse reports whether text carries too few characters for audioSeconds of
+// audio to be genuine speech, rather than a stock phrase whisper left behind
+// over a stretch it otherwise read as silence. minRate is content characters
+// (letters and digits) per second; minRate <= 0 disables the check, as does a
+// non-positive duration.
+func TooSparse(text string, audioSeconds, minRate float64) bool {
+	if minRate <= 0 || audioSeconds <= 0 {
+		return false
+	}
+	return float64(NormalizedRuneCount(text))/audioSeconds < minRate
+}
+
 // IsFiller reports whether text carries no content beyond hesitation sounds.
 // Filler is detected here rather than being left to the LLM so the decision is
 // deterministic and costs nothing — the classifier is then only ever asked

@@ -416,15 +416,10 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, 
 
 	// Speech-density gate: too few characters for this much audio means whisper
 	// read most of the segment as silence and left a stock phrase behind.
-	if p.cfg.MinCharRate > 0 {
-		if secs := seg.Duration.Seconds(); secs > 0 {
-			runes := process.NormalizedRuneCount(filtered)
-			if rate := float64(runes) / secs; rate < p.cfg.MinCharRate {
-				log.Printf("[%s] transcript too sparse for %.1fs of audio (%d chars, %.2f/s < %.2f), discarding likely hallucination: %s",
-					label, secs, runes, rate, p.cfg.MinCharRate, process.TruncateForLog(filtered))
-				return ""
-			}
-		}
+	if secs := seg.Duration.Seconds(); process.TooSparse(filtered, secs, p.cfg.MinCharRate) {
+		log.Printf("[%s] transcript too sparse for %.1fs of audio (%d chars < %.2f/s), discarding likely hallucination: %s",
+			label, secs, process.NormalizedRuneCount(filtered), p.cfg.MinCharRate, process.TruncateForLog(filtered))
+		return ""
 	}
 	return filtered
 }
