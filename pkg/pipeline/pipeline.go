@@ -125,8 +125,8 @@ func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource, label
 
 // retryDelay is the wait before restarting a source after its stream ends or
 // re-initialisation fails.  stallTimeout is how long runSourceOnce waits for an
-// audio chunk before assuming the stream has silently died (e.g. SCStream torn
-// down by macOS on sleep without firing didStopWithError:).  Both are vars, not
+// audio chunk before assuming the stream has silently died (e.g. the system-audio
+// device torn down by macOS on sleep without notifying us).  Both are vars, not
 // consts, so tests can shrink them.
 var (
 	retryDelay   = 5 * time.Second
@@ -136,7 +136,7 @@ var (
 // runSource runs a single audio source through VAD→STT and enqueues results
 // onto classifyCh.  It restarts the source automatically whenever a capture
 // session ends for any reason other than ctx cancellation — whether the stream
-// closed unexpectedly (SCStream stopped by macOS), stalled with no audio, or
+// closed unexpectedly (capture stopped by macOS), stalled with no audio, or
 // re-initialisation failed transiently (common right after sleep/wake).  It
 // returns only when ctx is cancelled.
 func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label string, classifyCh chan<- classifyItem) error {
@@ -256,7 +256,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 
 	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, silenceDuration, minSpeechDur)
 
-	// Inactivity watchdog: a live capture stream (mic or SCStream) delivers PCM
+	// Inactivity watchdog: a live capture stream (mic or system audio) delivers PCM
 	// chunks continuously, even during silence, so a prolonged absence of chunks
 	// means the stream has died without closing its channel.  When that happens
 	// we return so runSource restarts the source.

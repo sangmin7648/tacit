@@ -493,7 +493,7 @@ func cmdListen(cfg *config.Config) {
 			defer spk.Close()
 			sources = append(sources, spk)
 			sourceLabels = append(sourceLabels, "speaker")
-			log.Printf("System audio capture enabled (requires Screen Recording permission)")
+			log.Printf("System audio capture enabled (Core Audio tap)")
 		}
 	}
 
