@@ -129,7 +129,7 @@ The one exception is a deliberate skip: the classifier still discards a transcri
 ```mermaid
 graph LR
     MIC[Microphone\n16kHz mono] --> CAP[Capture\nmalgo]
-    SYS[System Audio\nScreenCaptureKit] --> CAP
+    SYS[System Audio\nCore Audio tap] --> CAP
     CAP --> VAD[VAD\nten-vad / Silero]
     VAD --> BUF[Segment Buffer]
     BUF --> STT[STT\nwhisper.cpp]
@@ -160,7 +160,7 @@ Entries are stored under `~/.tacit/<category>/YYYYMMDD-HHMMSS.md` — plain file
 
 ## Requirements
 
-- macOS (Apple Silicon)
+- macOS 14.2+ (Apple Silicon)
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
 
 ---

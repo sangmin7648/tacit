@@ -9,11 +9,11 @@ typedef struct SpeakerCapture SpeakerCapture;
 // Declared here so the .m file can call it.
 extern void tacitSpeakerSamplesCallback(uintptr_t handle, int16_t* samples, int count);
 
-// tacitSpeakerStoppedCallback is called when SCStream stops unexpectedly.
+// tacitSpeakerStoppedCallback is called when the tap stops unexpectedly.
 // Defined in speaker_darwin.go (//export).
 extern void tacitSpeakerStoppedCallback(uintptr_t handle);
 
-// speaker_create starts ScreenCaptureKit system audio capture (macOS 13+).
+// speaker_create starts Core Audio process-tap system audio capture (macOS 14.2+).
 // On success returns a non-NULL handle and sets *errMsg to NULL.
 // On failure returns NULL and sets *errMsg to a malloc'd error string (caller must free).
 // goHandle is passed through to tacitSpeakerSamplesCallback as the first argument.
