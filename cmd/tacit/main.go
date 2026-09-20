@@ -5,13 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -51,7 +49,7 @@ func main() {
 	case "update":
 		cmdUpdate()
 	case "install-skills":
-		if err := installSkills(cfg.SkillAgent); err != nil {
+		if err := runInstallSkills(cfg.SkillAgent); err != nil {
 			log.Fatalf("Failed to install skills: %v", err)
 		}
 		fmt.Println("Skills updated.")
@@ -200,7 +198,7 @@ func cmdSetup() {
 	fmt.Printf("Saved settings: %s\n", overridePath)
 
 	// Install skill files for the selected agent
-	if err := installSkills(skillAgent); err != nil {
+	if err := runInstallSkills(skillAgent); err != nil {
 		log.Fatalf("Setup failed: %v", err)
 	}
 
@@ -694,47 +692,14 @@ func cmdUpdate() {
 	}
 }
 
-// agentSkillsDir returns the skills directory for the given agent.
-func agentSkillsDir(agent string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	switch agent {
-	case "claude":
-		return filepath.Join(home, ".claude", "skills"), nil
-	default:
-		return "", fmt.Errorf("unknown skill agent %q", agent)
-	}
-}
-
-// installSkills copies the embedded skill files into the agent's skills directory.
-func installSkills(agent string) error {
-	skillsDir, err := agentSkillsDir(agent)
-	if err != nil {
-		return err
-	}
-	return fs.WalkDir(skills.FS, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		dest := filepath.Join(skillsDir, path)
-		if d.IsDir() {
-			return os.MkdirAll(dest, 0755)
-		}
-		data, err := skills.FS.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("reading embedded %s: %w", path, err)
-		}
-		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(dest, data, 0644); err != nil {
-			return fmt.Errorf("writing %s: %w", dest, err)
-		}
+// runInstallSkills installs the embedded skill files for agent and prints
+// each destination path written.
+func runInstallSkills(agent string) error {
+	installed, err := skills.Install(agent)
+	for _, dest := range installed {
 		fmt.Printf("Installed: %s\n", dest)
-		return nil
-	})
+	}
+	return err
 }
 
 // parseDuration extends time.ParseDuration with support for d (days) and w (weeks).
@@ -800,33 +765,7 @@ func cmdList() {
 	baseDir := config.BaseDir()
 	cutoff := time.Now().Add(-dur)
 
-	var entries []*storage.KnowledgeEntry
-	err := filepath.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // skip unreadable entries
-		}
-		if d.IsDir() {
-			// Skip internal directories
-			name := d.Name()
-			if name == "models" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if filepath.Ext(path) != ".md" {
-			return nil
-		}
-
-		entry, err := storage.Read(path)
-		if err != nil {
-			return nil // skip malformed files
-		}
-
-		if entry.CreatedAt.After(cutoff) {
-			entries = append(entries, entry)
-		}
-		return nil
-	})
+	entries, err := storage.ListEntries(baseDir, cutoff)
 	if err != nil {
 		log.Fatalf("Failed to read knowledge base: %v", err)
 	}
@@ -837,11 +776,6 @@ func cmdList() {
 		fmt.Printf("No entries found in the last %s.\n", durStr)
 		return
 	}
-
-	// Sort newest first
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAt.After(entries[j].CreatedAt)
-	})
 
 	fmt.Printf("Found %d entries in the last %s:\n\n", len(entries), durStr)
 	for _, e := range entries {
