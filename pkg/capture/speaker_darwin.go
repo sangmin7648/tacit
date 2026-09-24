@@ -4,7 +4,7 @@ package capture
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework ScreenCaptureKit -framework CoreMedia -framework AudioToolbox
+#cgo LDFLAGS: -framework CoreAudio -framework AudioToolbox -framework Foundation
 
 #include "speaker_darwin.h"
 #include <stdlib.h>
@@ -20,8 +20,8 @@ import (
 	"unsafe"
 )
 
-// Speaker captures system audio output (all apps) using ScreenCaptureKit.
-// Requires macOS 13.0+ and Screen Recording permission.
+// Speaker captures system audio output (all apps) using a Core Audio process tap.
+// Requires macOS 14.2+ and audio capture permission.
 // The captured audio is NOT affected by the microphone mute state.
 // A single Speaker may be Stream()ed repeatedly (the pipeline restarts sources
 // after sleep/wake); each call runs an independent capture session.
@@ -30,7 +30,7 @@ type Speaker struct {
 }
 
 // NewSpeaker creates a new system-audio capture instance.
-// The ScreenCaptureKit stream is started lazily in Stream().
+// The process tap is created lazily in Stream().
 func NewSpeaker() (*Speaker, error) {
 	// We create a temporary placeholder handle; the real handle is set in
 	// Stream() once we have a channel to deliver samples into.
@@ -38,13 +38,13 @@ func NewSpeaker() (*Speaker, error) {
 	return &Speaker{}, nil
 }
 
-// speakerSession owns one ScreenCaptureKit capture session: the data channel,
-// the cgo handle the ObjC callbacks use to find it, and the native SCStream
-// handle.  Teardown is split into two once-guarded steps so the context-cancel
+// speakerSession owns one system-audio capture session: the data channel,
+// the cgo handle the ObjC callbacks use to find it, and the native tap +
+// aggregate device.  Teardown is split into two once-guarded steps so the context-cancel
 // path, an explicit Close, and the unexpected-stop callback can all fire without
 // double-close panics or double-free of the native stream:
 //   - closeChan:  close the data channel + delete the cgo handle
-//   - stopNative: release the native SCStream (C.speaker_stop)
+//   - stopNative: release the native tap and aggregate device (C.speaker_stop)
 type speakerSession struct {
 	data      chan []int16
 	handle    cgo.Handle
@@ -76,10 +76,10 @@ func (s *speakerSession) teardown() {
 }
 
 // Stream starts system-audio capture and returns a channel of int16 chunks.
-// The channel is closed when ctx is cancelled or when SCStream stops unexpectedly.
+// The channel is closed when ctx is cancelled or when the tap stops unexpectedly.
 func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
 	// Release any prior session's native stream before starting a new one so
-	// repeated restarts (sleep/wake) don't leak SCStream instances.
+	// repeated restarts (sleep/wake) don't leak taps or aggregate devices.
 	if s.session != nil {
 		s.session.teardown()
 	}
@@ -107,12 +107,12 @@ func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
 
 	go func() {
 		<-ctx.Done()
-		// stopNative sets output.stopped = YES before stopping so
-		// didStopWithError won't re-fire the Go callback for our deliberate stop.
+		// stopNative latches the stopped flag before tearing the device down so
+		// the alive listener won't re-fire the Go callback for our deliberate stop.
 		sess.teardown()
 	}()
 
-	log.Printf("System audio capture started (ScreenCaptureKit, 16kHz mono)")
+	log.Printf("System audio capture started (Core Audio tap, 16kHz mono)")
 	return sess.data, nil
 }
 
@@ -146,12 +146,12 @@ func tacitSpeakerSamplesCallback(h C.uintptr_t, samples *C.int16_t, count C.int)
 	}
 }
 
-// tacitSpeakerStoppedCallback is called from Objective-C when SCStream stops
+// tacitSpeakerStoppedCallback is called from Objective-C when the tap stops
 // unexpectedly (not due to an explicit speaker_stop call).  Closing the channel
 // unblocks the pipeline's capture loop so it can detect the outage and restart.
-// It must NOT call stopNative: we're already inside didStopWithError: and the
-// native stream is being torn down by macOS; the leaked handle is released when
-// the next Stream() starts or Close()/ctx-cancel runs teardown.
+// It must NOT call stopNative: we're already inside the alive listener and the
+// device is being torn down by macOS; the leaked handle is released when the
+// next Stream() starts or Close()/ctx-cancel runs teardown.
 //
 //export tacitSpeakerStoppedCallback
 func tacitSpeakerStoppedCallback(h C.uintptr_t) {
@@ -160,6 +160,6 @@ func tacitSpeakerStoppedCallback(h C.uintptr_t) {
 	if !ok {
 		return
 	}
-	log.Printf("System audio capture: SCStream stopped unexpectedly, closing stream channel")
+	log.Printf("System audio capture: tap stopped unexpectedly, closing stream channel")
 	sess.closeChan()
 }

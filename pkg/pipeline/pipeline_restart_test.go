@@ -105,7 +105,7 @@ func TestRunSourceRecoversFromReinitFailure(t *testing.T) {
 }
 
 // TestRunSourceRestartsOnStall covers Defect B: a stream that stops delivering
-// audio without closing its channel (SCStream torn down on sleep with no stop
+// audio without closing its channel (capture torn down on sleep with no stop
 // callback) must be detected by the inactivity watchdog and restarted.
 func TestRunSourceRestartsOnStall(t *testing.T) {
 	withTimings(t, 5*time.Millisecond, 80*time.Millisecond)

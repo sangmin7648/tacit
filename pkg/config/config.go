@@ -38,9 +38,9 @@ type Config struct {
 	// CaptureMic enables microphone capture. When true, speech from the
 	// microphone is transcribed and stored. Defaults to true.
 	CaptureMic bool `yaml:"capture_mic"`
-	// CaptureSpeaker enables system-audio capture via ScreenCaptureKit (macOS 13+).
-	// When true, audio from speakers (Google Meet, YouTube, etc.) is also
-	// transcribed and stored. Requires Screen Recording permission.
+	// CaptureSpeaker enables system-audio capture via a Core Audio process tap
+	// (macOS 14.2+). When true, audio from speakers (Google Meet, YouTube, etc.)
+	// is also transcribed and stored. Requires audio recording permission.
 	CaptureSpeaker bool `yaml:"capture_speaker"`
 	// MaxSegmentDur caps the maximum length of a single speech segment sent to
 	// STT. When a segment grows beyond this, it is force-split and transcribed
