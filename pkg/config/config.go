@@ -316,6 +316,13 @@ func PIDPath() string {
 	return filepath.Join(BaseDir(), "tacit.pid")
 }
 
+// EventLogPath returns the path for the daemon event log
+// (~/.tacit/events.ndjson). The daemon appends to it whoever started it, so a
+// front end can follow a daemon it did not spawn.
+func EventLogPath() string {
+	return filepath.Join(BaseDir(), "events.ndjson")
+}
+
 // WriteSetupOverride writes a full override template with llm_provider,
 // llm_model, skill_agent, capture_mic, and capture_speaker set to the given
 // values (uncommented). Other fields are preserved from the existing override
