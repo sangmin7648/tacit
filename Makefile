@@ -1,4 +1,4 @@
-.PHONY: build clean whisper-lib test e2e-test install rg-download
+.PHONY: build clean whisper-lib test e2e-test install rg-download app
 
 WHISPER_DIR  := third_party/whisper.cpp
 WHISPER_BUILD := $(WHISPER_DIR)/build
@@ -86,6 +86,48 @@ ifeq ($(UNAME_S),Darwin)
 	go test -tags "integration darwin" -v -count=1 -timeout 30s ./pkg/capture/ -run TestSpeaker_Stream_E2E
 endif
 
+# ── Mac app ──────────────────────────────────────────────
+#
+# Tacit.app is the menu-bar front end (cmd/tacit-app) with the CLI bundled
+# beside it, which it runs as `tacit listen`:
+#
+#   Contents/MacOS/Tacit                  menu-bar app (pure Go + Wails)
+#   Contents/Helpers/tacit                the CLI from `make build`
+#   Contents/Frameworks/ten_vad.framework
+#
+# The CLI is in Helpers, not beside the app in MacOS: the default macOS
+# filesystem is case-insensitive, so MacOS/tacit would overwrite MacOS/Tacit.
+# The framework lives in Frameworks, where codesign expects nested code, so the
+# bundled CLI gets an extra rpath to find it there.
+#
+# Signing is ad-hoc by default. macOS keys microphone and Screen Recording
+# grants to an ad-hoc build's exact hash, so every rebuild asks again; sign with
+# a stable identity (e.g. a self-signed "Code Signing" certificate made in
+# Keychain Access) to keep grants across rebuilds:
+#
+#   make app SIGN_IDENTITY="Tacit Dev"
+
+APP := build/Tacit.app
+SIGN_IDENTITY ?= -
+MACOS_MIN := 13.0
+
+# CGO_* are overridden for the app: the whisper link flags exported above are the
+# CLI's, and the app links none of it.
+app: build
+	rm -rf $(APP)
+	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Helpers $(APP)/Contents/Frameworks
+	CGO_CFLAGS="-mmacosx-version-min=$(MACOS_MIN)" CGO_LDFLAGS="-mmacosx-version-min=$(MACOS_MIN)" \
+		go build -o $(APP)/Contents/MacOS/Tacit ./cmd/tacit-app/
+	cp tacit $(APP)/Contents/Helpers/tacit
+	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/Helpers/tacit
+	cp -R ten_vad.framework $(APP)/Contents/Frameworks/
+	cp cmd/tacit-app/Info.plist $(APP)/Contents/Info.plist
+	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)/Contents/Frameworks/ten_vad.framework
+	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)/Contents/Helpers/tacit
+	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)
+	codesign --verify --strict --deep $(APP)
+	@echo "Built $(APP)"
+
 INSTALL_DIR := $(HOME)/.local/bin
 
 install: build
@@ -104,6 +146,7 @@ endif
 
 clean:
 	rm -rf $(WHISPER_BUILD)
+	rm -rf build
 	rm -rf ten_vad.framework
 	rm -f tacit
 	rm -f pkg/search/rg-darwin-arm64 pkg/search/rg-darwin-amd64
