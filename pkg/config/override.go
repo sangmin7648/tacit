@@ -32,6 +32,9 @@ type Field struct {
 	Default any `json:"default"`
 	// Overridden reports whether config-override.yaml sets this key.
 	Overridden bool `json:"overridden"`
+	// Kind is the value's type, for choosing an input: "string", "bool",
+	// "number", "duration" (a string with a unit), or "list" (of strings).
+	Kind string `json:"kind"`
 }
 
 var durationType = reflect.TypeOf(time.Duration(0))
@@ -92,9 +95,24 @@ func Fields(configPath, overridePath string) ([]Field, error) {
 			Value:      displayValue(ev.FieldByIndex(f.Index)),
 			Default:    displayValue(dv.FieldByIndex(f.Index)),
 			Overridden: overridden[key],
+			Kind:       kindOf(f.Type),
 		})
 	}
 	return out, nil
+}
+
+func kindOf(t reflect.Type) string {
+	switch {
+	case t == durationType:
+		return "duration"
+	case t.Kind() == reflect.Bool:
+		return "bool"
+	case t.Kind() == reflect.Float64:
+		return "number"
+	case t.Kind() == reflect.Slice:
+		return "list"
+	}
+	return "string"
 }
 
 // displayValue renders a Config field for a settings screen: durations in
