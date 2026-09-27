@@ -120,7 +120,53 @@ func loadFile(path string, cfg *Config) error {
 		}
 		return err
 	}
-	return yaml.Unmarshal(data, cfg)
+	return decodeConfig(data, cfg)
+}
+
+// decodeConfig decodes a config file's contents into cfg. It is the one way a
+// config file is read, so what loads and what the write API accepts agree.
+func decodeConfig(data []byte, cfg *Config) error {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	if len(doc.Content) == 0 {
+		return nil // empty or comment-only file
+	}
+	if err := normalizeBareDurations(doc.Content[0]); err != nil {
+		return err
+	}
+	return doc.Content[0].Decode(cfg)
+}
+
+// normalizeBareDurations applies normalizeDuration to every duration written
+// as a bare number. The docs say 0 disables several durations, but YAML cannot
+// decode a bare 0 into a time.Duration; any other number is refused with the
+// unit it was probably meant to have, rather than read as nanoseconds.
+func normalizeBareDurations(root *yaml.Node) error {
+	if root.Kind != yaml.MappingNode {
+		return nil // let Decode report the type error
+	}
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key, val := root.Content[i], root.Content[i+1]
+		f, ok := fieldByKey(key.Value)
+		if !ok || f.Type != durationType || val.Kind != yaml.ScalarNode ||
+			(val.Tag != "!!int" && val.Tag != "!!float") {
+			continue
+		}
+		var v any
+		if err := val.Decode(&v); err != nil {
+			return err
+		}
+		norm, err := normalizeDuration(f, v)
+		if err != nil {
+			return fmt.Errorf("line %d: %w", val.Line, err)
+		}
+		if s, ok := norm.(string); ok {
+			val.Tag, val.Value = "!!str", s
+		}
+	}
+	return nil
 }
 
 // LoadWithOverride merges configuration from two YAML files into a single Config.

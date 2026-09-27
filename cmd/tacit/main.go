@@ -32,18 +32,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.LoadWithOverride(config.ConfigPath(), config.OverridePath())
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
 	switch os.Args[1] {
 	case "setup":
+		// setup's writes are refused on a file that does not load; fail
+		// before the wizard asks its questions rather than after.
+		loadConfig()
 		cmdSetup()
 	case "process":
-		cmdProcess(cfg)
+		cmdProcess(loadConfig())
 	case "listen":
-		cmdListen(cfg)
+		cmdListen(loadConfig())
 	case "stop":
 		cmdStop()
 	case "status":
@@ -51,7 +49,7 @@ func main() {
 	case "update":
 		cmdUpdate()
 	case "install-skills":
-		if err := runInstallSkills(cfg.SkillAgent); err != nil {
+		if err := runInstallSkills(loadConfig().SkillAgent); err != nil {
 			log.Fatalf("Failed to install skills: %v", err)
 		}
 		fmt.Println("Skills updated.")
@@ -68,7 +66,7 @@ func main() {
 		}
 		switch os.Args[2] {
 		case "view":
-			cmdConfigView(cfg)
+			cmdConfigView(loadConfig())
 		case "edit":
 			cmdConfigEdit()
 		case "set":
@@ -85,6 +83,17 @@ func main() {
 		printUsage()
 		os.Exit(1)
 	}
+}
+
+// loadConfig loads the merged config, exiting if it cannot be loaded. Only
+// commands that use the config call it, so a broken override file never blocks
+// 'tacit config edit', the way to fix it.
+func loadConfig() *config.Config {
+	cfg, err := config.LoadWithOverride(config.ConfigPath(), config.OverridePath())
+	if err != nil {
+		log.Fatalf("Failed to load config: %v\nFix it with 'tacit config edit'.", err)
+	}
+	return cfg
 }
 
 func printUsage() {
