@@ -174,6 +174,68 @@ func TestLoadWithOverride_OverrideWins(t *testing.T) {
 	}
 }
 
+// README documents 0 as disabling several durations; YAML reads a bare 0 as
+// an int, which cannot decode into a time.Duration without help.
+func TestLoadWithOverride_BareZeroDuration(t *testing.T) {
+	dir := t.TempDir()
+	overridePath := filepath.Join(dir, "config-override.yaml")
+	data := "max_segment_duration: 0\nmax_session_duration: 0.0\ndedup_window: 0\nmic_max_segment_duration: 0s\nenergy_threshold: 150\n"
+	if err := os.WriteFile(overridePath, []byte(data), 0644); err != nil {
+		t.Fatalf("failed to write override: %v", err)
+	}
+
+	cfg, err := LoadWithOverride("", overridePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+	if cfg.MaxSegmentDur != 0 || cfg.MaxSessionDur != 0 || cfg.DedupWindow != 0 || cfg.MicMaxSegmentDur != 0 {
+		t.Errorf("durations: got segment=%v session=%v dedup=%v mic_segment=%v, want all 0",
+			cfg.MaxSegmentDur, cfg.MaxSessionDur, cfg.DedupWindow, cfg.MicMaxSegmentDur)
+	}
+	if cfg.EnergyThreshold != 150 {
+		t.Errorf("EnergyThreshold: got %v, want 150", cfg.EnergyThreshold)
+	}
+}
+
+// Any other bare number would mean nanoseconds, which is never what was meant.
+func TestLoadWithOverride_BareNonZeroDurationNeedsUnit(t *testing.T) {
+	for _, tc := range []struct{ line, want string }{
+		{"max_segment_duration: 30", `max_segment_duration needs a unit, e.g. "30s"`},
+		{"silence_duration: 1.5", `silence_duration needs a unit, e.g. "1.5s"`},
+	} {
+		dir := t.TempDir()
+		overridePath := filepath.Join(dir, "config-override.yaml")
+		if err := os.WriteFile(overridePath, []byte("llm_model: x\n"+tc.line+"\n"), 0644); err != nil {
+			t.Fatalf("failed to write override: %v", err)
+		}
+
+		_, err := LoadWithOverride("", overridePath)
+		if err == nil {
+			t.Errorf("%q: expected error, got nil", tc.line)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "line 2") {
+			t.Errorf("%q: error %q should contain %q and the line number", tc.line, err, tc.want)
+		}
+	}
+}
+
+func TestLoadWithOverride_CommentOnlyOverride(t *testing.T) {
+	dir := t.TempDir()
+	overridePath := filepath.Join(dir, "config-override.yaml")
+	if err := WriteOverrideTemplate(overridePath, DefaultConfig()); err != nil {
+		t.Fatalf("WriteOverrideTemplate: %v", err)
+	}
+
+	cfg, err := LoadWithOverride("", overridePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+	if cfg.MaxSegmentDur != DefaultConfig().MaxSegmentDur {
+		t.Errorf("MaxSegmentDur: got %v, want default", cfg.MaxSegmentDur)
+	}
+}
+
 func TestLoadWithOverride_PartialOverride(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")

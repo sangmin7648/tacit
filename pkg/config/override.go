@@ -291,7 +291,7 @@ func editOverride(path, key, newLine string, set bool) error {
 
 	// Verify before writing: the file must still load into Config, and no key
 	// other than this one may have changed.
-	if err := yaml.Unmarshal(after, DefaultConfig()); err != nil {
+	if err := decodeConfig(after, DefaultConfig()); err != nil {
 		return fmt.Errorf("%s: %w", key, err)
 	}
 	afterMap := map[string]any{}

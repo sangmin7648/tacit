@@ -221,6 +221,22 @@ func TestSetOverride_RefusesInvalidExistingFile(t *testing.T) {
 	}
 }
 
+// A hand-written bare 0 loads, so it must not make the file refuse other edits.
+func TestSetOverride_AcceptsExistingBareZeroDuration(t *testing.T) {
+	path := overridePathIn(t)
+	writeOverride(t, path, "dedup_window: 0\n")
+
+	if err := SetOverride(path, "language", "ko"); err != nil {
+		t.Fatalf("SetOverride: %v", err)
+	}
+	if got, want := readOverride(t, path), "dedup_window: 0\nlanguage: ko\n"; got != want {
+		t.Errorf("file = %q, want %q", got, want)
+	}
+	if cfg := loadOverride(t, path); cfg.DedupWindow != 0 || cfg.Language != "ko" {
+		t.Errorf("DedupWindow = %v, Language = %q; want 0, ko", cfg.DedupWindow, cfg.Language)
+	}
+}
+
 func TestClearOverride_CommentsOutWithDefault(t *testing.T) {
 	path := overridePathIn(t)
 	writeOverride(t, path, "language: ko\nsilence_duration: 8s\ntranscript_denylist:\n  - a\n")
