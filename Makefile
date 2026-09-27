@@ -73,8 +73,11 @@ ifeq ($(UNAME_S),Darwin)
 	install_name_tool -rpath "$$(otool -l tacit | grep -A2 LC_RPATH | grep path | awk '{print $$2}')" @executable_path tacit
 endif
 
+# PKGS and ARGS narrow a run while keeping the CGo flags above, which a bare
+# `go test` of a whisper-linked package lacks:
+#   make test PKGS=./pkg/pipeline/ ARGS='-run TestRunSource -count=1'
 test: whisper-lib
-	go test ./...
+	go test $(or $(PKGS),./...) $(ARGS)
 
 whisper-lib: $(WHISPER_BUILD)/src/libwhisper.a
 
