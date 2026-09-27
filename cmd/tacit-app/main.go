@@ -138,6 +138,7 @@ func (t *trayApp) watchPID(ctx context.Context) {
 		changed := running != t.st.running || pid != t.st.pid
 		if changed {
 			t.st.running, t.st.pid = running, pid
+			t.st.speakerDenied = false
 			if !running {
 				t.st.activity = ""
 			}
@@ -166,6 +167,13 @@ func (t *trayApp) draw() {
 	menu.Add(s.statusLine()).SetEnabled(false)
 	if s.lastErr != "" {
 		menu.Add(s.lastErr).SetEnabled(false)
+	}
+	if s.running && s.speakerDenied {
+		// A grant reaches the daemon only when it restarts, so the fix is
+		// granting in Settings, then Stop and Start.
+		menu.Add("System audio off: Screen Recording not granted…").OnClick(func(*application.Context) {
+			t.onboarding.OpenPrivacySettings("ScreenCapture")
+		})
 	}
 	if s.running {
 		menu.Add("Stop Listening").OnClick(func(*application.Context) { t.stop() })

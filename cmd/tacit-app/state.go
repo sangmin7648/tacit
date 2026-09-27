@@ -27,6 +27,9 @@ type state struct {
 	recent []events.Event
 	// lastErr describes why a daemon this app started exited on its own.
 	lastErr string
+	// speakerDenied says the running daemon gave up on system audio because
+	// Screen Recording was refused. It clears when the daemon changes.
+	speakerDenied bool
 }
 
 // observe folds one event into the state.
@@ -45,6 +48,10 @@ func (s *state) observe(e events.Event) {
 		// The segment is done with; classification may still follow, but a
 		// transcribed segment waits in a queue until then, so show idle.
 		s.activity = events.KindListening
+	case events.KindError:
+		if e.Reason == events.ReasonPermissionDenied && e.Source == "speaker" {
+			s.speakerDenied = true
+		}
 	}
 }
 

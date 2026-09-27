@@ -1,6 +1,15 @@
 package capture
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrPermissionDenied is returned, wrapped, by Speaker.Stream when macOS
+// refuses system audio capture because Screen Recording is not granted.
+// Retrying does not help: a grant reaches a process only once it restarts,
+// and each attempt can put the permission dialog up again.
+var ErrPermissionDenied = errors.New("Screen Recording permission not granted")
 
 // AudioSource provides a stream of 16kHz mono int16 PCM audio samples.
 // Both Mic and Speaker implement this interface.

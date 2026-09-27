@@ -111,8 +111,24 @@ struct SpeakerCapture {
 // speaker_create
 // ---------------------------------------------------------------------------
 
-SpeakerCapture* speaker_create(uintptr_t goHandle, char** errMsg) {
+// isDeclined reports whether e is ScreenCaptureKit refusing capture because
+// Screen Recording is not granted.
+static BOOL isDeclined(NSError* e) API_AVAILABLE(macos(13.0)) {
+    return [e.domain isEqualToString:SCStreamErrorDomain] &&
+           e.code == SCStreamErrorUserDeclined;
+}
+
+// errorString renders e with its domain and code, which say more than the
+// description alone when a failure needs diagnosing from a log.
+static char* errorString(NSError* e) {
+    NSString* s = [NSString stringWithFormat:@"%@ (%@ %ld)",
+                   e.localizedDescription, e.domain, (long)e.code];
+    return strdup(s.UTF8String);
+}
+
+SpeakerCapture* speaker_create(uintptr_t goHandle, char** errMsg, int* denied) {
     *errMsg = NULL;
+    *denied = 0;
 
     if (@available(macOS 13.0, *)) {
         // Use __block so we can assign inside the completion handler.
@@ -138,8 +154,8 @@ SpeakerCapture* speaker_create(uintptr_t goHandle, char** errMsg) {
         }
 
         if (contentError != nil) {
-            const char* desc = [[contentError localizedDescription] UTF8String];
-            *errMsg = strdup(desc ? desc : "SCShareableContent error");
+            *denied = isDeclined(contentError);
+            *errMsg = errorString(contentError);
             return NULL;
         }
 
@@ -197,8 +213,8 @@ SpeakerCapture* speaker_create(uintptr_t goHandle, char** errMsg) {
             startSem, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
 
         if (startError != nil) {
-            const char* desc = [[startError localizedDescription] UTF8String];
-            *errMsg = strdup(desc ? desc : "failed to start SCStream");
+            *denied = isDeclined(startError);
+            *errMsg = errorString(startError);
             return NULL;
         }
 
