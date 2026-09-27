@@ -12,42 +12,52 @@ import (
 	"github.com/sangmin7648/tacit/pkg/setup"
 )
 
-// The window reaches Go by method name, as plain strings in backend.js. A
-// misspelt name fails only inside the running app, so check every one here —
-// and the progress event's name, which is matched the same way.
-func TestBackendJS_MatchesService(t *testing.T) {
-	src, err := os.ReadFile("frontend/src/backend.js")
+// The windows reach Go by method name, as plain strings in the frontend's
+// backend files. A misspelt name fails only inside the running app, so check
+// every one — both ways — and the event names, which are matched the same way.
+func checkBindings(t *testing.T, file, fqnPrefix string, svcType reflect.Type) string {
+	t.Helper()
+	src, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
 	js := string(src)
+	if !strings.Contains(js, "const svc = '"+fqnPrefix+"'") {
+		t.Errorf("%s does not address the service as %s", file, fqnPrefix)
+	}
 
 	calls := regexp.MustCompile(`svc \+ '(\w+)'`).FindAllStringSubmatch(js, -1)
 	if len(calls) == 0 {
-		t.Fatal("found no service calls in backend.js; has the calling convention changed?")
+		t.Fatalf("found no service calls in %s; has the calling convention changed?", file)
 	}
-	svcType := reflect.TypeFor[*OnboardingService]()
 	called := map[string]bool{}
 	for _, m := range calls {
-		name := m[1]
-		called[name] = true
-		if _, ok := svcType.MethodByName(name); !ok {
-			t.Errorf("backend.js calls OnboardingService.%s, which does not exist", name)
+		called[m[1]] = true
+		if _, ok := svcType.MethodByName(m[1]); !ok {
+			t.Errorf("%s calls %s%s, which does not exist", file, fqnPrefix, m[1])
 		}
 	}
-	if !strings.Contains(js, `const svc = 'main.OnboardingService.'`) {
-		t.Error("backend.js does not address the service as main.OnboardingService")
-	}
-
-	// And the other way: an exported method nothing calls is dead weight.
+	// And the other way: an exported method is bound to the window, so one
+	// nothing calls is dead weight.
 	for i := 0; i < svcType.NumMethod(); i++ {
 		if name := svcType.Method(i).Name; !called[name] {
-			t.Errorf("OnboardingService.%s is exported (so bound to the window) but backend.js never calls it", name)
+			t.Errorf("%s%s is bound to the window but %s never calls it", fqnPrefix, name, file)
 		}
 	}
+	return js
+}
 
+func TestBackendJS_MatchesService(t *testing.T) {
+	js := checkBindings(t, "frontend/src/backend.js", "main.OnboardingService.", reflect.TypeFor[*OnboardingService]())
 	if !strings.Contains(js, `MODEL_PROGRESS = '`+modelProgressEvent+`'`) {
 		t.Errorf("backend.js does not subscribe to %q", modelProgressEvent)
+	}
+}
+
+func TestKnowledgeJS_MatchesService(t *testing.T) {
+	js := checkBindings(t, "frontend/src/knowledge.js", "main.KnowledgeService.", reflect.TypeFor[*KnowledgeService]())
+	if !strings.Contains(js, `STORED = '`+storedEvent+`'`) {
+		t.Errorf("knowledge.js does not subscribe to %q", storedEvent)
 	}
 }
 
