@@ -10,6 +10,14 @@ WHISPER_LIBS := \
 	$(WHISPER_BUILD)/ggml/src/libggml-base.a \
 	$(WHISPER_BUILD)/ggml/src/libggml-cpu.a
 
+# The oldest macOS the binaries run on. System audio capture (ScreenCaptureKit)
+# needs 13. Without a target, everything is built for the build machine's own
+# macOS, and the result refuses to start on anything older.
+#
+# whisper.cpp's build directory is cached: after changing this, run
+# `rm -rf $(WHISPER_BUILD)` once so its libraries are rebuilt for the new target.
+MACOS_MIN := 13.0
+
 # Platform-specific libraries
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -20,13 +28,15 @@ ifeq ($(UNAME_S),Darwin)
 		-framework Foundation \
 		-framework Metal \
 		-framework MetalKit
+	MIN_FLAG := -mmacosx-version-min=$(MACOS_MIN)
+	WHISPER_CMAKE_FLAGS := -DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOS_MIN)
 else
 	PLATFORM_LDFLAGS := -lstdc++ -lm -lpthread
 endif
 
 # CGo flags (passed via environment)
-export CGO_CFLAGS  := -I$(abspath $(WHISPER_DIR)/include) -I$(abspath $(WHISPER_DIR)/ggml/include) -O2
-export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFORM_LDFLAGS)
+export CGO_CFLAGS  := -I$(abspath $(WHISPER_DIR)/include) -I$(abspath $(WHISPER_DIR)/ggml/include) -O2 $(MIN_FLAG)
+export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFORM_LDFLAGS) $(MIN_FLAG)
 
 # ── Targets ──────────────────────────────────────────────
 
@@ -76,7 +86,8 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 		-DWHISPER_BUILD_EXAMPLES=OFF \
 		-DWHISPER_BUILD_TESTS=OFF \
 		-DWHISPER_BUILD_SERVER=OFF \
-		-DCMAKE_BUILD_TYPE=Release
+		-DCMAKE_BUILD_TYPE=Release \
+		$(WHISPER_CMAKE_FLAGS)
 	cmake --build $(WHISPER_BUILD) --config Release -j
 
 e2e-test: build
@@ -119,7 +130,6 @@ endif
 APP := build/Tacit.app
 FRONTEND := cmd/tacit-app/frontend
 SIGN_IDENTITY ?= -
-MACOS_MIN := 13.0
 
 # CGO_* are overridden for the app: the whisper link flags exported above are the
 # CLI's, and the app links none of it.
@@ -127,7 +137,7 @@ app: build
 	cd $(FRONTEND) && npm ci --no-audit --no-fund && npm run build
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Helpers $(APP)/Contents/Frameworks
-	CGO_CFLAGS="-mmacosx-version-min=$(MACOS_MIN)" CGO_LDFLAGS="-mmacosx-version-min=$(MACOS_MIN)" \
+	CGO_CFLAGS="$(MIN_FLAG)" CGO_LDFLAGS="$(MIN_FLAG)" \
 		go build -o $(APP)/Contents/MacOS/Tacit ./cmd/tacit-app/
 	cp tacit $(APP)/Contents/Helpers/tacit
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/Helpers/tacit
