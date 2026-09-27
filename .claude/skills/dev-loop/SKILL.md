@@ -48,6 +48,7 @@ Run the cheapest gate that can disprove the change, then climb. Never `go build 
 |---|---|---|---|
 | `go test ./pkg/config/ ./pkg/daemon/ ./pkg/process/ ./pkg/storage/` | pure-Go logic (no CGo, no whisper libs) | ~2s | inner loop for changes in those packages |
 | `go build ./skills/` | a CGo-free package still compiles | ~1s | changes isolated to it |
+| `make test PKGS=./pkg/pipeline/ ARGS='-run TestX -count=1'` | one package or test, CGo included (whisper flags come from the Makefile) | seconds once built | inner loop for CGo packages (`pipeline`, `capture`, `stt`, `vad`, `cmd/...`) |
 | `make build` | the real compile: CGo, whisper.cpp, ten-vad bundling | incremental | **any Go change** |
 | `make test` | `go test ./...`, including CGo packages | fast once built | **any Go change** |
 | `make e2e-test` | build + real audio through the pipeline + `-tags integration` classifier test (spends Claude CLI tokens) + darwin speaker test | minutes | any change that can reach the capture -> VAD -> STT -> process -> store runtime |
@@ -75,7 +76,7 @@ Triage before you edit. An environment red **does not consume an iteration**, an
 |---|---|---|
 | `does not appear to contain CMakeLists.txt` | submodule not initialized in this worktree | `git submodule update --init --recursive` |
 | `pattern rg-darwin-amd64: no matching files found` / `[setup failed]` | `pkg/search` embed inputs missing | `make rg-download` |
-| `whisper.h: No such file or directory` | bare `go build`/`go test` outside `make` | use `make build` / `make test` |
+| `whisper.h: No such file or directory` | bare `go build`/`go test` outside `make` | use `make build` / `make test` (`PKGS=`/`ARGS=` to narrow) |
 | `Error: cmake is required` | toolchain missing | `brew install cmake` |
 | `claude CLI failed` / `executable file not found` | Claude CLI missing or unauthenticated | environment — report, don't change code |
 | long stall on first `make e2e-test` | whisper model downloading into `~/.tacit/models` (GB-scale) | wait once; it is cached |
