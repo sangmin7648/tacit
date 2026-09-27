@@ -1,0 +1,192 @@
+package setup
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/sangmin7648/tacit/pkg/config"
+)
+
+// isolate points HOME at a temp dir, so config.BaseDir() and the skills
+// directory both land there instead of in the real ~/.tacit and ~/.claude.
+func isolate(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	return home
+}
+
+func TestDefaults_AreValid(t *testing.T) {
+	if err := Defaults().Validate(); err != nil {
+		t.Fatalf("Defaults() fails its own validation: %v", err)
+	}
+	// The wizard pre-selects the first option of each list; that has to be the
+	// default it would otherwise apply.
+	d := Defaults()
+	if Providers[0] != d.LLMProvider || Agents[0] != d.SkillAgent || Languages[0].Code != d.Language {
+		t.Errorf("first options %q/%q/%q disagree with defaults %+v", Providers[0], Agents[0], Languages[0].Code, d)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	cases := map[string]func(*Choices){
+		"unknown provider": func(c *Choices) { c.LLMProvider = "openai" },
+		"empty model":      func(c *Choices) { c.LLMModel = "  " },
+		"bad claude model": func(c *Choices) { c.LLMProvider, c.LLMModel = "claude", "qwen3.5" },
+		"unknown agent":    func(c *Choices) { c.SkillAgent = "cursor" },
+		"no audio source":  func(c *Choices) { c.CaptureMic, c.CaptureSpeaker = false, false },
+		"empty language":   func(c *Choices) { c.Language = "" },
+	}
+	for name, mutate := range cases {
+		c := Defaults()
+		mutate(&c)
+		if err := c.Validate(); err == nil {
+			t.Errorf("%s: Validate accepted %+v", name, c)
+		}
+	}
+
+	ok := Defaults()
+	ok.LLMProvider, ok.LLMModel = "claude", "opus"
+	ok.CaptureMic = false
+	if err := ok.Validate(); err != nil {
+		t.Errorf("Validate rejected a valid choice set: %v", err)
+	}
+}
+
+func TestApply_RefusesInvalidWithoutWriting(t *testing.T) {
+	home := isolate(t)
+	c := Defaults()
+	c.CaptureMic, c.CaptureSpeaker = false, false
+
+	if _, err := Apply(c); err == nil {
+		t.Fatal("Apply accepted choices with no audio source")
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("Apply wrote %d entries into HOME on a refused run", len(entries))
+	}
+}
+
+func TestApply_WritesEverything(t *testing.T) {
+	home := isolate(t)
+	c := Choices{
+		LLMProvider: "claude", LLMModel: "sonnet", SkillAgent: "claude",
+		CaptureMic: true, CaptureSpeaker: false, Language: "ko", Experimental: true,
+	}
+
+	res, err := Apply(c)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	cfg, err := config.LoadWithOverride(res.ReferencePath, res.OverridePath)
+	if err != nil {
+		t.Fatalf("loading what Apply wrote: %v", err)
+	}
+	if cfg.LLMProvider != "claude" || cfg.LLMModel != "sonnet" || cfg.Language != "ko" ||
+		!cfg.Experimental || !cfg.CaptureMic || cfg.CaptureSpeaker {
+		t.Errorf("loaded config does not reflect the choices: %+v", cfg)
+	}
+
+	ref, err := os.ReadFile(res.ReferencePath)
+	if err != nil || !strings.HasPrefix(string(ref), "# tacit reference config") {
+		t.Errorf("reference config not regenerated (err %v)", err)
+	}
+
+	if len(res.InstalledSkills) == 0 {
+		t.Fatal("no skills reported installed")
+	}
+	skillsDir := filepath.Join(home, ".claude", "skills")
+	for _, p := range res.InstalledSkills {
+		if !strings.HasPrefix(p, skillsDir) {
+			t.Errorf("skill installed outside %s: %s", skillsDir, p)
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("reported skill %s missing: %v", p, err)
+		}
+	}
+	if res.BackupPath != "" {
+		t.Errorf("BackupPath = %q on a fresh install", res.BackupPath)
+	}
+}
+
+// A user from before config-override.yaml kept their settings in config.yaml,
+// which setup regenerates. It has to be copied aside first.
+func TestApply_BacksUpHandEditedLegacyReference(t *testing.T) {
+	isolate(t)
+	ref := config.ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const legacy = "whisper_model: small\nlanguage: ko\n"
+	if err := os.WriteFile(ref, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Apply(Defaults())
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if res.BackupPath != ref+".bak" {
+		t.Fatalf("BackupPath = %q, want %q", res.BackupPath, ref+".bak")
+	}
+	got, err := os.ReadFile(res.BackupPath)
+	if err != nil || string(got) != legacy {
+		t.Errorf("backup = %q (err %v), want the hand-edited file", got, err)
+	}
+}
+
+// Once an override file exists the user is past the migration, and config.yaml
+// is tacit's to regenerate — even if they scribbled in it.
+func TestApply_NoBackupOnceOverridesExist(t *testing.T) {
+	isolate(t)
+	ref := config.ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(ref, []byte("whisper_model: small\n"), 0o644)
+	os.WriteFile(config.OverridePath(), []byte("# mine\n"), 0o644)
+
+	res, err := Apply(Defaults())
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if res.BackupPath != "" {
+		t.Errorf("BackupPath = %q, want none", res.BackupPath)
+	}
+	if _, err := os.Stat(ref + ".bak"); !os.IsNotExist(err) {
+		t.Error("a .bak was written")
+	}
+}
+
+// Re-running setup keeps what the user wrote into the override file that setup
+// never asks about.
+func TestApply_RerunKeepsUserLines(t *testing.T) {
+	isolate(t)
+	if err := os.MkdirAll(config.BaseDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const mine = "# pinned for the office mic\nmic_silence_duration: 12s\nllm_provider: claude\nllm_model: opus\n"
+	if err := os.WriteFile(config.OverridePath(), []byte(mine), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Apply(Defaults()); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	got, _ := os.ReadFile(config.OverridePath())
+	for _, want := range []string{"# pinned for the office mic\n", "mic_silence_duration: 12s\n"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("override lost %q:\n%s", want, got)
+		}
+	}
+	cfg, err := config.LoadWithOverride("", config.OverridePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LLMProvider != "ollama" || cfg.LLMModel != config.DefaultConfig().LLMModel {
+		t.Errorf("accepting defaults did not clear the provider pin: %s/%s", cfg.LLMProvider, cfg.LLMModel)
+	}
+}

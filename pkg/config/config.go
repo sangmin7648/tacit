@@ -329,106 +329,48 @@ func EventLogPath() string {
 	return filepath.Join(BaseDir(), "events.ndjson")
 }
 
-// WriteSetupOverride writes a full override template with llm_provider,
-// llm_model, skill_agent, capture_mic, and capture_speaker set to the given
-// values (uncommented). Other fields are preserved from the existing override
-// file if present; otherwise they remain commented out with their default values.
+// WriteSetupOverride records the setup wizard's answers in the override file
+// at path, creating it from the template if it does not exist.
+//
+// A wizard field is set only when the answer differs from the current default
+// and is cleared otherwise — whatever the file held before. A user upgrading
+// from an older tacit (whose setup pinned these fields even when the default
+// was accepted) therefore has the stale pin removed on re-running setup, so
+// later changes to DefaultConfig() reach them.
+//
+// Every other line — settings setup never asks about, and the user's own
+// comments — is left exactly as it was: the answers are applied one key at a
+// time through SetOverride and ClearOverride.
 func WriteSetupOverride(path string, provider, model, agent, language string, captureMic, captureSpeaker, experimental bool) error {
-	// Load existing override values to preserve non-LLM user settings.
-	existing := map[string]interface{}{}
-	if data, err := os.ReadFile(path); err == nil {
-		_ = yaml.Unmarshal(data, &existing)
-	}
-
-	defaults := DefaultConfig()
-
-	header := "# tacit user overrides — edit this file to customize tacit.\n" +
-		"# Only fields you uncomment and set here will override the defaults.\n" +
-		"# Run 'tacit config view' to see the current merged configuration.\n\n"
-
-	type field struct {
-		key    string
-		value  string
-		active bool
-	}
-
-	// setupChoice marks a field active only when the value picked in the setup
-	// wizard differs from the current code default. This is intentionally based
-	// on the fresh wizard answer alone, ignoring whatever the override file had
-	// before: a user upgrading from an older tacit (whose setup unconditionally
-	// pinned these 7 fields, even when they just accepted the default) should
-	// have that stale pin cleared as soon as they re-run setup and accept the
-	// new default, so future DefaultConfig() changes take effect automatically.
-	setupChoice := func(key, chosen, def string) field {
-		return field{key, chosen, chosen != def}
-	}
-
-	// preserved marks a field active only when the override file already had it
-	// explicitly set, in which case that existing value is kept verbatim rather
-	// than being silently replaced by the current code default.
-	preserved := func(key, def string) field {
-		if v, ok := existing[key]; ok {
-			return field{key, fmt.Sprintf("%v", v), true}
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := WriteOverrideTemplate(path, DefaultConfig()); err != nil {
+			return err
 		}
-		return field{key, def, false}
 	}
 
-	// preservedList is preserved for list-valued fields. %v would render a slice
-	// as "[a b]", which YAML reads back as a single-element list, so the entries
-	// are re-emitted as a quoted flow sequence instead.
-	preservedList := func(key string) field {
-		raw, ok := existing[key].([]interface{})
-		if !ok || len(raw) == 0 {
-			return field{key, "[]", false}
-		}
-		quoted := make([]string, 0, len(raw))
-		for _, v := range raw {
-			quoted = append(quoted, fmt.Sprintf("%q", fmt.Sprintf("%v", v)))
-		}
-		return field{key, "[" + strings.Join(quoted, ", ") + "]", true}
+	d := DefaultConfig()
+	answers := []struct {
+		key          string
+		chosen, dflt any
+	}{
+		{"language", language, d.Language},
+		{"experimental", experimental, d.Experimental},
+		{"llm_provider", provider, d.LLMProvider},
+		{"llm_model", model, d.LLMModel},
+		{"skill_agent", agent, d.SkillAgent},
+		{"capture_mic", captureMic, d.CaptureMic},
+		{"capture_speaker", captureSpeaker, d.CaptureSpeaker},
 	}
-
-	fields := []field{
-		preserved("whisper_model", defaults.WhisperModel),
-		setupChoice("language", language, defaults.Language),
-		setupChoice("experimental", fmt.Sprintf("%v", experimental), fmt.Sprintf("%v", defaults.Experimental)),
-		func() field {
-			if v, ok := existing["initial_prompt"]; ok {
-				return field{"initial_prompt", fmt.Sprintf("%q", fmt.Sprintf("%v", v)), true}
-			}
-			return field{"initial_prompt", "\"\"", false}
-		}(),
-		preserved("min_speech_duration", formatDuration(defaults.MinSpeechDur)),
-		preserved("silence_duration", formatDuration(defaults.SilenceDuration)),
-		preserved("speech_threshold", fmt.Sprintf("%.2f", defaults.SpeechThreshold)),
-		preserved("energy_threshold", fmt.Sprintf("%.0f", defaults.EnergyThreshold)),
-		setupChoice("llm_provider", provider, defaults.LLMProvider),
-		setupChoice("llm_model", model, defaults.LLMModel),
-		setupChoice("skill_agent", agent, defaults.SkillAgent),
-		setupChoice("capture_mic", fmt.Sprintf("%v", captureMic), fmt.Sprintf("%v", defaults.CaptureMic)),
-		setupChoice("capture_speaker", fmt.Sprintf("%v", captureSpeaker), fmt.Sprintf("%v", defaults.CaptureSpeaker)),
-		preserved("max_segment_duration", formatDuration(defaults.MaxSegmentDur)),
-		preserved("max_session_duration", formatDuration(defaults.MaxSessionDur)),
-		preservedList("transcript_denylist"),
-		preserved("dedup_window", formatDuration(defaults.DedupWindow)),
-		preserved("min_char_rate", fmt.Sprintf("%.2f", defaults.MinCharRate)),
-		preserved("mic_min_speech_duration", formatDuration(defaults.MicMinSpeechDur)),
-		preserved("mic_silence_duration", formatDuration(defaults.MicSilenceDuration)),
-		preserved("mic_max_segment_duration", formatDuration(defaults.MicMaxSegmentDur)),
-		preserved("speaker_min_speech_duration", formatDuration(defaults.SpeakerMinSpeechDur)),
-		preserved("speaker_silence_duration", formatDuration(defaults.SpeakerSilenceDuration)),
-		preserved("speaker_max_segment_duration", formatDuration(defaults.SpeakerMaxSegmentDur)),
-	}
-
-	var sb strings.Builder
-	sb.WriteString(header)
-	for _, f := range fields {
-		if f.active {
-			sb.WriteString(f.key + ": " + f.value + "\n")
+	for _, a := range answers {
+		var err error
+		if a.chosen == a.dflt {
+			err = ClearOverride(path, a.key)
 		} else {
-			sb.WriteString("# " + f.key + ": " + f.value + "\n")
+			err = SetOverride(path, a.key, a.chosen)
+		}
+		if err != nil {
+			return err
 		}
 	}
-
-	return os.WriteFile(path, []byte(sb.String()), 0644)
+	return nil
 }
