@@ -17,6 +17,7 @@ import (
 	"github.com/sangmin7648/tacit/pkg/capture"
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
+	"github.com/sangmin7648/tacit/pkg/events"
 	"github.com/sangmin7648/tacit/pkg/pipeline"
 	"github.com/sangmin7648/tacit/pkg/search"
 	"github.com/sangmin7648/tacit/pkg/storage"
@@ -409,6 +410,25 @@ func selectMultiple(options []string, defaultSelected []bool) []bool {
 }
 
 // cmdProcess handles the "process" subcommand: audio file → knowledge entry.
+// openEventLog attaches the daemon event log to p, so a front end can follow
+// this run. A failure here is reported and swallowed: the event log is an
+// observation channel, and losing it must never cost the user a transcript.
+// The returned closer is nil when the log could not be opened.
+func openEventLog(p *pipeline.Pipeline) func() {
+	w, err := events.NewWriter(config.EventLogPath(), 0)
+	if err != nil {
+		log.Printf("Warning: event log unavailable: %v", err)
+		return nil
+	}
+	p.SetObserver(w)
+	return func() {
+		if err := w.Err(); err != nil {
+			log.Printf("Warning: event log write failed: %v", err)
+		}
+		w.Close()
+	}
+}
+
 func cmdProcess(cfg *config.Config) {
 	if len(os.Args) < 3 {
 		fmt.Fprintf(os.Stderr, "Usage: tacit process <audio-file>\n")
@@ -428,8 +448,15 @@ func cmdProcess(cfg *config.Config) {
 		log.Fatalf("Failed to initialize pipeline: %v", err)
 	}
 
+	closeEvents := openEventLog(p)
+
 	filePath, err := p.ProcessFile(ctx, audioPath)
 	p.Close() // Close before printing to avoid ggml cleanup race
+	// Closed explicitly rather than deferred: every exit below is an os.Exit or
+	// log.Fatalf, and neither runs deferred functions.
+	if closeEvents != nil {
+		closeEvents()
+	}
 
 	if err != nil {
 		if errors.Is(err, pipeline.ErrSkipped) {
@@ -464,6 +491,10 @@ func cmdListen(cfg *config.Config) {
 		log.Fatalf("Failed to initialize pipeline: %v", err)
 	}
 	defer p.Close()
+
+	if closeEvents := openEventLog(p); closeEvents != nil {
+		defer closeEvents()
+	}
 
 	// Build audio sources.
 	var sources []capture.AudioSource
