@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>Tacit</string>
+	<key>CFBundleDisplayName</key>
+	<string>Tacit</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.sangmin7648.tacit</string>
+	<key>CFBundleExecutable</key>
+	<string>Tacit</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<!-- Menu bar only: no Dock icon. -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<!-- Shown in the microphone permission prompt. The bundled CLI that does
+	     the capturing (Contents/Helpers/tacit) runs as this app's child, so
+	     macOS attributes its microphone and Screen Recording access to Tacit
+	     rather than to a terminal. Screen Recording has no usage-description
+	     key. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Tacit transcribes what you say on this Mac. Audio is processed on-device and never leaves it.</string>
+</dict>
+</plist>
