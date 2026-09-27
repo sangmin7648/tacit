@@ -91,7 +91,10 @@ endif
 # Tacit.app is the menu-bar front end (cmd/tacit-app) with the CLI bundled
 # beside it, which it runs as `tacit listen`:
 #
-#   Contents/MacOS/Tacit                  menu-bar app (pure Go + Wails)
+#   Contents/MacOS/Tacit                  menu-bar app (pure Go + Wails), with
+#                                         the onboarding window's frontend
+#                                         (cmd/tacit-app/frontend, Svelte)
+#                                         embedded; building it needs Node
 #   Contents/Helpers/tacit                the CLI from `make build`
 #   Contents/Frameworks/ten_vad.framework
 #
@@ -106,14 +109,22 @@ endif
 # Keychain Access) to keep grants across rebuilds:
 #
 #   make app SIGN_IDENTITY="Tacit Dev"
+#
+# Symptom of an ad-hoc rebuild: System Settings shows Tacit allowed for Screen
+# Recording, yet the app (and a daemon it starts) is refused — the grant belongs
+# to an earlier build. Reset it and grant again:
+#
+#   tccutil reset ScreenCapture io.github.sangmin7648.tacit
 
 APP := build/Tacit.app
+FRONTEND := cmd/tacit-app/frontend
 SIGN_IDENTITY ?= -
 MACOS_MIN := 13.0
 
 # CGO_* are overridden for the app: the whisper link flags exported above are the
 # CLI's, and the app links none of it.
 app: build
+	cd $(FRONTEND) && npm ci --no-audit --no-fund && npm run build
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Helpers $(APP)/Contents/Frameworks
 	CGO_CFLAGS="-mmacosx-version-min=$(MACOS_MIN)" CGO_LDFLAGS="-mmacosx-version-min=$(MACOS_MIN)" \

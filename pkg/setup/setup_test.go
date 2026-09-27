@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,5 +189,64 @@ func TestApply_RerunKeepsUserLines(t *testing.T) {
 	}
 	if cfg.LLMProvider != "ollama" || cfg.LLMModel != config.DefaultConfig().LLMModel {
 		t.Errorf("accepting defaults did not clear the provider pin: %s/%s", cfg.LLMProvider, cfg.LLMModel)
+	}
+}
+
+// Setup reopened on a configured machine has to start from the user's current
+// answers, and saving them unchanged has to change nothing.
+func TestFromConfig_RoundTrips(t *testing.T) {
+	isolate(t)
+	want := Choices{
+		LLMProvider: "claude", LLMModel: "opus", SkillAgent: "claude",
+		CaptureMic: false, CaptureSpeaker: true, Language: "ko", Experimental: true,
+	}
+	res, err := Apply(want)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	cfg, err := config.LoadWithOverride(res.ReferencePath, res.OverridePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := FromConfig(cfg); got != want {
+		t.Fatalf("FromConfig = %+v, want %+v", got, want)
+	}
+
+	before, _ := os.ReadFile(res.OverridePath)
+	if _, err := Apply(FromConfig(cfg)); err != nil {
+		t.Fatalf("re-Apply: %v", err)
+	}
+	after, _ := os.ReadFile(res.OverridePath)
+	if string(before) != string(after) {
+		t.Errorf("re-applying the current answers changed the override file:\n%s\n---\n%s", before, after)
+	}
+}
+
+// The claude check is a PATH lookup — the one that failed silently for a
+// daemon started from Finder, whose PATH does not include ~/.local/bin.
+func TestCheckProvider_Claude(t *testing.T) {
+	c := Defaults()
+	c.LLMProvider, c.LLMModel = "claude", "haiku"
+
+	t.Setenv("PATH", t.TempDir())
+	if err := CheckProvider(context.Background(), c); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("err = %v, want Claude CLI not found", err)
+	}
+
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	if err := CheckProvider(context.Background(), c); err != nil {
+		t.Errorf("CheckProvider with claude on PATH: %v", err)
+	}
+}
+
+func TestCheckProvider_RejectsInvalidChoices(t *testing.T) {
+	c := Defaults()
+	c.LLMProvider = "openai"
+	if err := CheckProvider(context.Background(), c); err == nil {
+		t.Error("CheckProvider accepted an unknown provider")
 	}
 }

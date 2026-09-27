@@ -6,8 +6,11 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -20,28 +23,48 @@ import (
 	"github.com/sangmin7648/tacit/pkg/events"
 )
 
+// frontend holds the built onboarding window (frontend/dist, from `npm run
+// build`). "all:" admits the committed dist/.gitkeep, so the package compiles
+// — and `make test` runs — without a frontend build; `make app` builds it.
+//
+//go:embed all:frontend/dist
+var frontend embed.FS
+
 // pollInterval paces both the PID-file check and the event-log follow. The PID
 // file changes when anything — this app, a terminal, a crash — starts or stops
 // the daemon, and nothing announces it.
 const pollInterval = 500 * time.Millisecond
 
 type trayApp struct {
-	app  *application.App
-	tray *application.SystemTray
+	app        *application.App
+	tray       *application.SystemTray
+	onboarding *OnboardingService
 
 	mu sync.Mutex
 	st state
 }
 
 func main() {
+	// Launched from Finder, the app gets launchd's minimal PATH, and so would
+	// the daemon it starts — which then cannot find the claude CLI.
+	os.Setenv("PATH", userPath(os.Getenv("PATH"), os.Getenv("HOME")))
+
+	assets, err := fs.Sub(frontend, "frontend/dist")
+	if err != nil {
+		log.Fatal(err)
+	}
+	onboarding := &OnboardingService{}
 	app := application.New(application.Options{
-		Name: "Tacit",
+		Name:     "Tacit",
+		Services: []application.Service{application.NewService(onboarding)},
+		Assets:   application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		Mac: application.MacOptions{
 			// Menu bar only: no Dock icon, no app menu.
 			ActivationPolicy: application.ActivationPolicyAccessory,
 		},
 	})
-	t := &trayApp{app: app, tray: app.SystemTray.New()}
+	t := &trayApp{app: app, tray: app.SystemTray.New(), onboarding: onboarding}
+	onboarding.tray = t
 
 	history, err := events.ReadFile(config.EventLogPath())
 	if err != nil {
@@ -58,6 +81,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	app.Event.OnApplicationEvent(wailsevents.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		// Open onboarding on a first run — nothing is set up, so Start would
+		// fail — and when a previous run of it was cut short, e.g. by the
+		// relaunch macOS forces to apply Screen Recording.
+		if !isConfigured() || pendingStep() > 0 {
+			go onboarding.show()
+		}
 		go t.watchPID(ctx)
 		go func() {
 			err := events.Follow(ctx, config.EventLogPath(), pollInterval, func(e events.Event) {
@@ -144,6 +173,7 @@ func (t *trayApp) draw() {
 	}
 
 	menu.AddSeparator()
+	menu.Add("Set Up Tacit…").OnClick(func(*application.Context) { go t.onboarding.show() })
 	menu.Add("Open Knowledge Folder").OnClick(func(*application.Context) { openPath(config.BaseDir()) })
 	menu.Add("Open Daemon Log").OnClick(func(*application.Context) { openPath(daemonLogPath()) })
 	menu.AddSeparator()

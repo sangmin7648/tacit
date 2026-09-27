@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/sangmin7648/tacit/pkg/daemon"
@@ -29,6 +30,32 @@ func cliPath() (string, error) {
 		return "", fmt.Errorf("tacit CLI not found in the app bundle at %s — build with 'make app'", p)
 	}
 	return p, nil
+}
+
+// userBinDirs are where the tools the daemon shells out to — the claude CLI —
+// usually live, and which launchd's PATH for Finder-launched apps omits.
+var userBinDirs = []string{"$HOME/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"}
+
+// userPath returns path with userBinDirs appended where missing. They go last
+// so anything already on PATH keeps precedence.
+func userPath(path, home string) string {
+	have := map[string]bool{}
+	for _, d := range filepath.SplitList(path) {
+		have[d] = true
+	}
+	out := path
+	for _, d := range userBinDirs {
+		d = strings.Replace(d, "$HOME", home, 1)
+		if home == "" && strings.HasPrefix(d, "/.local") || have[d] {
+			continue
+		}
+		if out != "" {
+			out += string(os.PathListSeparator)
+		}
+		out += d
+		have[d] = true
+	}
+	return out
 }
 
 // spawnListen starts `<cli> listen` with its output in logPath, which is

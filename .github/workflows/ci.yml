@@ -27,5 +27,12 @@ jobs:
       - name: Test
         run: make test
 
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/tacit-app/frontend/package-lock.json
+
       - name: Build Mac app
         run: make app

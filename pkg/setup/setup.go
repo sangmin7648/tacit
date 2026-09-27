@@ -5,14 +5,17 @@
 package setup
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/sangmin7648/tacit/pkg/config"
+	"github.com/sangmin7648/tacit/pkg/process"
 	"github.com/sangmin7648/tacit/skills"
 )
 
@@ -62,6 +65,43 @@ func Defaults() Choices {
 		Language:       d.Language,
 		Experimental:   d.Experimental,
 	}
+}
+
+// FromConfig returns the answers that would reproduce cfg's current settings,
+// so re-running setup starts from where the user is rather than from the
+// defaults.
+func FromConfig(cfg *config.Config) Choices {
+	return Choices{
+		LLMProvider:    cfg.LLMProvider,
+		LLMModel:       cfg.LLMModel,
+		SkillAgent:     cfg.SkillAgent,
+		CaptureMic:     cfg.CaptureMic,
+		CaptureSpeaker: cfg.CaptureSpeaker,
+		Language:       cfg.Language,
+		Experimental:   cfg.Experimental,
+	}
+}
+
+// CheckProvider reports whether the classifier c chose can be reached, before
+// anything is saved. `tacit listen` refuses to start when it cannot, so this
+// is the same check caught earlier: for ollama, the server is up and has the
+// model; for claude, the Claude Code CLI is on PATH.
+func CheckProvider(ctx context.Context, c Choices) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	if c.LLMProvider == "claude" {
+		if _, err := exec.LookPath("claude"); err != nil {
+			return errors.New("Claude Code CLI not found on PATH\n  → Install it: https://docs.anthropic.com/en/docs/claude-code")
+		}
+		return nil
+	}
+	cfg := config.DefaultConfig()
+	cfg.LLMProvider, cfg.LLMModel = c.LLMProvider, c.LLMModel
+	if p, ok := process.NewClassifier(cfg).(process.Pinger); ok {
+		return p.Ping(ctx)
+	}
+	return nil
 }
 
 // Validate reports the first answer setup cannot proceed with.

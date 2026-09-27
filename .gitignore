@@ -5,3 +5,6 @@ third_party/whisper.cpp/build/
 pkg/search/rg-darwin-arm64
 pkg/search/rg-darwin-amd64
 /build/
+/cmd/tacit-app/frontend/node_modules/
+/cmd/tacit-app/frontend/dist/*
+!/cmd/tacit-app/frontend/dist/.gitkeep
