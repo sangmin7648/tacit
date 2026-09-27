@@ -587,6 +587,13 @@ func cmdConfigView(cfg *config.Config) {
 		if overrideKeys[yamlKey] {
 			return "[override]"
 		}
+		// An overridden shared timing applies to a source that does not set
+		// its own (see config.LoadWithOverride).
+		for _, prefix := range []string{"mic_", "speaker_"} {
+			if shared, ok := strings.CutPrefix(yamlKey, prefix); ok && overrideKeys[shared] {
+				return "[from " + shared + "]"
+			}
+		}
 		return "[default]"
 	}
 

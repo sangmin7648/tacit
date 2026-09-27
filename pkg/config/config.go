@@ -183,8 +183,40 @@ func LoadWithOverride(configPath, overridePath string) (*Config, error) {
 		if err := loadFile(overridePath, cfg); err != nil {
 			return nil, fmt.Errorf("loading %s: %w", overridePath, err)
 		}
+		set, err := LoadOverrideKeys(overridePath)
+		if err != nil {
+			return nil, fmt.Errorf("loading %s: %w", overridePath, err)
+		}
+		applySharedTimings(cfg, set)
 	}
 	return cfg, nil
+}
+
+// applySharedTimings makes a shared timing the user overrode apply to each
+// source whose own value they did not override. The per-source defaults are
+// tuned per source, so they win over the shared default — but not over a
+// value the user chose: `silence_duration: 5s` or `max_segment_duration: 0`
+// in the override file must take effect.
+func applySharedTimings(cfg *Config, set map[string]bool) {
+	for _, t := range []struct {
+		key          string
+		shared       time.Duration
+		mic, speaker *time.Duration
+	}{
+		{"min_speech_duration", cfg.MinSpeechDur, &cfg.MicMinSpeechDur, &cfg.SpeakerMinSpeechDur},
+		{"silence_duration", cfg.SilenceDuration, &cfg.MicSilenceDuration, &cfg.SpeakerSilenceDuration},
+		{"max_segment_duration", cfg.MaxSegmentDur, &cfg.MicMaxSegmentDur, &cfg.SpeakerMaxSegmentDur},
+	} {
+		if !set[t.key] {
+			continue
+		}
+		if !set["mic_"+t.key] {
+			*t.mic = t.shared
+		}
+		if !set["speaker_"+t.key] {
+			*t.speaker = t.shared
+		}
+	}
 }
 
 // LoadOverrideKeys returns the set of YAML keys explicitly present in the

@@ -22,12 +22,12 @@
     {
       title: 'Microphone',
       keys: ['mic_min_speech_duration', 'mic_silence_duration', 'mic_max_segment_duration'],
-      help: 'Used for the microphone instead of the speech detection timings above; 0s falls back to them.',
+      help: "The microphone's own timings. Changing one above changes it here too, unless you set it here; 0s also takes the one above.",
     },
     {
       title: 'System audio',
       keys: ['speaker_min_speech_duration', 'speaker_silence_duration', 'speaker_max_segment_duration'],
-      help: 'Used for system audio instead of the speech detection timings above; 0s falls back to them.',
+      help: "System audio's own timings. Changing one above changes it here too, unless you set it here; 0s also takes the one above.",
     },
   ]
 

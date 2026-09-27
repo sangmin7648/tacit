@@ -588,3 +588,40 @@ func TestWriteSetupOverride_MentionsDenylistWhenUnset(t *testing.T) {
 		t.Error("transcript_denylist is absent from the generated override file")
 	}
 }
+
+// A shared timing set in the override file reaches every source that does not
+// set its own; the per-source defaults hold only while the user sets neither.
+func TestLoadWithOverride_SharedTimingsApply(t *testing.T) {
+	path := overridePathIn(t)
+	writeOverride(t, path, "silence_duration: 5s\nspeaker_silence_duration: 4s\nmax_segment_duration: 0\n")
+
+	cfg, err := LoadWithOverride("", path)
+	if err != nil {
+		t.Fatalf("LoadWithOverride: %v", err)
+	}
+	d := DefaultConfig()
+	for _, c := range []struct {
+		name      string
+		got, want time.Duration
+	}{
+		{"mic_silence_duration (inherits the shared override)", cfg.MicSilenceDuration, 5 * time.Second},
+		{"speaker_silence_duration (its own override wins)", cfg.SpeakerSilenceDuration, 4 * time.Second},
+		{"mic_max_segment_duration (0 turns the cap off)", cfg.MicMaxSegmentDur, 0},
+		{"speaker_max_segment_duration (0 turns the cap off)", cfg.SpeakerMaxSegmentDur, 0},
+		{"mic_min_speech_duration (nothing set: per-source default)", cfg.MicMinSpeechDur, d.MicMinSpeechDur},
+		{"speaker_min_speech_duration (nothing set: per-source default)", cfg.SpeakerMinSpeechDur, d.SpeakerMinSpeechDur},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
+		}
+	}
+
+	// The defaults a settings screen compares against are untouched.
+	defaults, err := LoadWithOverride("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaults.MicSilenceDuration != d.MicSilenceDuration {
+		t.Errorf("defaults mic_silence_duration = %v", defaults.MicSilenceDuration)
+	}
+}

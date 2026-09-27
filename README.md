@@ -100,7 +100,7 @@ Run `tacit setup` to generate two files in `~/.tacit/`:
 | `speech_threshold` | float | `0.5` | VAD confidence threshold (0–1). Higher = more conservative. |
 | `energy_threshold` | int | `200` | Audio energy gate. Frames below this value are rejected before VAD. |
 
-The three segmentation durations can be set per source, since a microphone and a meeting on your speakers behave differently. A source-specific value wins over the shared one; leave it at `0` to inherit.
+The three segmentation durations also exist per source, since a microphone and a meeting on your speakers behave differently, and each source has its own defaults (below). Setting a shared value, such as `silence_duration: 5s`, applies it to both sources; a source-specific value, such as `mic_silence_duration`, wins over it. Set a source-specific value to `0` to inherit the shared one.
 
 | Suffix | `mic_` default | `speaker_` default |
 |---|---|---|
