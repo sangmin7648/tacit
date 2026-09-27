@@ -62,7 +62,7 @@ func main() {
 		cmdGet()
 	case "config":
 		if len(os.Args) < 3 {
-			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit>\n")
+			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit|set|unset>\n")
 			os.Exit(1)
 		}
 		switch os.Args[2] {
@@ -70,9 +70,13 @@ func main() {
 			cmdConfigView(cfg)
 		case "edit":
 			cmdConfigEdit()
+		case "set":
+			cmdConfigSet()
+		case "unset":
+			cmdConfigUnset()
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown config subcommand: %s\n", os.Args[2])
-			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit>\n")
+			fmt.Fprintf(os.Stderr, "Usage: tacit config <view|edit|set|unset>\n")
 			os.Exit(1)
 		}
 	default:
@@ -95,8 +99,10 @@ Usage:
   tacit list [duration] [--json]   List knowledge entries (default: 24h)
   tacit search [--duration <d>] [--json] <pattern>  Search knowledge entries by pattern
   tacit get [--json] <file-path>...  Print the full content of one or more knowledge entries
-  tacit config view            Show current configuration
+  tacit config view [--json]   Show current configuration
   tacit config edit            Open configuration in a text editor
+  tacit config set <key> <value>  Override one setting
+  tacit config unset <key>     Clear an override so the default applies
 `)
 }
 
@@ -584,6 +590,15 @@ func cmdStop() {
 func cmdConfigView(cfg *config.Config) {
 	cfgPath := config.ConfigPath()
 	overridePath := config.OverridePath()
+
+	if _, asJSON := stripFlag(os.Args[3:], "--json"); asJSON {
+		fields, err := config.Fields(cfgPath, overridePath)
+		if err != nil {
+			log.Fatalf("Failed to read config: %v", err)
+		}
+		printJSON(configDoc{Version: jsonVersion, Reference: cfgPath, Override: overridePath, Fields: fields})
+		return
+	}
 
 	fmt.Printf("Config files:\n")
 	fmt.Printf("  reference: %s\n", cfgPath)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/search"
 	"github.com/sangmin7648/tacit/pkg/storage"
 )
@@ -90,4 +91,11 @@ func printJSON(v any) {
 		fmt.Fprintf(os.Stderr, "Failed to encode JSON: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+type configDoc struct {
+	Version   int            `json:"version"`
+	Reference string         `json:"reference"`
+	Override  string         `json:"override"`
+	Fields    []config.Field `json:"fields"`
 }

@@ -226,6 +226,13 @@ func WriteDefault(path string) error {
 // all fields commented out. Users uncomment and set only the fields they want
 // to override. The template values reflect the current defaults.
 func WriteOverrideTemplate(path string, defaults *Config) error {
+	return os.WriteFile(path, []byte(overrideTemplate(defaults)), 0644)
+}
+
+// overrideTemplate renders the commented-out override template. SetOverride
+// starts from it when no override file exists yet, so a file it creates looks
+// the same as one `tacit config edit` would have.
+func overrideTemplate(defaults *Config) string {
 	header := "# tacit user overrides — edit this file to customize tacit.\n" +
 		"# Only fields you uncomment and set here will override the defaults.\n" +
 		"# Run 'tacit config view' to see the current merged configuration.\n\n"
@@ -264,8 +271,7 @@ func WriteOverrideTemplate(path string, defaults *Config) error {
 		sb.WriteString(f)
 		sb.WriteByte('\n')
 	}
-
-	return os.WriteFile(path, []byte(sb.String()), 0644)
+	return sb.String()
 }
 
 // formatDuration formats a time.Duration as a human-readable string.
