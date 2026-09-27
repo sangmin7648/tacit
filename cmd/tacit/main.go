@@ -90,11 +90,11 @@ Usage:
   tacit process <audio-file>   Process an audio file into a knowledge entry
   tacit listen                 Start the voice capture daemon (foreground)
   tacit stop                   Stop the voice capture daemon
-  tacit status                 Check daemon status
+  tacit status [--json]        Check daemon status
   tacit update                 Update tacit to the latest version
-  tacit list [duration]        List knowledge entries (default: 24h)
-  tacit search [--duration <d>] <pattern>  Search knowledge entries by pattern
-  tacit get <file-path>...     Print the full content of one or more knowledge entries
+  tacit list [duration] [--json]   List knowledge entries (default: 24h)
+  tacit search [--duration <d>] [--json] <pattern>  Search knowledge entries by pattern
+  tacit get [--json] <file-path>...  Print the full content of one or more knowledge entries
   tacit config view            Show current configuration
   tacit config edit            Open configuration in a text editor
 `)
@@ -782,11 +782,12 @@ func parseDuration(s string) (time.Duration, error) {
 
 // cmdList lists knowledge entries created within the given duration (default 24h).
 func cmdList() {
+	args, asJSON := stripFlag(os.Args[2:], "--json")
 	dur := 24 * time.Hour
-	if len(os.Args) >= 3 {
-		d, err := parseDuration(os.Args[2])
+	if len(args) >= 1 {
+		d, err := parseDuration(args[0])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid duration %q: %v\n", os.Args[2], err)
+			fmt.Fprintf(os.Stderr, "Invalid duration %q: %v\n", args[0], err)
 			fmt.Fprintf(os.Stderr, "Examples: 1h, 30m, 24h, 1d, 7d, 2w\n")
 			os.Exit(1)
 		}
@@ -799,6 +800,11 @@ func cmdList() {
 	entries, err := storage.ListEntries(baseDir, cutoff)
 	if err != nil {
 		log.Fatalf("Failed to read knowledge base: %v", err)
+	}
+
+	if asJSON {
+		printJSON(listDoc{Version: jsonVersion, Since: cutoff, Entries: normalizeEntries(entries)})
+		return
 	}
 
 	durStr := formatDuration(dur)
@@ -826,8 +832,8 @@ func cmdList() {
 
 // cmdSearch searches the knowledge base for entries matching a pattern.
 func cmdSearch() {
-	// Parse args: tacit search [--duration <dur>] <pattern>
-	args := os.Args[2:]
+	// Parse args: tacit search [--duration <dur>] [--json] <pattern>
+	args, asJSON := stripFlag(os.Args[2:], "--json")
 	var since time.Time
 	var patternArgs []string
 
@@ -860,6 +866,26 @@ func cmdSearch() {
 		log.Fatalf("Search failed: %v", err)
 	}
 
+	if asJSON {
+		doc := searchDoc{Version: jsonVersion, Pattern: pattern, Results: results}
+		if !since.IsZero() {
+			doc.Since = &since
+		}
+		if doc.Results == nil {
+			doc.Results = []*search.SearchResult{}
+		}
+		for _, r := range doc.Results {
+			if r.KnowledgeEntry != nil && r.Keywords == nil {
+				r.Keywords = []string{}
+			}
+			if r.MatchLines == nil {
+				r.MatchLines = []string{}
+			}
+		}
+		printJSON(doc)
+		return
+	}
+
 	if len(results) == 0 {
 		if !since.IsZero() {
 			fmt.Printf("No results found for %q in the last %s.\n", pattern, formatDuration(time.Since(since)))
@@ -886,12 +912,29 @@ func cmdSearch() {
 
 // cmdGet prints the full content of one or more knowledge entry files.
 func cmdGet() {
-	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: tacit get <file-path> [<file-path>...]\n")
+	filePaths, asJSON := stripFlag(os.Args[2:], "--json")
+	if len(filePaths) == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: tacit get [--json] <file-path> [<file-path>...]\n")
 		os.Exit(1)
 	}
 
-	filePaths := os.Args[2:]
+	if asJSON {
+		// A failed read is reported in-band and does not change the exit code,
+		// matching the text output, which notes it on stderr and moves on.
+		doc := getDoc{Version: jsonVersion, Entries: []*storage.KnowledgeEntry{}, Errors: []getError{}}
+		for _, filePath := range filePaths {
+			entry, err := storage.Read(filePath)
+			if err != nil {
+				doc.Errors = append(doc.Errors, getError{Path: filePath, Error: err.Error()})
+				continue
+			}
+			doc.Entries = append(doc.Entries, entry)
+		}
+		doc.Entries = normalizeEntries(doc.Entries)
+		printJSON(doc)
+		return
+	}
+
 	for i, filePath := range filePaths {
 		if i > 0 {
 			fmt.Println()
@@ -957,11 +1000,32 @@ func findNewline(s string) int {
 
 // cmdStatus checks if the daemon is running.
 func cmdStatus() {
+	_, asJSON := stripFlag(os.Args[2:], "--json")
 	pidPath := config.PIDPath()
 
 	pid, err := daemon.ReadPID(pidPath)
 	if err != nil {
+		if asJSON {
+			printJSON(statusDoc{Version: jsonVersion})
+			return
+		}
 		fmt.Println("tacit is not running")
+		return
+	}
+
+	if asJSON {
+		doc := statusDoc{Version: jsonVersion}
+		if daemon.IsRunning(pid) {
+			doc.Running = true
+			doc.PID = pid
+			if info, err := os.Stat(pidPath); err == nil {
+				t := info.ModTime()
+				doc.StartedAt = &t
+			}
+		} else {
+			daemon.RemovePID(pidPath)
+		}
+		printJSON(doc)
 		return
 	}
 

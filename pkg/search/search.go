@@ -23,8 +23,8 @@ import (
 // SearchResult wraps a KnowledgeEntry with search-specific metadata.
 type SearchResult struct {
 	*storage.KnowledgeEntry
-	Score      int
-	MatchLines []string // matched lines (up to 2) for display
+	Score      int      `json:"score"`
+	MatchLines []string `json:"match_lines"` // matched lines (up to 2) for display
 }
 
 var (
