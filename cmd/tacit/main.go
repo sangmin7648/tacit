@@ -20,6 +20,7 @@ import (
 	"github.com/sangmin7648/tacit/pkg/events"
 	"github.com/sangmin7648/tacit/pkg/pipeline"
 	"github.com/sangmin7648/tacit/pkg/search"
+	"github.com/sangmin7648/tacit/pkg/setup"
 	"github.com/sangmin7648/tacit/pkg/storage"
 	"github.com/sangmin7648/tacit/skills"
 	"golang.org/x/term"
@@ -106,66 +107,51 @@ Usage:
 `)
 }
 
-// cmdSetup runs an interactive setup wizard and installs skills.
+// cmdSetup runs the interactive setup wizard. It only asks and reports: the
+// decisions live in pkg/setup, which the Mac app's onboarding calls too.
 func cmdSetup() {
 	fmt.Println("=== tacit setup ===")
 	fmt.Println()
 
-	var llmProvider, llmModel string
+	c := setup.Defaults()
 
 	// Step 1: LLM provider
 	fmt.Println("Step 1/6: Select LLM provider for summarization")
-	providerIdx := selectOption([]string{"ollama", "claude"}, 0)
+	c.LLMProvider = setup.Providers[selectOption(setup.Providers, 0)]
 	fmt.Println()
 
-	switch providerIdx {
-	case 1:
-		llmProvider = "claude"
-
+	switch c.LLMProvider {
+	case "claude":
 		// Step 2: Claude model
 		fmt.Println("Step 2/6: Select Claude model")
-		modelIdx := selectOption([]string{"haiku", "sonnet", "opus"}, 0)
+		c.LLMModel = setup.ClaudeModels[selectOption(setup.ClaudeModels, 0)]
 		fmt.Println()
-		switch modelIdx {
-		case 1:
-			llmModel = "sonnet"
-		case 2:
-			llmModel = "opus"
-		default:
-			llmModel = "haiku"
-		}
 
 	default:
-		llmProvider = "ollama"
-
 		// Step 2: Ollama model (text input)
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Println("Step 2/6: Enter Ollama model name")
-		fmt.Print("  Model name [qwen3.5]: ")
+		fmt.Printf("  Model name [%s]: ", setup.DefaultOllamaModel)
 		input := strings.TrimSpace(readLine(reader))
 		fmt.Println()
-		if input == "" {
-			llmModel = "qwen3.5"
-		} else {
-			llmModel = input
+		c.LLMModel = setup.DefaultOllamaModel
+		if input != "" {
+			c.LLMModel = input
 		}
 	}
 
 	// Step 3: AI agent for skill installation (only claude supported)
 	fmt.Println("Step 3/6: Select AI agent for skill installation")
-	agentNames := []string{"claude"}
-	agentIdx := selectOption(agentNames, 0)
-	skillAgent := agentNames[agentIdx]
+	c.SkillAgent = setup.Agents[selectOption(setup.Agents, 0)]
 	fmt.Println()
 
 	// Step 4: Audio sources (multi-select) — at least one must be selected.
-	var captureMic, captureSpeaker bool
 	for {
 		fmt.Println("Step 4/6: Select audio sources to listen  (Space to toggle, Enter to confirm)")
 		sourceSelected := selectMultiple([]string{"mic", "speaker"}, []bool{true, true})
 		fmt.Println()
-		captureMic, captureSpeaker = sourceSelected[0], sourceSelected[1]
-		if captureMic || captureSpeaker {
+		c.CaptureMic, c.CaptureSpeaker = sourceSelected[0], sourceSelected[1]
+		if c.CaptureMic || c.CaptureSpeaker {
 			break
 		}
 		fmt.Println("  At least one source must be selected. Please try again.")
@@ -175,67 +161,45 @@ func cmdSetup() {
 	// Step 5: transcription language. Fixing the language (instead of "auto")
 	// meaningfully reduces wrong-language / hallucinated transcriptions.
 	fmt.Println("Step 5/6: Select transcription language")
-	langIdx := selectOption([]string{"auto (detect)", "english", "korean"}, 0)
-	language := []string{"auto", "en", "ko"}[langIdx]
+	labels := make([]string, len(setup.Languages))
+	for i, l := range setup.Languages {
+		labels[i] = l.Label
+	}
+	c.Language = setup.Languages[selectOption(labels, 0)].Code
 	fmt.Println()
 
 	// Step 6: experimental beta channel.
 	fmt.Println("Step 6/6: Enable experimental transcription? (non-speech token suppression + VAD pre-roll padding)")
-	experimental := selectOption([]string{"no", "yes"}, 0) == 1
+	c.Experimental = selectOption([]string{"no", "yes"}, 0) == 1
 	fmt.Println()
 
 	fmt.Println()
-	fmt.Printf("  LLM provider   : %s\n", llmProvider)
-	fmt.Printf("  LLM model      : %s\n", llmModel)
-	fmt.Printf("  Skill agent    : %s\n", skillAgent)
-	fmt.Printf("  Capture mic    : %v\n", captureMic)
-	fmt.Printf("  Capture speaker: %v\n", captureSpeaker)
-	fmt.Printf("  Language       : %s\n", language)
-	fmt.Printf("  Experimental   : %v\n", experimental)
+	fmt.Printf("  LLM provider   : %s\n", c.LLMProvider)
+	fmt.Printf("  LLM model      : %s\n", c.LLMModel)
+	fmt.Printf("  Skill agent    : %s\n", c.SkillAgent)
+	fmt.Printf("  Capture mic    : %v\n", c.CaptureMic)
+	fmt.Printf("  Capture speaker: %v\n", c.CaptureSpeaker)
+	fmt.Printf("  Language       : %s\n", c.Language)
+	fmt.Printf("  Experimental   : %v\n", c.Experimental)
 	fmt.Println()
 
-	// Write settings to config-override.yaml
-	overridePath := config.OverridePath()
-	if err := os.MkdirAll(filepath.Dir(overridePath), 0755); err != nil {
-		log.Fatalf("Failed to create config directory: %v", err)
-	}
-	if err := config.WriteSetupOverride(overridePath, llmProvider, llmModel, skillAgent, language, captureMic, captureSpeaker, experimental); err != nil {
-		log.Fatalf("Failed to write config override: %v", err)
-	}
-	fmt.Printf("Saved settings: %s\n", overridePath)
-
-	// Install skill files for the selected agent
-	if err := runInstallSkills(skillAgent); err != nil {
+	res, err := setup.Apply(c)
+	if err != nil {
 		log.Fatalf("Setup failed: %v", err)
 	}
 
-	// Always regenerate config.yaml (tacit-managed reference doc).
-	cfgPath := config.ConfigPath()
-	if err := os.MkdirAll(filepath.Dir(cfgPath), 0755); err != nil {
-		log.Fatalf("Failed to create config directory: %v", err)
+	fmt.Printf("Saved settings: %s\n", res.OverridePath)
+	for _, dest := range res.InstalledSkills {
+		fmt.Printf("Installed: %s\n", dest)
 	}
-
-	// If config.yaml exists and differs from defaults, the user may have edited
-	// it manually (old behavior). Back it up and warn before overwriting.
-	if existing, readErr := os.ReadFile(cfgPath); readErr == nil {
-		if _, overrideExists := os.Stat(overridePath); os.IsNotExist(overrideExists) {
-			if len(existing) > 0 && existing[0] != '#' {
-				bakPath := cfgPath + ".bak"
-				if err := os.WriteFile(bakPath, existing, 0644); err == nil {
-					fmt.Printf("WARNING: config.yaml appears to have been edited manually.\n")
-					fmt.Printf("  tacit now uses config-override.yaml for user settings.\n")
-					fmt.Printf("  Your previous config.yaml has been backed up to:\n")
-					fmt.Printf("    %s\n", bakPath)
-					fmt.Printf("  Run 'tacit config edit' to set your overrides in config-override.yaml.\n\n")
-				}
-			}
-		}
+	if res.BackupPath != "" {
+		fmt.Printf("WARNING: config.yaml appears to have been edited manually.\n")
+		fmt.Printf("  tacit now uses config-override.yaml for user settings.\n")
+		fmt.Printf("  Your previous config.yaml has been backed up to:\n")
+		fmt.Printf("    %s\n", res.BackupPath)
+		fmt.Printf("  Run 'tacit config edit' to set your overrides in config-override.yaml.\n\n")
 	}
-
-	if err := config.WriteDefault(cfgPath); err != nil {
-		log.Fatalf("Failed to write reference config: %v", err)
-	}
-	fmt.Printf("Updated reference config: %s\n", cfgPath)
+	fmt.Printf("Updated reference config: %s\n", res.ReferencePath)
 
 	fmt.Println("Setup complete.")
 }
