@@ -23,9 +23,8 @@ import (
 	"github.com/sangmin7648/tacit/pkg/events"
 )
 
-// frontend holds the built windows — onboarding and the notes browser —
-// (frontend/dist, from `npm run
-// build`). "all:" admits the committed dist/.gitkeep, so the package compiles
+// frontend holds the built windows — onboarding, the notes browser and
+// settings — (frontend/dist, from `npm run build`). "all:" admits the committed dist/.gitkeep, so the package compiles
 // — and `make test` runs — without a frontend build; `make app` builds it.
 //
 //go:embed all:frontend/dist
@@ -41,6 +40,7 @@ type trayApp struct {
 	tray       *application.SystemTray
 	onboarding *OnboardingService
 	knowledge  *KnowledgeService
+	settings   *SettingsService
 
 	mu sync.Mutex
 	st state
@@ -57,17 +57,20 @@ func main() {
 	}
 	onboarding := &OnboardingService{}
 	knowledge := &KnowledgeService{}
+	settings := &SettingsService{}
 	app := application.New(application.Options{
-		Name:     "Tacit",
-		Services: []application.Service{application.NewService(onboarding), application.NewService(knowledge)},
-		Assets:   application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
+		Name: "Tacit",
+		Services: []application.Service{
+			application.NewService(onboarding), application.NewService(knowledge), application.NewService(settings),
+		},
+		Assets: application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		Mac: application.MacOptions{
 			// Menu bar only: no Dock icon, no app menu.
 			ActivationPolicy: application.ActivationPolicyAccessory,
 		},
 	})
-	t := &trayApp{app: app, tray: app.SystemTray.New(), onboarding: onboarding, knowledge: knowledge}
-	onboarding.tray = t
+	t := &trayApp{app: app, tray: app.SystemTray.New(), onboarding: onboarding, knowledge: knowledge, settings: settings}
+	onboarding.tray, settings.tray = t, t
 
 	history, err := events.ReadFile(config.EventLogPath())
 	if err != nil {
@@ -183,6 +186,7 @@ func (t *trayApp) draw() {
 
 	menu.AddSeparator()
 	menu.Add("Browse Notes…").OnClick(func(*application.Context) { go t.knowledge.show() })
+	menu.Add("Settings…").OnClick(func(*application.Context) { go t.settings.show() })
 	menu.Add("Set Up Tacit…").OnClick(func(*application.Context) { go t.onboarding.show() })
 	menu.Add("Open Knowledge Folder").OnClick(func(*application.Context) { openPath(config.BaseDir()) })
 	menu.Add("Open Daemon Log").OnClick(func(*application.Context) { openPath(daemonLogPath()) })
@@ -197,17 +201,19 @@ func (t *trayApp) draw() {
 	t.tray.SetMenu(menu)
 }
 
-func (t *trayApp) start() {
+// start starts the daemon. A failure is shown in the menu and returned.
+func (t *trayApp) start() error {
 	cli, err := cliPath()
 	if err == nil {
 		var cmd *exec.Cmd
 		if cmd, err = spawnListen(cli, daemonLogPath()); err == nil {
 			t.update(func(s *state) { s.ownPID, s.lastErr = cmd.Process.Pid, "" })
 			go t.reap(cmd)
-			return
+			return nil
 		}
 	}
 	t.update(func(s *state) { s.lastErr = "Couldn't start: " + err.Error() })
+	return err
 }
 
 // reap waits for a daemon this app started. An exit nobody asked for — the

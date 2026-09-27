@@ -99,6 +99,8 @@ func TestEntryLabel(t *testing.T) {
 
 // spawnListen and stopDaemon against a stand-in CLI: a script that behaves
 // like `tacit listen` — writes the PID file, runs until SIGTERM, removes it.
+// It writes the PID file last, so the test, which signals as soon as the file
+// appears, cannot catch it before its trap is set.
 func TestSpawnAndStop(t *testing.T) {
 	dir := t.TempDir()
 	pidPath := filepath.Join(dir, "tacit.pid")
@@ -106,9 +108,9 @@ func TestSpawnAndStop(t *testing.T) {
 	cli := filepath.Join(dir, "tacit")
 	script := fmt.Sprintf(`#!/bin/sh
 [ "$1" = listen ] || exit 2
-echo $$ > %q
 trap 'rm -f %q; echo stopped; exit 0' TERM
 echo listening
+echo $$ > %q
 while :; do sleep 0.05; done
 `, pidPath, pidPath)
 	if err := os.WriteFile(cli, []byte(script), 0o755); err != nil {

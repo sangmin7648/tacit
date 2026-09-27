@@ -332,6 +332,14 @@ func TestFields(t *testing.T) {
 	if f := byKey["transcript_denylist"]; f.Value == nil || reflect.ValueOf(f.Value).Len() != 0 {
 		t.Errorf("transcript_denylist = %#v, want an empty non-nil list", f.Value)
 	}
+	for key, want := range map[string]string{
+		"language": "string", "capture_mic": "bool", "speech_threshold": "number",
+		"silence_duration": "duration", "transcript_denylist": "list",
+	} {
+		if got := byKey[key].Kind; got != want {
+			t.Errorf("%s kind = %q, want %q", key, got, want)
+		}
+	}
 
 	// A value read here has to be writable straight back.
 	for _, f := range fields {

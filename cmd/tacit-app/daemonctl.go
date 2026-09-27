@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/sangmin7648/tacit/pkg/daemon"
 )
@@ -97,4 +99,28 @@ func stopDaemon(pidPath string) error {
 		return errors.New("tacit is not running")
 	}
 	return syscall.Kill(pid, syscall.SIGTERM)
+}
+
+// restartTimeout bounds how long a restart waits for the daemon to exit. It
+// finishes classifying what it has heard first, which takes a while.
+const restartTimeout = 30 * time.Second
+
+// stopAndWait stops the running daemon and waits, up to timeout, for it to
+// exit — so one started next does not find it still holding the PID file.
+func stopAndWait(ctx context.Context, pidPath string, timeout time.Duration) error {
+	if err := stopDaemon(pidPath); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	for {
+		if running, _ := daemonStatus(pidPath); !running {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errors.New("tacit is still stopping; start it from the menu once it has")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
