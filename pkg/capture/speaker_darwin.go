@@ -90,11 +90,15 @@ func (s *Speaker) Stream(ctx context.Context) (<-chan []int16, error) {
 	sess.handle = cgo.NewHandle(sess)
 
 	var errCStr *C.char
-	cap := C.speaker_create(C.uintptr_t(sess.handle), &errCStr)
+	var denied C.int
+	cap := C.speaker_create(C.uintptr_t(sess.handle), &errCStr, &denied)
 	if errCStr != nil {
 		msg := C.GoString(errCStr)
 		C.free(unsafe.Pointer(errCStr))
 		sess.closeChan()
+		if denied != 0 {
+			return nil, fmt.Errorf("speaker capture: %s: %w", msg, ErrPermissionDenied)
+		}
 		return nil, fmt.Errorf("speaker capture: %s", msg)
 	}
 	if cap == nil {

@@ -78,6 +78,11 @@ type Event struct {
 	Error string `json:"error,omitempty"`
 }
 
+// ReasonPermissionDenied is the Reason of a KindError for a source macOS
+// refused for lack of permission. The daemon stops that source rather than
+// retrying, and runs on with the others.
+const ReasonPermissionDenied = "permission_denied"
+
 // Observer receives pipeline events. Observe is called from the pipeline's own
 // goroutines — several of them concurrently, one per capture source plus the
 // classify worker — so an implementation must be safe for concurrent use and

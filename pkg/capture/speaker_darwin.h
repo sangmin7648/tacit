@@ -17,7 +17,9 @@ extern void tacitSpeakerStoppedCallback(uintptr_t handle);
 // On success returns a non-NULL handle and sets *errMsg to NULL.
 // On failure returns NULL and sets *errMsg to a malloc'd error string (caller must free).
 // goHandle is passed through to tacitSpeakerSamplesCallback as the first argument.
-SpeakerCapture* speaker_create(uintptr_t goHandle, char** errMsg);
+// *denied is set to 1 when the failure is macOS refusing capture because Screen
+// Recording is not granted, 0 otherwise.
+SpeakerCapture* speaker_create(uintptr_t goHandle, char** errMsg, int* denied);
 
 // speaker_stop stops the stream and releases resources.
 void speaker_stop(SpeakerCapture* cap);

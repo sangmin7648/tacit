@@ -171,11 +171,19 @@ var (
 // session ends for any reason other than ctx cancellation — whether the stream
 // closed unexpectedly (SCStream stopped by macOS), stalled with no audio, or
 // re-initialisation failed transiently (common right after sleep/wake).  It
-// returns only when ctx is cancelled.
+// returns when ctx is cancelled, or when macOS refuses the source for lack of
+// permission (capture.ErrPermissionDenied), which no retry can fix.
 func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label string, classifyCh chan<- classifyItem) error {
 	for {
 		err := p.runSourceOnce(ctx, src, label, classifyCh)
 		if ctx.Err() != nil {
+			return nil
+		}
+		if errors.Is(err, capture.ErrPermissionDenied) {
+			// Retrying cannot succeed until the process restarts, and each try
+			// can show the permission dialog again. The other sources run on.
+			log.Printf("[%s] %v; not capturing this source — grant Screen Recording and restart tacit", label, err)
+			p.emit(events.Event{Kind: events.KindError, Source: label, Reason: events.ReasonPermissionDenied, Error: err.Error()})
 			return nil
 		}
 		if err != nil {
