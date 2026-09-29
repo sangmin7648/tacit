@@ -17,9 +17,10 @@ const recentLimit = 5
 type state struct {
 	running bool
 	pid     int
-	// ownPID is the daemon this app started, or 0. A daemon started from a
+	// ownPID is the daemon the app started — this run or an earlier one that
+	// crashed or was killed (see adopt) — or 0. A daemon started from a
 	// terminal is shown and can be stopped here, but quitting the app leaves
-	// it alone; one started here stops when the app quits.
+	// it alone; the app's own stops when the app quits.
 	ownPID int
 	// activity is the latest event kind from the running daemon.
 	activity events.Kind

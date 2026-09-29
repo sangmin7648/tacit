@@ -180,3 +180,42 @@ func TestSpeakerDenied(t *testing.T) {
 		t.Errorf("label = %q; the microphone is still listening", got)
 	}
 }
+
+// A daemon the app started stays the app's across app runs — so Quit stops
+// it — while one started from a terminal never becomes the app's.
+func TestAdopt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := os.MkdirAll(filepath.Dir(ownerPath()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := adopt(true, 4242); got != 0 {
+		t.Errorf("with no record, adopt = %d, want 0 (a terminal's daemon)", got)
+	}
+	if err := recordOwned(4242); err != nil {
+		t.Fatal(err)
+	}
+	if got := adopt(true, 4242); got != 4242 {
+		t.Errorf("adopt = %d, want the recorded 4242", got)
+	}
+	if got := adopt(true, 5151); got != 0 {
+		t.Errorf("a different running daemon was adopted: %d", got)
+	}
+	if got := adopt(false, 4242); got != 0 {
+		t.Errorf("a daemon that is not running was adopted: %d", got)
+	}
+
+	clearOwned(5151) // another daemon stopping leaves the record alone
+	if ownedPID() != 4242 {
+		t.Error("clearing another PID dropped the record")
+	}
+	clearOwned(4242)
+	if ownedPID() != 0 {
+		t.Error("the record survived its daemon stopping")
+	}
+
+	os.WriteFile(ownerPath(), []byte("garbage"), 0o644)
+	if got := adopt(true, 0); got != 0 {
+		t.Errorf("an unreadable record adopted PID %d", got)
+	}
+}
