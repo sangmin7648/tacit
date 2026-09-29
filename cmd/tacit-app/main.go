@@ -78,6 +78,7 @@ func main() {
 	}
 	t.st.seedRecent(history)
 	t.st.running, t.st.pid = daemonStatus(config.PIDPath())
+	t.st.ownPID = adopt(t.st.running, t.st.pid)
 	// Before Run there is no native tray yet: the tray records the label and
 	// menu and applies them at startup, and there is no main thread loop to
 	// dispatch to, so draw directly rather than through render.
@@ -136,6 +137,9 @@ func (t *trayApp) watchPID(ctx context.Context) {
 		running, pid := daemonStatus(config.PIDPath())
 		t.mu.Lock()
 		changed := running != t.st.running || pid != t.st.pid
+		if changed && t.st.running {
+			clearOwned(t.st.pid) // the daemon that was running has stopped
+		}
 		if changed {
 			t.st.running, t.st.pid = running, pid
 			t.st.speakerDenied = false
@@ -215,6 +219,9 @@ func (t *trayApp) start() error {
 	if err == nil {
 		var cmd *exec.Cmd
 		if cmd, err = spawnListen(cli, daemonLogPath()); err == nil {
+			if err := recordOwned(cmd.Process.Pid); err != nil {
+				log.Printf("recording the daemon as the app's: %v", err)
+			}
 			t.update(func(s *state) { s.ownPID, s.lastErr = cmd.Process.Pid, "" })
 			go t.reap(cmd)
 			return nil
@@ -247,15 +254,19 @@ func (t *trayApp) stop() {
 	}
 }
 
-// quit stops the daemon only if this app started it; one started from a
-// terminal belongs to that terminal.
+// quit stops the daemon only if the app started it — this run or an earlier
+// one; one started from a terminal belongs to that terminal.
 func (t *trayApp) quit() {
 	t.mu.Lock()
 	own := t.st.running && t.st.ownPID != 0 && t.st.ownPID == t.st.pid
+	pid := t.st.pid
 	t.mu.Unlock()
 	if own {
 		if err := stopDaemon(config.PIDPath()); err != nil {
 			log.Printf("stopping daemon on quit: %v", err)
+		} else {
+			// The app exits before watchPID would see the daemon stop.
+			clearOwned(pid)
 		}
 	}
 	t.app.Quit()
