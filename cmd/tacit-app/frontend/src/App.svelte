@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { backend, errorText } from './backend.js'
 
-  const STEPS = ['Summaries', 'Listening', 'Speech model', 'Permissions']
+  const STEPS = ['Summaries', 'Transcription', 'Speech model', 'Permissions']
 
   let opts = $state(null)
   let loadError = $state('')
@@ -15,7 +15,7 @@
   let checkError = $state('')
   let checkedOK = $state(false)
 
-  // Listening
+  // Transcription
   let saving = $state(false)
   let saveError = $state('')
 
@@ -27,12 +27,6 @@
   // Permissions
   let perms = $state(null)
 
-  // Record progress once the choices are saved, so a forced relaunch resumes.
-  $effect(() => {
-    if (opts && step >= 2) backend.saveProgress(step)
-  })
-
-  const noSource = $derived(choices && !choices.capture_mic && !choices.capture_speaker)
   const percent = $derived(progress.total > 0 ? Math.floor((progress.done / progress.total) * 100) : 0)
 
   onMount(() => {
@@ -41,11 +35,6 @@
       .then((o) => {
         opts = o
         choices = { ...o.choices }
-        // Reopened after macOS relaunched the app mid-setup (granting Screen
-        // Recording does that): pick up where it stopped, and confirm the
-        // grant once — the polled check can miss it.
-        if (o.resume_step > 0) step = o.resume_step
-        if (o.resume_step === 3 && o.choices.capture_speaker) verifyScreen()
       })
       .catch((e) => (loadError = errorText(e)))
     const off = backend.onModelProgress((p) => (progress = p))
@@ -126,25 +115,6 @@
     await refreshPerms()
   }
 
-  async function allowScreenRecording() {
-    const granted = await backend.requestScreenRecording()
-    if (!granted) await backend.openPrivacySettings('ScreenCapture')
-    await refreshPerms()
-  }
-
-  // The one check that can show macOS's dialog: only on a click, or once
-  // after a relaunch. Never on the polling timer.
-  let verifying = $state(false)
-  async function verifyScreen() {
-    verifying = true
-    try {
-      await backend.verifyScreenRecording()
-      await refreshPerms()
-    } finally {
-      verifying = false
-    }
-  }
-
   function gb(n) {
     return (n / 1e9).toFixed(2)
   }
@@ -208,16 +178,8 @@
     </section>
   {:else if step === 1}
     <section>
-      <h2>What should it listen to?</h2>
-      <label class="check">
-        <input type="checkbox" bind:checked={choices.capture_mic} />
-        <span><strong>Microphone</strong><small>What you say.</small></span>
-      </label>
-      <label class="check">
-        <input type="checkbox" bind:checked={choices.capture_speaker} />
-        <span><strong>System audio</strong><small>Meetings and videos playing on this Mac. Needs Screen Recording permission.</small></span>
-      </label>
-      {#if noSource}<p class="error">Choose at least one.</p>{/if}
+      <h2>How should it transcribe?</h2>
+      <p class="muted">Tacit listens to your microphone.</p>
 
       <label class="field">
         <span>Language</span>
@@ -235,7 +197,7 @@
       {#if saveError}<pre class="error">{saveError}</pre>{/if}
       <footer>
         <button onclick={() => (step = 0)}>Back</button>
-        <button class="primary" onclick={save} disabled={saving || noSource}>{saving ? 'Saving…' : 'Save and continue'}</button>
+        <button class="primary" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save and continue'}</button>
       </footer>
     </section>
   {:else if step === 2}
@@ -273,35 +235,20 @@
   {:else if step === 3}
     <section>
       <h2>Permissions</h2>
-      <p class="muted">macOS asks once for each. You can change them later in System Settings → Privacy &amp; Security.</p>
+      <p class="muted">macOS asks once. You can change it later in System Settings → Privacy &amp; Security.</p>
       {#if !perms}
         <p class="muted">Checking…</p>
       {:else}
-        {#if choices.capture_mic}
-          <div class="perm">
-            <span><strong>Microphone</strong></span>
-            {#if perms.microphone === 'granted'}
-              <span class="ok">✓ Allowed</span>
-            {:else if perms.microphone === 'undetermined'}
-              <button onclick={() => backend.requestMicrophone()}>Allow…</button>
-            {:else}
-              <button onclick={() => backend.openPrivacySettings('Microphone')}>Open Settings</button>
-            {/if}
-          </div>
-        {/if}
-        {#if choices.capture_speaker}
-          <div class="perm">
-            <span><strong>Screen Recording</strong><small>For system audio. After allowing it, let macOS quit and reopen Tacit.</small></span>
-            {#if perms.screen_recording}
-              <span class="ok">✓ Allowed</span>
-            {:else}
-              <span class="actions">
-                <button onclick={verifyScreen} disabled={verifying}>{verifying ? 'Checking…' : 'Check again'}</button>
-                <button onclick={allowScreenRecording}>Allow…</button>
-              </span>
-            {/if}
-          </div>
-        {/if}
+        <div class="perm">
+          <span><strong>Microphone</strong></span>
+          {#if perms.microphone === 'granted'}
+            <span class="ok">✓ Allowed</span>
+          {:else if perms.microphone === 'undetermined'}
+            <button onclick={() => backend.requestMicrophone()}>Allow…</button>
+          {:else}
+            <button onclick={() => backend.openPrivacySettings('Microphone')}>Open Settings</button>
+          {/if}
+        </div>
       {/if}
       <footer>
         <button onclick={() => (step = 2)}>Back</button>

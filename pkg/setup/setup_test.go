@@ -37,7 +37,6 @@ func TestValidate(t *testing.T) {
 		"empty model":      func(c *Choices) { c.LLMModel = "  " },
 		"bad claude model": func(c *Choices) { c.LLMProvider, c.LLMModel = "claude", "qwen3.5" },
 		"unknown agent":    func(c *Choices) { c.SkillAgent = "cursor" },
-		"no audio source":  func(c *Choices) { c.CaptureMic, c.CaptureSpeaker = false, false },
 		"empty language":   func(c *Choices) { c.Language = "" },
 	}
 	for name, mutate := range cases {
@@ -50,7 +49,6 @@ func TestValidate(t *testing.T) {
 
 	ok := Defaults()
 	ok.LLMProvider, ok.LLMModel = "claude", "opus"
-	ok.CaptureMic = false
 	if err := ok.Validate(); err != nil {
 		t.Errorf("Validate rejected a valid choice set: %v", err)
 	}
@@ -59,10 +57,10 @@ func TestValidate(t *testing.T) {
 func TestApply_RefusesInvalidWithoutWriting(t *testing.T) {
 	home := isolate(t)
 	c := Defaults()
-	c.CaptureMic, c.CaptureSpeaker = false, false
+	c.LLMProvider = "openai"
 
 	if _, err := Apply(c); err == nil {
-		t.Fatal("Apply accepted choices with no audio source")
+		t.Fatal("Apply accepted an unknown provider")
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("Apply wrote %d entries into HOME on a refused run", len(entries))
@@ -73,7 +71,7 @@ func TestApply_WritesEverything(t *testing.T) {
 	home := isolate(t)
 	c := Choices{
 		LLMProvider: "claude", LLMModel: "sonnet", SkillAgent: "claude",
-		CaptureMic: true, CaptureSpeaker: false, Language: "ko", Experimental: true,
+		Language: "ko", Experimental: true,
 	}
 
 	res, err := Apply(c)
@@ -86,7 +84,7 @@ func TestApply_WritesEverything(t *testing.T) {
 		t.Fatalf("loading what Apply wrote: %v", err)
 	}
 	if cfg.LLMProvider != "claude" || cfg.LLMModel != "sonnet" || cfg.Language != "ko" ||
-		!cfg.Experimental || !cfg.CaptureMic || cfg.CaptureSpeaker {
+		!cfg.Experimental {
 		t.Errorf("loaded config does not reflect the choices: %+v", cfg)
 	}
 
@@ -168,7 +166,7 @@ func TestApply_RerunKeepsUserLines(t *testing.T) {
 	if err := os.MkdirAll(config.BaseDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	const mine = "# pinned for the office mic\nmic_silence_duration: 12s\nllm_provider: claude\nllm_model: opus\n"
+	const mine = "# pinned for the office mic\nsilence_duration: 12s\nllm_provider: claude\nllm_model: opus\n"
 	if err := os.WriteFile(config.OverridePath(), []byte(mine), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +176,7 @@ func TestApply_RerunKeepsUserLines(t *testing.T) {
 	}
 
 	got, _ := os.ReadFile(config.OverridePath())
-	for _, want := range []string{"# pinned for the office mic\n", "mic_silence_duration: 12s\n"} {
+	for _, want := range []string{"# pinned for the office mic\n", "silence_duration: 12s\n"} {
 		if !strings.Contains(string(got), want) {
 			t.Errorf("override lost %q:\n%s", want, got)
 		}
@@ -198,7 +196,7 @@ func TestFromConfig_RoundTrips(t *testing.T) {
 	isolate(t)
 	want := Choices{
 		LLMProvider: "claude", LLMModel: "opus", SkillAgent: "claude",
-		CaptureMic: false, CaptureSpeaker: true, Language: "ko", Experimental: true,
+		Language: "ko", Experimental: true,
 	}
 	res, err := Apply(want)
 	if err != nil {

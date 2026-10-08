@@ -18,19 +18,14 @@ const real = {
   downloadModel: () => Call.ByName(svc + 'DownloadModel'),
   permissions: () => Call.ByName(svc + 'Permissions'),
   requestMicrophone: () => Call.ByName(svc + 'RequestMicrophone'),
-  requestScreenRecording: () => Call.ByName(svc + 'RequestScreenRecording'),
-  // May show macOS's permission dialog: call only on a user action (or once
-  // after a relaunch). Never from a timer.
-  verifyScreenRecording: () => Call.ByName(svc + 'VerifyScreenRecording'),
   openPrivacySettings: (pane) => Call.ByName(svc + 'OpenPrivacySettings', pane),
   finish: (startListening) => Call.ByName(svc + 'Finish', startListening),
-  saveProgress: (step) => Call.ByName(svc + 'SaveProgress', step),
   onModelProgress: (fn) => Events.On(MODEL_PROGRESS, (e) => fn(e.data)),
 }
 
 function makeFake() {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-  const perms = { microphone: 'undetermined', screen_recording: false }
+  const perms = { microphone: 'undetermined' }
   let progressFn = () => {}
   let modelPresent = false
 
@@ -40,7 +35,7 @@ function makeFake() {
         configured: false,
         choices: {
           llm_provider: 'ollama', llm_model: 'qwen3.5', skill_agent: 'claude',
-          capture_mic: true, capture_speaker: true, language: 'auto', experimental: false,
+          language: 'auto', experimental: false,
         },
         providers: ['ollama', 'claude'],
         claude_models: ['haiku', 'sonnet', 'opus'],
@@ -51,8 +46,6 @@ function makeFake() {
         ],
         default_ollama_model: 'qwen3.5',
         model: { name: 'large-v3-turbo', present: modelPresent },
-        // ?resume=3 in the dev URL simulates reopening after a forced relaunch.
-        resume_step: Number(new URLSearchParams(location.search).get('resume') ?? 0),
       }
     },
     async checkProvider(c) {
@@ -87,11 +80,8 @@ function makeFake() {
     },
     async permissions() { return { ...perms } },
     async requestMicrophone() { await wait(300); perms.microphone = 'granted' },
-    async requestScreenRecording() { return false },
-    async verifyScreenRecording() { return perms.screen_recording },
-    async openPrivacySettings() { await wait(300); perms.screen_recording = true },
+    async openPrivacySettings() { await wait(300); perms.microphone = 'granted' },
     async finish(startListening) { console.log('finish', { startListening }) },
-    async saveProgress(step) { console.log('saveProgress', step) },
     onModelProgress(fn) { progressFn = fn; return () => { progressFn = () => {} } },
   }
 }

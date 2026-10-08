@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,22 +29,7 @@ type OnboardingService struct {
 
 	mu     sync.Mutex
 	window *application.WebviewWindow
-
-	// See VerifyScreenRecording.
-	screenMu       sync.Mutex
-	screenVerified bool      // a ScreenCaptureKit check succeeded in this process
-	screenChecking bool      // one is running
-	screenLastRun  time.Time // when the last one started
 }
-
-// checkSystemAudio is the ScreenCaptureKit check behind VerifyScreenRecording,
-// swapped out in tests.
-var checkSystemAudio = systemAudioCaptureAllowed
-
-// verifyMinInterval bounds how often the ScreenCaptureKit check can run. While
-// access is missing, each run shows macOS's permission dialog; polling it once
-// a second put that dialog in an endless loop.
-const verifyMinInterval = 5 * time.Second
 
 // OnboardingOptions is everything the window needs to draw its form.
 type OnboardingOptions struct {
@@ -59,10 +41,6 @@ type OnboardingOptions struct {
 	Languages          []setup.Language `json:"languages"`
 	DefaultOllamaModel string           `json:"default_ollama_model"`
 	Model              ModelInfo        `json:"model"`
-	// ResumeStep is the step to reopen at when a previous run of the window
-	// was cut short after the choices were saved — typically by the "Quit &
-	// Reopen" macOS demands to apply Screen Recording. 0 means start over.
-	ResumeStep int `json:"resume_step"`
 }
 
 // ModelInfo describes the whisper model setup will need.
@@ -73,38 +51,13 @@ type ModelInfo struct {
 
 // Permissions is the app's (and so the daemon's) capture permission state.
 type Permissions struct {
-	Microphone      string `json:"microphone"`
-	ScreenRecording bool   `json:"screen_recording"`
+	Microphone string `json:"microphone"`
 }
 
 // ModelProgress is the payload of modelProgressEvent.
 type ModelProgress struct {
 	Done  int64 `json:"done"`
 	Total int64 `json:"total"`
-}
-
-// progressPath records how far onboarding got once the choices are saved, so a
-// relaunch in the middle — which granting Screen Recording forces — resumes
-// there instead of starting again.
-func progressPath() string {
-	return filepath.Join(config.BaseDir(), "onboarding-progress")
-}
-
-// firstSavedStep is the first step reached only after Apply: before it,
-// nothing is saved and there is nothing to resume.
-const firstSavedStep = 2
-
-// pendingStep returns the recorded step, or 0 if onboarding is not mid-way.
-func pendingStep() int {
-	b, err := os.ReadFile(progressPath())
-	if err != nil {
-		return 0
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || n < firstSavedStep {
-		return 0
-	}
-	return n
 }
 
 // isConfigured reports whether setup has run — CLI or app. Both write the
@@ -139,17 +92,7 @@ func (s *OnboardingService) Options() (OnboardingOptions, error) {
 		Languages:          setup.Languages,
 		DefaultOllamaModel: setup.DefaultOllamaModel,
 		Model:              ModelInfo{Name: cfg.WhisperModel, Present: statErr == nil},
-		ResumeStep:         pendingStep(),
 	}, nil
-}
-
-// SaveProgress records the step the window is on. Steps before the choices
-// are saved are not recorded: resuming there would skip the save.
-func (s *OnboardingService) SaveProgress(step int) error {
-	if step < firstSavedStep {
-		return nil
-	}
-	return os.WriteFile(progressPath(), []byte(strconv.Itoa(step)+"\n"), 0o644)
 }
 
 // CheckProvider checks the chosen classifier is reachable before saving.
@@ -189,58 +132,19 @@ func (s *OnboardingService) DownloadModel(ctx context.Context) error {
 }
 
 // Permissions reports capture permissions without ever prompting — the window
-// polls it every second. ScreenRecording is true once either the non-prompting
-// preflight says so or VerifyScreenRecording has confirmed it.
+// polls it every second.
 func (s *OnboardingService) Permissions() Permissions {
-	s.screenMu.Lock()
-	verified := s.screenVerified
-	s.screenMu.Unlock()
-	return Permissions{
-		Microphone:      microphoneStatus(),
-		ScreenRecording: verified || screenRecordingPreflight(),
-	}
-}
-
-// VerifyScreenRecording asks ScreenCaptureKit directly whether the daemon can
-// record system audio — the answer the preflight in Permissions can miss.
-// While access is missing, macOS shows its permission dialog for this call,
-// so the window runs it only when the user asks or right after a relaunch,
-// and it refuses to run more than once per verifyMinInterval regardless.
-func (s *OnboardingService) VerifyScreenRecording() bool {
-	s.screenMu.Lock()
-	if s.screenVerified {
-		s.screenMu.Unlock()
-		return true
-	}
-	if s.screenChecking || time.Since(s.screenLastRun) < verifyMinInterval {
-		s.screenMu.Unlock()
-		return false
-	}
-	s.screenChecking, s.screenLastRun = true, time.Now()
-	s.screenMu.Unlock()
-
-	ok := checkSystemAudio()
-
-	s.screenMu.Lock()
-	s.screenChecking = false
-	s.screenVerified = s.screenVerified || ok
-	s.screenMu.Unlock()
-	return ok
+	return Permissions{Microphone: microphoneStatus()}
 }
 
 // RequestMicrophone shows the system microphone prompt, if it has not been
 // answered. The window polls Permissions for the outcome.
 func (s *OnboardingService) RequestMicrophone() { requestMicrophone() }
 
-// RequestScreenRecording shows the Screen Recording prompt the first time;
-// after that the only way to grant it is System Settings.
-func (s *OnboardingService) RequestScreenRecording() bool { return requestScreenRecording() }
-
-// OpenPrivacySettings opens a Privacy & Security pane: "Microphone" or
-// "ScreenCapture".
+// OpenPrivacySettings opens a Privacy & Security pane: "Microphone".
 func (s *OnboardingService) OpenPrivacySettings(pane string) error {
 	switch pane {
-	case "Microphone", "ScreenCapture":
+	case "Microphone":
 	default:
 		return fmt.Errorf("unknown privacy pane %q", pane)
 	}
@@ -250,9 +154,6 @@ func (s *OnboardingService) OpenPrivacySettings(pane string) error {
 // Finish closes the window, marks onboarding done, and, if asked, starts
 // listening.
 func (s *OnboardingService) Finish(startListening bool) {
-	if err := os.Remove(progressPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintf(os.Stderr, "clearing onboarding progress: %v\n", err)
-	}
 	s.mu.Lock()
 	w := s.window
 	s.mu.Unlock()

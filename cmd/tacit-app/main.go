@@ -93,10 +93,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	app.Event.OnApplicationEvent(wailsevents.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-		// Open onboarding on a first run — nothing is set up, so Start would
-		// fail — and when a previous run of it was cut short, e.g. by the
-		// relaunch macOS forces to apply Screen Recording.
-		if !isConfigured() || pendingStep() > 0 {
+		// Open onboarding on a first run: nothing is set up, so Start would fail.
+		if !isConfigured() {
 			go onboarding.show()
 		}
 		go t.watchPID(ctx)
@@ -154,7 +152,6 @@ func (t *trayApp) watchPID(ctx context.Context) {
 		}
 		if changed {
 			t.st.running, t.st.pid = running, pid
-			t.st.speakerDenied = false
 			if !running {
 				t.st.activity = ""
 			}
@@ -183,13 +180,6 @@ func (t *trayApp) draw() {
 	menu.Add(s.statusLine()).SetEnabled(false)
 	if s.lastErr != "" {
 		menu.Add(s.lastErr).SetEnabled(false)
-	}
-	if s.running && s.speakerDenied {
-		// A grant reaches the daemon only when it restarts, so the fix is
-		// granting in Settings, then Stop and Start.
-		menu.Add("System audio off: Screen Recording not granted…").OnClick(func(*application.Context) {
-			t.onboarding.OpenPrivacySettings("ScreenCapture")
-		})
 	}
 	if s.running {
 		menu.Add("Stop Listening").OnClick(func(*application.Context) { t.stop() })

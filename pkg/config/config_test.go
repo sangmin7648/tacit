@@ -20,11 +20,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Experimental != false {
 		t.Errorf("Experimental: got %v, want %v", cfg.Experimental, false)
 	}
-	if cfg.MinSpeechDur != 5*time.Second {
-		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 5*time.Second)
+	if cfg.MinSpeechDur != 2*time.Second {
+		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 2*time.Second)
 	}
-	if cfg.SilenceDuration != 3*time.Second {
-		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, 3*time.Second)
+	if cfg.SilenceDuration != 10*time.Second {
+		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, 10*time.Second)
 	}
 	if cfg.MaxSegmentDur != 30*time.Second {
 		t.Errorf("MaxSegmentDur: got %v, want %v", cfg.MaxSegmentDur, 30*time.Second)
@@ -37,24 +37,6 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.LLMModel != "qwen3.5" {
 		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "qwen3.5")
-	}
-	if cfg.MicMinSpeechDur != 2*time.Second {
-		t.Errorf("MicMinSpeechDur: got %v, want %v", cfg.MicMinSpeechDur, 2*time.Second)
-	}
-	if cfg.MicSilenceDuration != 10*time.Second {
-		t.Errorf("MicSilenceDuration: got %v, want %v", cfg.MicSilenceDuration, 10*time.Second)
-	}
-	if cfg.MicMaxSegmentDur != 30*time.Second {
-		t.Errorf("MicMaxSegmentDur: got %v, want %v", cfg.MicMaxSegmentDur, 30*time.Second)
-	}
-	if cfg.SpeakerMinSpeechDur != 5*time.Second {
-		t.Errorf("SpeakerMinSpeechDur: got %v, want %v", cfg.SpeakerMinSpeechDur, 5*time.Second)
-	}
-	if cfg.SpeakerSilenceDuration != 3*time.Second {
-		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, 3*time.Second)
-	}
-	if cfg.SpeakerMaxSegmentDur != 30*time.Second {
-		t.Errorf("SpeakerMaxSegmentDur: got %v, want %v", cfg.SpeakerMaxSegmentDur, 30*time.Second)
 	}
 }
 
@@ -179,7 +161,7 @@ func TestLoadWithOverride_OverrideWins(t *testing.T) {
 func TestLoadWithOverride_BareZeroDuration(t *testing.T) {
 	dir := t.TempDir()
 	overridePath := filepath.Join(dir, "config-override.yaml")
-	data := "max_segment_duration: 0\nmax_session_duration: 0.0\ndedup_window: 0\nmic_max_segment_duration: 0s\nenergy_threshold: 150\n"
+	data := "max_segment_duration: 0\nmax_session_duration: 0.0\ndedup_window: 0\nenergy_threshold: 150\n"
 	if err := os.WriteFile(overridePath, []byte(data), 0644); err != nil {
 		t.Fatalf("failed to write override: %v", err)
 	}
@@ -188,9 +170,9 @@ func TestLoadWithOverride_BareZeroDuration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadWithOverride returned error: %v", err)
 	}
-	if cfg.MaxSegmentDur != 0 || cfg.MaxSessionDur != 0 || cfg.DedupWindow != 0 || cfg.MicMaxSegmentDur != 0 {
-		t.Errorf("durations: got segment=%v session=%v dedup=%v mic_segment=%v, want all 0",
-			cfg.MaxSegmentDur, cfg.MaxSessionDur, cfg.DedupWindow, cfg.MicMaxSegmentDur)
+	if cfg.MaxSegmentDur != 0 || cfg.MaxSessionDur != 0 || cfg.DedupWindow != 0 {
+		t.Errorf("durations: got segment=%v session=%v dedup=%v, want all 0",
+			cfg.MaxSegmentDur, cfg.MaxSessionDur, cfg.DedupWindow)
 	}
 	if cfg.EnergyThreshold != 150 {
 		t.Errorf("EnergyThreshold: got %v, want 150", cfg.EnergyThreshold)
@@ -361,14 +343,11 @@ func TestWriteDefault(t *testing.T) {
 	}
 
 	defaults := DefaultConfig()
-	if cfg.MicMinSpeechDur != defaults.MicMinSpeechDur {
-		t.Errorf("MicMinSpeechDur: got %v, want %v", cfg.MicMinSpeechDur, defaults.MicMinSpeechDur)
+	if cfg.MinSpeechDur != defaults.MinSpeechDur {
+		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, defaults.MinSpeechDur)
 	}
-	if cfg.MicSilenceDuration != defaults.MicSilenceDuration {
-		t.Errorf("MicSilenceDuration: got %v, want %v", cfg.MicSilenceDuration, defaults.MicSilenceDuration)
-	}
-	if cfg.SpeakerSilenceDuration != defaults.SpeakerSilenceDuration {
-		t.Errorf("SpeakerSilenceDuration: got %v, want %v", cfg.SpeakerSilenceDuration, defaults.SpeakerSilenceDuration)
+	if cfg.SilenceDuration != defaults.SilenceDuration {
+		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, defaults.SilenceDuration)
 	}
 	// dedup_window is written as "3h"; the reader has to parse that back.
 	if cfg.DedupWindow != defaults.DedupWindow {
@@ -385,7 +364,7 @@ func TestWriteSetupOverride_AcceptingDefaultsWritesNoActiveOverrides(t *testing.
 	defaults := DefaultConfig()
 
 	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
-		defaults.Language, defaults.CaptureMic, defaults.CaptureSpeaker, defaults.Experimental); err != nil {
+		defaults.Language, defaults.Experimental); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -402,7 +381,7 @@ func TestWriteSetupOverride_NonDefaultChoicesAreActive(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config-override.yaml")
 
-	if err := WriteSetupOverride(path, "claude", "opus", "claude", "ko", false, false, true); err != nil {
+	if err := WriteSetupOverride(path, "claude", "opus", "claude", "ko", true); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -414,19 +393,8 @@ func TestWriteSetupOverride_NonDefaultChoicesAreActive(t *testing.T) {
 		t.Errorf("expected non-default wizard choices to be active, got %+v", cfg)
 	}
 
-	// CaptureMic/CaptureSpeaker are both false here (differing from the true/true
-	// default), but that's also Go's zero value for an unset field — parsing the
-	// merged config can't distinguish "active: false" from "commented out", so
-	// check the raw file for the uncommented line instead.
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read override file: %v", err)
-	}
-	if !containsLine(string(data), "\ncapture_mic: false\n") {
-		t.Errorf("expected capture_mic: false to be active (uncommented), got:\n%s", data)
-	}
-	if !containsLine(string(data), "\ncapture_speaker: false\n") {
-		t.Errorf("expected capture_speaker: false to be active (uncommented), got:\n%s", data)
+	if !cfg.Experimental {
+		t.Errorf("expected experimental: true to be active, got %+v", cfg)
 	}
 }
 
@@ -448,7 +416,7 @@ func TestWriteSetupOverride_UpgradeClearsStaleDefaultPin(t *testing.T) {
 	}
 
 	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
-		defaults.Language, defaults.CaptureMic, defaults.CaptureSpeaker, defaults.Experimental); err != nil {
+		defaults.Language, defaults.Experimental); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -477,7 +445,7 @@ func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
 	// User previously hand-edited durations that setup never asks about.
 	seed := "whisper_model: small\n" +
 		"min_speech_duration: 7s\n" +
-		"mic_silence_duration: 12s\n" +
+		"silence_duration: 12s\n" +
 		"dedup_window: 6h\n" +
 		"min_char_rate: 0.35\n" +
 		"initial_prompt: \"hello, world\"\n"
@@ -486,7 +454,7 @@ func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
 	}
 
 	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
-		defaults.Language, defaults.CaptureMic, defaults.CaptureSpeaker, defaults.Experimental); err != nil {
+		defaults.Language, defaults.Experimental); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -500,8 +468,8 @@ func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
 	if cfg.MinSpeechDur != 7*time.Second {
 		t.Errorf("MinSpeechDur: got %v, want 7s (should survive re-running setup)", cfg.MinSpeechDur)
 	}
-	if cfg.MicSilenceDuration != 12*time.Second {
-		t.Errorf("MicSilenceDuration: got %v, want 12s (should survive re-running setup)", cfg.MicSilenceDuration)
+	if cfg.SilenceDuration != 12*time.Second {
+		t.Errorf("SilenceDuration: got %v, want 12s (should survive re-running setup)", cfg.SilenceDuration)
 	}
 	if cfg.InitialPrompt != "hello, world" {
 		t.Errorf("InitialPrompt: got %q, want %q (should survive re-running setup)", cfg.InitialPrompt, "hello, world")
@@ -554,7 +522,7 @@ func TestWriteSetupOverride_PreservesDenylist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", true, true, true); err != nil {
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -577,7 +545,7 @@ func TestWriteSetupOverride_PreservesDenylist(t *testing.T) {
 // it is discoverable without reading the docs.
 func TestWriteSetupOverride_MentionsDenylistWhenUnset(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config-override.yaml")
-	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", true, true, false); err != nil {
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", false); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
@@ -586,42 +554,5 @@ func TestWriteSetupOverride_MentionsDenylistWhenUnset(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "transcript_denylist") {
 		t.Error("transcript_denylist is absent from the generated override file")
-	}
-}
-
-// A shared timing set in the override file reaches every source that does not
-// set its own; the per-source defaults hold only while the user sets neither.
-func TestLoadWithOverride_SharedTimingsApply(t *testing.T) {
-	path := overridePathIn(t)
-	writeOverride(t, path, "silence_duration: 5s\nspeaker_silence_duration: 4s\nmax_segment_duration: 0\n")
-
-	cfg, err := LoadWithOverride("", path)
-	if err != nil {
-		t.Fatalf("LoadWithOverride: %v", err)
-	}
-	d := DefaultConfig()
-	for _, c := range []struct {
-		name      string
-		got, want time.Duration
-	}{
-		{"mic_silence_duration (inherits the shared override)", cfg.MicSilenceDuration, 5 * time.Second},
-		{"speaker_silence_duration (its own override wins)", cfg.SpeakerSilenceDuration, 4 * time.Second},
-		{"mic_max_segment_duration (0 turns the cap off)", cfg.MicMaxSegmentDur, 0},
-		{"speaker_max_segment_duration (0 turns the cap off)", cfg.SpeakerMaxSegmentDur, 0},
-		{"mic_min_speech_duration (nothing set: per-source default)", cfg.MicMinSpeechDur, d.MicMinSpeechDur},
-		{"speaker_min_speech_duration (nothing set: per-source default)", cfg.SpeakerMinSpeechDur, d.SpeakerMinSpeechDur},
-	} {
-		if c.got != c.want {
-			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
-		}
-	}
-
-	// The defaults a settings screen compares against are untouched.
-	defaults, err := LoadWithOverride("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if defaults.MicSilenceDuration != d.MicSilenceDuration {
-		t.Errorf("defaults mic_silence_duration = %v", defaults.MicSilenceDuration)
 	}
 }

@@ -97,7 +97,7 @@ func TestSetOverride_PreservesUnrelatedBytes(t *testing.T) {
 		"\n" +
 		"# model notes: turbo is fast enough\n" +
 		"llm_provider: claude\n" +
-		"capture_speaker: false\n"
+		"experimental: true\n"
 	writeOverride(t, path, orig)
 
 	if err := SetOverride(path, "llm_provider", "ollama"); err != nil {
@@ -120,13 +120,13 @@ func TestSetOverride_ReplacesBlockList(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := overridePathIn(t)
-			writeOverride(t, path, "language: ko\n"+block+"capture_mic: false\n")
+			writeOverride(t, path, "language: ko\n"+block+"experimental: true\n")
 
 			if err := SetOverride(path, "transcript_denylist", []any{"시청해주셔서 감사합니다", "new"}); err != nil {
 				t.Fatalf("SetOverride: %v", err)
 			}
 
-			want := "language: ko\ntranscript_denylist: [시청해주셔서 감사합니다, new]\ncapture_mic: false\n"
+			want := "language: ko\ntranscript_denylist: [시청해주셔서 감사합니다, new]\nexperimental: true\n"
 			if got := readOverride(t, path); got != want {
 				t.Errorf("file =\n%s\nwant =\n%s", got, want)
 			}
@@ -134,8 +134,8 @@ func TestSetOverride_ReplacesBlockList(t *testing.T) {
 			if !reflect.DeepEqual(cfg.TranscriptDenylist, []string{"시청해주셔서 감사합니다", "new"}) {
 				t.Errorf("TranscriptDenylist = %q", cfg.TranscriptDenylist)
 			}
-			if cfg.CaptureMic {
-				t.Error("capture_mic lost its override")
+			if !cfg.Experimental {
+				t.Error("experimental lost its override")
 			}
 		})
 	}
@@ -155,7 +155,7 @@ func TestSetOverride_RoundTripsAwkwardValues(t *testing.T) {
 		{"initial_prompt", "line one\nline two", func(c *Config) any { return c.InitialPrompt }, "line one\nline two"},
 		{"initial_prompt", "", func(c *Config) any { return c.InitialPrompt }, ""},
 		{"llm_model", "3.5", func(c *Config) any { return c.LLMModel }, "3.5"},
-		{"capture_mic", false, func(c *Config) any { return c.CaptureMic }, false},
+		{"experimental", true, func(c *Config) any { return c.Experimental }, true},
 		{"speech_threshold", 0.65, func(c *Config) any { return c.SpeechThreshold }, 0.65},
 		{"energy_threshold", 300, func(c *Config) any { return c.EnergyThreshold }, 300.0},
 		{"dedup_window", "90m", func(c *Config) any { return c.DedupWindow }, 90 * time.Minute},
@@ -183,7 +183,7 @@ func TestSetOverride_RefusesAndLeavesFileUntouched(t *testing.T) {
 		want  string // substring of the error
 	}{
 		{"unknown key", "whisper_modle", "base", "unknown config key"},
-		{"wrong type", "capture_mic", "maybe", "capture_mic"},
+		{"wrong type", "experimental", "maybe", "experimental"},
 		{"list for scalar", "language", []any{"ko", "en"}, "language"},
 		{"bare int duration", "silence_duration", 30, "needs a unit"},
 		{"bare float duration", "silence_duration", 1.5, "needs a unit"},
@@ -213,7 +213,7 @@ func TestSetOverride_RefusesInvalidExistingFile(t *testing.T) {
 	const orig = "language: [ko\n"
 	writeOverride(t, path, orig)
 
-	if err := SetOverride(path, "capture_mic", false); err == nil || !strings.Contains(err.Error(), "tacit config edit") {
+	if err := SetOverride(path, "experimental", true); err == nil || !strings.Contains(err.Error(), "tacit config edit") {
 		t.Fatalf("err = %v, want one pointing at 'tacit config edit'", err)
 	}
 	if got := readOverride(t, path); got != orig {
@@ -248,7 +248,7 @@ func TestClearOverride_CommentsOutWithDefault(t *testing.T) {
 		t.Fatalf("ClearOverride: %v", err)
 	}
 
-	want := "language: ko\n# silence_duration: 3s\n# transcript_denylist: []\n"
+	want := "language: ko\n# silence_duration: 10s\n# transcript_denylist: []\n"
 	if got := readOverride(t, path); got != want {
 		t.Errorf("file =\n%s\nwant =\n%s", got, want)
 	}
@@ -339,17 +339,17 @@ func TestFields(t *testing.T) {
 	if f := byKey["language"]; f.Value != "ko" || f.Default != "auto" || !f.Overridden {
 		t.Errorf("language = %+v", f)
 	}
-	if f := byKey["silence_duration"]; f.Value != "8s" || f.Default != "3s" || !f.Overridden {
+	if f := byKey["silence_duration"]; f.Value != "8s" || f.Default != "10s" || !f.Overridden {
 		t.Errorf("silence_duration = %+v, want durations in file form", f)
 	}
-	if f := byKey["capture_mic"]; f.Value != true || f.Overridden {
-		t.Errorf("capture_mic = %+v", f)
+	if f := byKey["experimental"]; f.Value != false || f.Overridden {
+		t.Errorf("experimental = %+v", f)
 	}
 	if f := byKey["transcript_denylist"]; f.Value == nil || reflect.ValueOf(f.Value).Len() != 0 {
 		t.Errorf("transcript_denylist = %#v, want an empty non-nil list", f.Value)
 	}
 	for key, want := range map[string]string{
-		"language": "string", "capture_mic": "bool", "speech_threshold": "number",
+		"language": "string", "experimental": "bool", "speech_threshold": "number",
 		"silence_duration": "duration", "transcript_denylist": "list",
 	} {
 		if got := byKey[key].Kind; got != want {
@@ -374,7 +374,7 @@ func TestParseValue(t *testing.T) {
 		{"initial_prompt", "tacit: whisper, VAD", "tacit: whisper, VAD"},
 		{"initial_prompt", "", ""},
 		{"llm_model", "3.5", "3.5"},
-		{"capture_mic", "false", false},
+		{"experimental", "true", true},
 		{"speech_threshold", "0.6", 0.6},
 		{"energy_threshold", "300", 300},
 		{"silence_duration", "8s", "8s"},
@@ -404,7 +404,7 @@ func TestParseValue_FeedsSetOverride(t *testing.T) {
 	path := overridePathIn(t)
 	for key, text := range map[string]string{
 		"initial_prompt":      "tacit: whisper, VAD",
-		"capture_speaker":     "false",
+		"experimental":        "true",
 		"min_char_rate":       "0.35",
 		"dedup_window":        "0s",
 		"transcript_denylist": "구독과 좋아요",
@@ -418,7 +418,7 @@ func TestParseValue_FeedsSetOverride(t *testing.T) {
 		}
 	}
 	cfg := loadOverride(t, path)
-	if cfg.InitialPrompt != "tacit: whisper, VAD" || cfg.CaptureSpeaker || cfg.MinCharRate != 0.35 ||
+	if cfg.InitialPrompt != "tacit: whisper, VAD" || !cfg.Experimental || cfg.MinCharRate != 0.35 ||
 		cfg.DedupWindow != 0 || !reflect.DeepEqual(cfg.TranscriptDenylist, []string{"구독과 좋아요"}) {
 		t.Errorf("loaded config = %+v", cfg)
 	}
