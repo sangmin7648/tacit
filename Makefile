@@ -38,6 +38,14 @@ endif
 export CGO_CFLAGS  := -I$(abspath $(WHISPER_DIR)/include) -I$(abspath $(WHISPER_DIR)/ggml/include) -O2 $(MIN_FLAG)
 export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFORM_LDFLAGS) $(MIN_FLAG)
 
+# VERSION is stamped into both binaries (main.version) and the app's
+# Info.plist. The release workflow passes the tag; a local build describes the
+# checkout, e.g. v0.11.0-16-gfe768d8.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GO_LDFLAGS := -X main.version=$(VERSION)
+# CFBundleShortVersionString takes numbers only: v0.11.0-16-gfe768d8 -> 0.11.0.
+PLIST_VERSION := $(or $(shell echo '$(VERSION)' | sed -nE 's/^v?([0-9]+\.[0-9]+\.[0-9]+).*/\1/p'),0.0.0)
+
 # ── Targets ──────────────────────────────────────────────
 
 TEN_VAD_FRAMEWORK := third_party/ten-vad/lib/macOS/ten_vad.framework
@@ -65,7 +73,7 @@ pkg/search/rg-darwin-amd64:
 rg-download: pkg/search/rg-darwin-arm64 pkg/search/rg-darwin-amd64
 
 build: whisper-lib rg-download
-	go build -o tacit ./cmd/tacit/
+	go build -ldflags "$(GO_LDFLAGS)" -o tacit ./cmd/tacit/
 ifeq ($(UNAME_S),Darwin)
 	@echo "Bundling ten_vad.framework..."
 	rm -rf ten_vad.framework
@@ -141,11 +149,13 @@ app: build
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Helpers $(APP)/Contents/Frameworks
 	CGO_CFLAGS="$(MIN_FLAG)" CGO_LDFLAGS="$(MIN_FLAG)" \
-		go build -o $(APP)/Contents/MacOS/Tacit ./cmd/tacit-app/
+		go build -ldflags "$(GO_LDFLAGS)" -o $(APP)/Contents/MacOS/Tacit ./cmd/tacit-app/
 	cp tacit $(APP)/Contents/Helpers/tacit
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/Helpers/tacit
 	cp -R ten_vad.framework $(APP)/Contents/Frameworks/
 	cp cmd/tacit-app/Info.plist $(APP)/Contents/Info.plist
+	plutil -replace CFBundleShortVersionString -string "$(PLIST_VERSION)" $(APP)/Contents/Info.plist
+	plutil -replace CFBundleVersion -string "$(PLIST_VERSION)" $(APP)/Contents/Info.plist
 	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)/Contents/Frameworks/ten_vad.framework
 	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)/Contents/Helpers/tacit
 	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)

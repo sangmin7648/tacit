@@ -30,6 +30,9 @@ import (
 //go:embed all:frontend/dist
 var frontend embed.FS
 
+// version is set at build time by the Makefile (-X main.version).
+var version = "dev"
+
 // pollInterval paces both the PID-file check and the event-log follow. The PID
 // file changes when anything — this app, a terminal, a crash — starts or stops
 // the daemon, and nothing announces it.
@@ -203,6 +206,7 @@ func (t *trayApp) draw() {
 	menu.Add("Open Knowledge Folder").OnClick(func(*application.Context) { openPath(config.BaseDir()) })
 	menu.Add("Open Daemon Log").OnClick(func(*application.Context) { openPath(daemonLogPath()) })
 	menu.AddSeparator()
+	menu.Add("Tacit " + version).SetEnabled(false)
 	quit := "Quit Tacit"
 	if s.running && s.ownPID == s.pid {
 		quit = "Quit Tacit (stops listening)"

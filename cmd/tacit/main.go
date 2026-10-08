@@ -26,6 +26,9 @@ import (
 	"golang.org/x/term"
 )
 
+// version is set at build time by the Makefile (-X main.version).
+var version = "dev"
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -33,6 +36,8 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "version", "--version":
+		fmt.Printf("tacit %s\n", version)
 	case "setup":
 		// setup's writes are refused on a file that does not load; fail
 		// before the wizard asks its questions rather than after.
@@ -106,6 +111,7 @@ Usage:
   tacit stop                   Stop the voice capture daemon
   tacit status [--json]        Check daemon status
   tacit update                 Update tacit to the latest version
+  tacit version                Print the installed version
   tacit list [duration] [--json]   List knowledge entries (default: 24h)
   tacit search [--duration <d>] [--json] <pattern>  Search knowledge entries by pattern
   tacit get [--json] <file-path>...  Print the full content of one or more knowledge entries
