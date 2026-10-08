@@ -28,6 +28,13 @@ type state struct {
 	recent []events.Event
 	// lastErr describes why a daemon this app started exited on its own.
 	lastErr string
+
+	// latest is a release newer than this build, once a check has found one;
+	// upToDate says the last check found none.
+	latest   string
+	upToDate bool
+	// updateFailed says the update that reopened the app failed.
+	updateFailed bool
 }
 
 // observe folds one event into the state.

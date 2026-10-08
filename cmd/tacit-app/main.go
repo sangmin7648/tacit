@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -82,6 +83,7 @@ func main() {
 	t.st.seedRecent(history)
 	t.st.running, t.st.pid = daemonStatus(config.PIDPath())
 	t.st.ownPID = adopt(t.st.running, t.st.pid)
+	t.st.updateFailed = lastUpdateFailed()
 	// Before Run there is no native tray yet: the tray records the label and
 	// menu and applies them at startup, and there is no main thread loop to
 	// dispatch to, so draw directly rather than through render.
@@ -96,6 +98,13 @@ func main() {
 			go onboarding.show()
 		}
 		go t.watchPID(ctx)
+		go t.watchUpdates(ctx)
+		// Reopened by an update that stopped the daemon: listen again.
+		if slices.Contains(os.Args[1:], resumeFlag) && isConfigured() {
+			if running, _ := daemonStatus(config.PIDPath()); !running {
+				go t.start()
+			}
+		}
 		go func() {
 			err := events.Follow(ctx, config.EventLogPath(), pollInterval, func(e events.Event) {
 				t.update(func(s *state) { s.observe(e) })
@@ -196,7 +205,21 @@ func (t *trayApp) draw() {
 	menu.Add("Open Knowledge Folder").OnClick(func(*application.Context) { openPath(config.BaseDir()) })
 	menu.Add("Open Daemon Log").OnClick(func(*application.Context) { openPath(daemonLogPath()) })
 	menu.AddSeparator()
-	menu.Add("Tacit " + version).SetEnabled(false)
+	if s.upToDate {
+		menu.Add("Tacit " + version + " — up to date").SetEnabled(false)
+	} else {
+		menu.Add("Tacit " + version).SetEnabled(false)
+	}
+	if isRelease(version) { // development builds don't update
+		if s.updateFailed {
+			menu.Add("Update failed — Open Update Log").OnClick(func(*application.Context) { openPath(updateLogPath()) })
+		}
+		if s.latest != "" {
+			menu.Add("Update to " + s.latest + "…").OnClick(func(*application.Context) { go t.upgrade() })
+		} else {
+			menu.Add("Check for Updates…").OnClick(func(*application.Context) { go t.checkForUpdate(context.Background(), true) })
+		}
+	}
 	quit := "Quit Tacit"
 	if s.running && s.ownPID == s.pid {
 		quit = "Quit Tacit (stops listening)"
@@ -262,6 +285,76 @@ func (t *trayApp) quit() {
 			// The app exits before watchPID would see the daemon stop.
 			clearOwned(pid)
 		}
+	}
+	t.app.Quit()
+}
+
+// watchUpdates checks for a new release at startup and then daily.
+func (t *trayApp) watchUpdates(ctx context.Context) {
+	if !isRelease(version) {
+		return
+	}
+	for {
+		t.checkForUpdate(ctx, false)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(checkInterval):
+		}
+	}
+}
+
+// checkForUpdate looks for a release newer than this build. A failed check
+// is shown only when the user asked for it.
+func (t *trayApp) checkForUpdate(ctx context.Context, asked bool) {
+	tag, err := latestRelease(ctx)
+	if err != nil {
+		log.Printf("checking for updates: %v", err)
+		if asked {
+			t.update(func(s *state) { s.lastErr = "Couldn't check for updates: " + err.Error() })
+		}
+		return
+	}
+	t.update(func(s *state) {
+		if newer(tag, version) {
+			s.latest, s.upToDate = tag, false
+		} else {
+			s.latest, s.upToDate = "", true
+		}
+	})
+}
+
+// upgrade installs the newest release. install.sh refuses to replace a
+// running app or daemon, so this stops the app's daemon, hands install.sh to
+// a detached updater, and quits; the updater reopens the app, which listens
+// again if it was listening.
+func (t *trayApp) upgrade() {
+	t.mu.Lock()
+	running, pid := t.st.running, t.st.pid
+	own := running && t.st.ownPID != 0 && t.st.ownPID == pid
+	t.mu.Unlock()
+	fail := func(err error) { t.update(func(s *state) { s.lastErr = "Couldn't update: " + err.Error() }) }
+
+	if running && !own {
+		fail(errTerminalDaemon)
+		return
+	}
+	if own {
+		if err := stopAndWait(context.Background(), config.PIDPath(), restartTimeout); err != nil {
+			fail(err)
+			return
+		}
+		clearOwned(pid)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		fail(err)
+		return
+	}
+	bundle := filepath.Clean(filepath.Join(filepath.Dir(exe), "..", "..")) // Tacit.app/Contents/MacOS/Tacit
+	if err := spawnUpdater(os.Getpid(), bundle, own); err != nil {
+		fail(err)
+		return
 	}
 	t.app.Quit()
 }
