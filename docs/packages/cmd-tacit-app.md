@@ -1,5 +1,5 @@
 ---
-source: [cmd/tacit-app]
+source: [tacit/cmd/tacit-app]
 verified: 9825e8e
 ---
 

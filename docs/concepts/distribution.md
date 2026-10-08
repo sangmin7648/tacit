@@ -1,5 +1,5 @@
 ---
-source: [install.sh, Makefile, .github/workflows, cmd/tacit-app/upgrade.go]
+source: [install.sh, tacit/Makefile, .github/workflows, tacit/cmd/tacit-app/upgrade.go]
 verified: 9825e8e
 ---
 

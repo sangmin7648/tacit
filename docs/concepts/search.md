@@ -1,5 +1,5 @@
 ---
-source: [pkg/search, pkg/storage, cmd/tacit]
+source: [tacit/pkg/search, tacit/pkg/storage, tacit/cmd/tacit]
 verified: 9825e8e
 ---
 

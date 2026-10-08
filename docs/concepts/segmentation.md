@@ -1,5 +1,5 @@
 ---
-source: [pkg/pipeline, pkg/audio, pkg/vad, pkg/config]
+source: [tacit/pkg/pipeline, tacit/pkg/audio, tacit/pkg/vad, tacit/pkg/config]
 verified: 9825e8e
 ---
 

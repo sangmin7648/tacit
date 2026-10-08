@@ -1,5 +1,5 @@
 ---
-source: [skills, cmd/tacit]
+source: [tacit/skills, tacit/cmd/tacit]
 verified: 9825e8e
 ---
 

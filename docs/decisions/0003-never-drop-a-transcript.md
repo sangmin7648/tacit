@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-08-26
-source: [pkg/pipeline, pkg/process, pkg/storage]
+source: [tacit/pkg/pipeline, tacit/pkg/process, tacit/pkg/storage]
 verified: 9825e8e
 ---
 

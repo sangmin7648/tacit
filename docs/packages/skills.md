@@ -1,5 +1,5 @@
 ---
-source: [skills]
+source: [tacit/skills]
 verified: 9825e8e
 ---
 

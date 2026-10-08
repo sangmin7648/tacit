@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-09-27
-source: [cmd/tacit-app, pkg/daemon, pkg/events]
+source: [tacit/cmd/tacit-app, tacit/pkg/daemon, tacit/pkg/events]
 verified: 9825e8e
 ---
 

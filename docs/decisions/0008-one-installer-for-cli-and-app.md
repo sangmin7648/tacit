@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-10-09
-source: [install.sh, cmd/tacit-app/upgrade.go]
+source: [install.sh, tacit/cmd/tacit-app/upgrade.go]
 verified: 9825e8e
 ---
 

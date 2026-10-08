@@ -2,6 +2,8 @@
 
 tacit turns spoken words into a searchable local knowledge base: it listens to the microphone, transcribes on-device, classifies each transcript with an LLM, and stores it as a Markdown file that AI agents can search.
 
+The Go module, Makefile, and all code live in `tacit/`; run every `make` and `go` command from there. The repo root holds `docs/` and what GitHub or users reach by URL: `README.md`, `install.sh`, `.github/`, `LICENSE`.
+
 **Read `docs/index.md` first.** It lists every document and what it covers. The code is the source of truth; `docs/` explains the *why* and the *shape* at a high level.
 
 ## Build rules
@@ -29,7 +31,7 @@ Comments are a liability: they go stale silently and cost reading time. Make the
 
 It never holds code-level detail: no function signatures, struct fields, line numbers, or walkthroughs. If a sentence would go stale on a refactor that changes no behaviour, it does not belong in `docs/`. Link to a file path instead of describing its contents.
 
-Layout:
+Layout (`source` paths are relative to the repo root):
 
 ```
 docs/index.md       every page, one line each, with the commit it was last checked against

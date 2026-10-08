@@ -1,5 +1,5 @@
 ---
-source: [cmd/tacit]
+source: [tacit/cmd/tacit]
 verified: 9825e8e
 ---
 

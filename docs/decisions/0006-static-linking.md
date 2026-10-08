@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-03-28
-source: [Makefile, third_party]
+source: [tacit/Makefile, tacit/third_party]
 verified: 9825e8e
 ---
 

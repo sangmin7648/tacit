@@ -163,7 +163,7 @@ Entries are stored under `~/.tacit/<category>/YYYYMMDD-HHMMSS.md` — plain file
 
 ```bash
 git clone --recursive https://github.com/sangmin7648/tacit.git
-cd tacit
+cd tacit/tacit
 make build
 make install   # installs to ~/.local/bin/tacit
 ```
