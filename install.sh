@@ -3,6 +3,8 @@ set -e
 
 REPO="sangmin7648/tacit"
 INSTALL_DIR="$HOME/.local/bin"
+APP_DIR="$HOME/Applications"
+APP_ID="io.github.sangmin7648.tacit"
 
 # ── Helpers ─────────────────────────────────────────────
 
@@ -22,6 +24,20 @@ esac
 
 PLATFORM="${OS}-${ARCH}"
 info "Detected platform: $PLATFORM"
+[ "$PLATFORM" = "darwin-arm64" ] || error "tacit is available for Apple Silicon Macs only"
+
+# ── Refuse while tacit runs ─────────────────────────────
+#
+# Replacing the binary under a running daemon loses its macOS permissions the
+# next time it restarts capture, so stop everything first.
+
+if pgrep -xq Tacit; then
+  error "Tacit is running. Quit it from its menu-bar icon, then run this again."
+fi
+PIDFILE="$HOME/.tacit/tacit.pid"
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  error "tacit is listening (PID $(cat "$PIDFILE")). Stop it with 'tacit stop', then run this again."
+fi
 
 # ── Resolve version ─────────────────────────────────────
 
@@ -41,41 +57,46 @@ info "Installing tacit $VERSION"
 
 # ── Download ────────────────────────────────────────────
 
-ARCHIVE="tacit-${VERSION}-${PLATFORM}.tar.gz"
+ARCHIVE="Tacit-${VERSION}-${PLATFORM}.zip"
 URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 info "Downloading $URL"
-curl -fSL -o "$TMPDIR/$ARCHIVE" "$URL" || error "Download failed. Check version/platform: $URL"
-tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
+curl -fSL -o "$TMPDIR/$ARCHIVE" "$URL" ||
+  error "Download failed: $URL (releases from before the Mac app have no $ARCHIVE)"
+ditto -x -k "$TMPDIR/$ARCHIVE" "$TMPDIR"
+[ -d "$TMPDIR/Tacit.app" ] || error "$ARCHIVE does not contain Tacit.app"
 
 # ── Install ─────────────────────────────────────────────
+#
+# Tacit.app carries the CLI (Contents/Helpers/tacit), and $INSTALL_DIR/tacit
+# is a link to it, so the terminal and the menu-bar app always run the same
+# build. The app is ad-hoc signed, not notarized: fetched with curl it carries
+# no quarantine flag, so Gatekeeper does not check it.
 
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$APP_DIR" "$INSTALL_DIR"
+UPDATING=0
+[ -d "$APP_DIR/Tacit.app" ] && UPDATING=1
+rm -rf "$APP_DIR/Tacit.app"
+ditto "$TMPDIR/Tacit.app" "$APP_DIR/Tacit.app"
+xattr -dr com.apple.quarantine "$APP_DIR/Tacit.app" 2>/dev/null || true
 
-cp "$TMPDIR/tacit" "$INSTALL_DIR/tacit"
-chmod +x "$INSTALL_DIR/tacit"
+ln -sfn "$APP_DIR/Tacit.app/Contents/Helpers/tacit" "$INSTALL_DIR/tacit"
+# Before the app, the CLI was a standalone binary with this framework beside
+# it. Keep it while `make install`'s tacit-dev still uses it.
+[ -e "$INSTALL_DIR/tacit-dev" ] || rm -rf "$INSTALL_DIR/ten_vad.framework"
 
-# Bundle ten_vad.framework (macOS)
-if [ "$OS" = "darwin" ] && [ -d "$TMPDIR/ten_vad.framework" ]; then
-  rm -rf "$INSTALL_DIR/ten_vad.framework"
-  cp -R "$TMPDIR/ten_vad.framework" "$INSTALL_DIR/ten_vad.framework"
+if [ "$UPDATING" = 1 ]; then
+  # macOS ties an ad-hoc signed app's permissions to that exact build, so the
+  # old grants no longer apply — yet System Settings still shows them on, and
+  # the new build is refused. Clear them so Tacit can ask again.
+  tccutil reset Microphone "$APP_ID" >/dev/null 2>&1 || true
+  tccutil reset ScreenCapture "$APP_ID" >/dev/null 2>&1 || true
+  warn "Updated: Tacit will ask for Microphone and Screen Recording again."
 fi
-
-# Remove macOS quarantine and apply ad-hoc signature (Gatekeeper)
-if [ "$OS" = "darwin" ]; then
-  xattr -dr com.apple.quarantine "$INSTALL_DIR/tacit" 2>/dev/null || true
-  if [ -d "$INSTALL_DIR/ten_vad.framework" ]; then
-    xattr -dr com.apple.quarantine "$INSTALL_DIR/ten_vad.framework" 2>/dev/null || true
-  fi
-  # Ad-hoc sign to satisfy macOS Sequoia (15+) Gatekeeper even without notarization
-  codesign --force --deep --sign - "$INSTALL_DIR/tacit" 2>/dev/null || true
-  if [ -d "$INSTALL_DIR/ten_vad.framework" ]; then
-    codesign --force --deep --sign - "$INSTALL_DIR/ten_vad.framework" 2>/dev/null || true
-  fi
-fi
+info "Installed $APP_DIR/Tacit.app and linked $INSTALL_DIR/tacit to it"
 
 # ── PATH check ──────────────────────────────────────────
 
@@ -91,4 +112,5 @@ case ":$PATH:" in
     ;;
 esac
 
-info "Done! Run 'tacit --help' to get started."
+info "Done! Open the menu-bar app with: open ~/Applications/Tacit.app"
+info "Or use the CLI: tacit setup, then tacit listen"
