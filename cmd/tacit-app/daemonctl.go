@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
 )
 
@@ -123,4 +125,47 @@ func stopAndWait(ctx context.Context, pidPath string, timeout time.Duration) err
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+// ownerPath records which daemon the app started. A daemon outlives the app
+// that started it when that app crashes or is killed; without the record the
+// next run of the app took it for one started from a terminal, so Quit left
+// it running with nothing left to show or stop it.
+func ownerPath() string {
+	return filepath.Join(config.BaseDir(), "app-daemon.pid")
+}
+
+// recordOwned notes pid as a daemon the app started.
+func recordOwned(pid int) error {
+	return os.WriteFile(ownerPath(), []byte(strconv.Itoa(pid)), 0o644)
+}
+
+// ownedPID returns the PID recordOwned noted, or 0.
+func ownedPID() int {
+	data, err := os.ReadFile(ownerPath())
+	if err != nil {
+		return 0
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		return 0
+	}
+	return pid
+}
+
+// clearOwned drops the record once pid has stopped — only if it is pid's,
+// so a daemon started in the meantime keeps its own.
+func clearOwned(pid int) {
+	if pid != 0 && ownedPID() == pid {
+		os.Remove(ownerPath())
+	}
+}
+
+// adopt returns the daemon to treat as the app's own: the running one, if the
+// app started it — this run or an earlier one.
+func adopt(running bool, pid int) int {
+	if running && ownedPID() == pid {
+		return pid
+	}
+	return 0
 }
