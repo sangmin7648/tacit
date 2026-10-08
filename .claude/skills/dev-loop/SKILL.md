@@ -51,7 +51,7 @@ Run the cheapest gate that can disprove the change, then climb. Never `go build 
 | `make test PKGS=./pkg/pipeline/ ARGS='-run TestX -count=1'` | one package or test, CGo included (whisper flags come from the Makefile) | seconds once built | inner loop for CGo packages (`pipeline`, `capture`, `stt`, `vad`, `cmd/...`) |
 | `make build` | the real compile: CGo, whisper.cpp, ten-vad bundling | incremental | **any Go change** |
 | `make test` | `go test ./...`, including CGo packages | fast once built | **any Go change** |
-| `make e2e-test` | build + real audio through the pipeline + `-tags integration` classifier test (spends Claude CLI tokens) + darwin speaker test | minutes | any change that can reach the capture -> VAD -> STT -> process -> store runtime |
+| `make e2e-test` | build + real audio through the pipeline + `-tags integration` classifier test (spends Claude CLI tokens) | minutes | any change that can reach the capture -> VAD -> STT -> process -> store runtime |
 
 **CI parity is `make build` + `make test`** (see [.github/workflows/ci.yml](../../../.github/workflows/ci.yml), macos-15). The inner-loop `go test` on pure-Go packages is a supplement, never a substitute — a change verified only that way can still break CI.
 
@@ -62,7 +62,6 @@ Run the cheapest gate that can disprove the change, then climb. Never `go build 
 A passing exit code is not a passing gate here:
 
 - `./tacit process <file>` **exits 0 when the classifier skips** ([cmd/tacit/main.go:439](../../../cmd/tacit/main.go)). The `make e2e-test` step is green either way. Decide *before* running which line you need in stdout: `Knowledge entry created: <path>` (pipeline stored something) or `Content classified as meaningless, skipping.` (ran, stored nothing). For a storage/classify/dedup change the skip line is a **red**.
-- The darwin speaker test `t.Skipf`s when Screen Recording permission is missing. A skip is not a pass — say which it was.
 - Go caches test results. Re-run with `-count=1` when the input changed outside Go source.
 - `tacit process` deliberately `os.Exit(0)`s to dodge a ggml Metal cleanup crash — output printed, then immediate exit, is normal, not a truncated run.
 
@@ -80,7 +79,6 @@ Triage before you edit. An environment red **does not consume an iteration**, an
 | `Error: cmake is required` | toolchain missing | `brew install cmake` |
 | `claude CLI failed` / `executable file not found` | Claude CLI missing or unauthenticated | environment — report, don't change code |
 | long stall on first `make e2e-test` | whisper model downloading into `~/.tacit/models` (GB-scale) | wait once; it is cached |
-| `Stream: ...` + skip in `TestSpeaker_Stream_E2E` | Screen Recording permission | grant it, or report the gate as skipped |
 
 ## 7. Loop
 

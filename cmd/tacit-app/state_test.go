@@ -163,24 +163,6 @@ while :; do sleep 0.05; done
 	}
 }
 
-// A daemon that lost system audio to a refused permission says so until a
-// different daemon — or none — is running.
-func TestSpeakerDenied(t *testing.T) {
-	s := &state{running: true}
-	s.observe(events.Event{Kind: events.KindError, Source: "speaker", Reason: "capture_session_failed"})
-	s.observe(events.Event{Kind: events.KindError, Source: "mic", Reason: events.ReasonPermissionDenied})
-	if s.speakerDenied {
-		t.Error("set by an error that is not the speaker's permission refusal")
-	}
-	s.observe(events.Event{Kind: events.KindError, Source: "speaker", Reason: events.ReasonPermissionDenied})
-	if !s.speakerDenied {
-		t.Error("not set by the speaker's permission refusal")
-	}
-	if got := s.label(); got != "●" {
-		t.Errorf("label = %q; the microphone is still listening", got)
-	}
-}
-
 // A daemon the app started stays the app's across app runs — so Quit stops
 // it — while one started from a terminal never becomes the app's.
 func TestAdopt(t *testing.T) {

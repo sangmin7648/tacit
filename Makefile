@@ -10,9 +10,9 @@ WHISPER_LIBS := \
 	$(WHISPER_BUILD)/ggml/src/libggml-base.a \
 	$(WHISPER_BUILD)/ggml/src/libggml-cpu.a
 
-# The oldest macOS the binaries run on. System audio capture (ScreenCaptureKit)
-# needs 13. Without a target, everything is built for the build machine's own
-# macOS, and the result refuses to start on anything older.
+# The oldest macOS the binaries run on. Without a target, everything is built
+# for the build machine's own macOS, and the result refuses to start on
+# anything older.
 #
 # whisper.cpp's build directory is cached: after changing this, run
 # `rm -rf $(WHISPER_BUILD)` once so its libraries are rebuilt for the new target.
@@ -104,9 +104,6 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 e2e-test: build
 	./tacit process testdata/test_voice_recording.m4a
 	go test -tags integration -v -count=1 ./pkg/process/ -run TestClassifier
-ifeq ($(UNAME_S),Darwin)
-	go test -tags "integration darwin" -v -count=1 -timeout 30s ./pkg/capture/ -run TestSpeaker_Stream_E2E
-endif
 
 # ── Mac app ──────────────────────────────────────────────
 #
@@ -125,18 +122,18 @@ endif
 # The framework lives in Frameworks, where codesign expects nested code, so the
 # bundled CLI gets an extra rpath to find it there.
 #
-# Signing is ad-hoc by default. macOS keys microphone and Screen Recording
-# grants to an ad-hoc build's exact hash, so every rebuild asks again; sign with
+# Signing is ad-hoc by default. macOS keys the microphone grant to an ad-hoc
+# build's exact hash, so every rebuild asks again; sign with
 # a stable identity (e.g. a self-signed "Code Signing" certificate made in
 # Keychain Access) to keep grants across rebuilds:
 #
 #   make app SIGN_IDENTITY="Tacit Dev"
 #
-# Symptom of an ad-hoc rebuild: System Settings shows Tacit allowed for Screen
-# Recording, yet the app (and a daemon it starts) is refused — the grant belongs
-# to an earlier build. Reset it and grant again:
+# Symptom of an ad-hoc rebuild: System Settings shows Tacit allowed for the
+# microphone, yet the daemon it starts hears nothing — the grant belongs to an
+# earlier build. Reset it and grant again:
 #
-#   tccutil reset ScreenCapture io.github.sangmin7648.tacit
+#   tccutil reset Microphone io.github.sangmin7648.tacit
 
 APP := build/Tacit.app
 FRONTEND := cmd/tacit-app/frontend

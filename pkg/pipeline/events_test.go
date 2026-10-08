@@ -114,14 +114,14 @@ func TestClassifyLoop_EmitsSkippedNotStored(t *testing.T) {
 	rec := &recorder{}
 	p.SetObserver(rec)
 
-	runClassify(t, p, sourcedItems("speaker", "어 그래 응")...)
+	runClassify(t, p, sourcedItems("mic", "어 그래 응")...)
 
 	e, ok := rec.first(events.KindSkipped)
 	if !ok {
 		t.Fatalf("no %q event; got %v", events.KindSkipped, rec.kinds())
 	}
-	if e.Source != "speaker" {
-		t.Errorf("Source = %q, want %q", e.Source, "speaker")
+	if e.Source != "mic" {
+		t.Errorf("Source = %q, want %q", e.Source, "mic")
 	}
 	if e.Text == "" {
 		t.Error("Text is empty; a skip event is the only record of what was discarded")
@@ -142,7 +142,7 @@ func TestClassifyLoop_EmitsDiscardedOnStockRepeat(t *testing.T) {
 	const stock = "시청해주셔서 감사합니다"
 	// dedupKeepFirst copies pass; the next is treated as a stock repeat.
 	for i := 0; i < dedupKeepFirst+1; i++ {
-		runClassify(t, p, sourcedItems("speaker", stock)...)
+		runClassify(t, p, sourcedItems("mic", stock)...)
 	}
 
 	e, ok := rec.first(events.KindDiscarded)

@@ -31,7 +31,7 @@ Spoken ideas disappear. tacit transcribes them on-device, classifies them with O
 speak → capture → VAD → STT → classify → store → retrieve
 ```
 
-1. **Capture** — Records microphone and system audio simultaneously in real time
+1. **Capture** — Records the microphone in real time
 2. **Process** — Voice Activity Detection filters silence; Whisper transcribes speech on-device
 3. **Classify** — Ollama extracts title, category, keywords, and summary from the transcript
 4. **Store** — Saves a structured Markdown entry to `~/.tacit/<category>/`
@@ -43,7 +43,6 @@ speak → capture → VAD → STT → classify → store → retrieve
 
 - **Fully automatic** — speak naturally; tacit handles transcription, classification, and storage without any manual steps
 - **On-device STT** — powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp); no audio ever leaves your machine
-- **Dual audio sources** — captures microphone and system audio simultaneously
 - **Language-agnostic** — Whisper auto-detects language; works with Korean, English, or mixed conversation
 - **AI-native retrieval** — first-class [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) skill integration for in-conversation search
 
@@ -97,27 +96,17 @@ Run `tacit setup` to generate two files in `~/.tacit/`:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `min_speech_duration` | duration | `5s` | Minimum segment length to process. Shorter segments are discarded. |
-| `silence_duration` | duration | `3s` | Silence required to end a speech segment. |
+| `min_speech_duration` | duration | `2s` | Minimum segment length to process. Shorter segments are discarded. |
+| `silence_duration` | duration | `10s` | Silence required to end a speech segment. |
 | `max_segment_duration` | duration | `30s` | Caps a single segment sent to Whisper. Longer speech is split and transcribed as it goes, keeping memory bounded. `0` disables the cap. |
 | `max_session_duration` | duration | `5m` | Caps how long transcribed text accumulates before it is classified. Continuous speech never triggers the silence-based flush, so this keeps a long meeting from becoming one giant entry. With `max_segment_duration` at `0` this doubles as the split boundary, since text only accumulates at a split. `0` disables the cap. |
 | `speech_threshold` | float | `0.5` | VAD confidence threshold (0–1). Higher = more conservative. |
 | `energy_threshold` | int | `200` | Audio energy gate. Frames below this value are rejected before VAD. |
 
-The three segmentation durations also exist per source, since a microphone and a meeting on your speakers behave differently, and each source has its own defaults (below). Setting a shared value, such as `silence_duration: 5s`, applies it to both sources; a source-specific value, such as `mic_silence_duration`, wins over it. Set a source-specific value to `0` to inherit the shared one.
-
-| Suffix | `mic_` default | `speaker_` default |
-|---|---|---|
-| `min_speech_duration` | `2s` | `5s` |
-| `silence_duration` | `10s` | `3s` |
-| `max_segment_duration` | `30s` | `30s` |
-
-### Capture and classification
+### Classification
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `capture_mic` | bool | `true` | Capture the microphone. |
-| `capture_speaker` | bool | `true` | Capture system audio via ScreenCaptureKit. Requires Screen Recording permission. |
 | `llm_provider` | string | `ollama` | Classification backend: `ollama` or `claude`. |
 | `llm_model` | string | `qwen3.5` | Model used for classification. For `claude`, a Claude Code CLI model name such as `haiku`. |
 | `skill_agent` | string | `claude` | Agent the `/tacit.*` skills are installed for. |
@@ -133,7 +122,6 @@ The one exception is a deliberate skip: the classifier still discards a transcri
 ```mermaid
 graph LR
     MIC[Microphone\n16kHz mono] --> CAP[Capture\nmalgo]
-    SYS[System Audio\nScreenCaptureKit] --> CAP
     CAP --> VAD[VAD\nten-vad / Silero]
     VAD --> BUF[Segment Buffer]
     BUF --> STT[STT\nwhisper.cpp]

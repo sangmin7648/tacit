@@ -52,7 +52,7 @@ type Event struct {
 	Kind Kind      `json:"kind"`
 	Time time.Time `json:"time"`
 
-	// Source is the capture source the event came from ("mic", "speaker"), or
+	// Source is the capture source the event came from ("mic"), or
 	// empty for events that belong to the daemon as a whole.
 	Source string `json:"source,omitempty"`
 
@@ -77,11 +77,6 @@ type Event struct {
 	// Error is the message of a failure the daemon continued past.
 	Error string `json:"error,omitempty"`
 }
-
-// ReasonPermissionDenied is the Reason of a KindError for a source macOS
-// refused for lack of permission. The daemon stops that source rather than
-// retrying, and runs on with the others.
-const ReasonPermissionDenied = "permission_denied"
 
 // Observer receives pipeline events. Observe is called from the pipeline's own
 // goroutines — several of them concurrently, one per capture source plus the

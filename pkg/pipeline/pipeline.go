@@ -32,7 +32,7 @@ var ErrSkipped = errors.New("content classified as meaningless, skipping")
 const dedupKeepFirst = 2
 
 // fileSource is the Source label on events from ProcessFile, distinguishing a
-// one-shot file run from the live "mic" and "speaker" capture sources.
+// one-shot file run from the live "mic" capture source.
 const fileSource = "file"
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
@@ -158,8 +158,8 @@ func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource, label
 
 // retryDelay is the wait before restarting a source after its stream ends or
 // re-initialisation fails.  stallTimeout is how long runSourceOnce waits for an
-// audio chunk before assuming the stream has silently died (e.g. SCStream torn
-// down by macOS on sleep without firing didStopWithError:).  Both are vars, not
+// audio chunk before assuming the stream has silently died (e.g. the device
+// went away on sleep without the stream closing).  Both are vars, not
 // consts, so tests can shrink them.
 var (
 	retryDelay   = 5 * time.Second
@@ -169,21 +169,13 @@ var (
 // runSource runs a single audio source through VAD→STT and enqueues results
 // onto classifyCh.  It restarts the source automatically whenever a capture
 // session ends for any reason other than ctx cancellation — whether the stream
-// closed unexpectedly (SCStream stopped by macOS), stalled with no audio, or
+// closed unexpectedly (the device went away), stalled with no audio, or
 // re-initialisation failed transiently (common right after sleep/wake).  It
-// returns when ctx is cancelled, or when macOS refuses the source for lack of
-// permission (capture.ErrPermissionDenied), which no retry can fix.
+// returns only when ctx is cancelled.
 func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label string, classifyCh chan<- classifyItem) error {
 	for {
 		err := p.runSourceOnce(ctx, src, label, classifyCh)
 		if ctx.Err() != nil {
-			return nil
-		}
-		if errors.Is(err, capture.ErrPermissionDenied) {
-			// Retrying cannot succeed until the process restarts, and each try
-			// can show the permission dialog again. The other sources run on.
-			log.Printf("[%s] %v; not capturing this source — grant Screen Recording and restart tacit", label, err)
-			p.emit(events.Event{Kind: events.KindError, Source: label, Reason: events.ReasonPermissionDenied, Error: err.Error()})
 			return nil
 		}
 		if err != nil {
@@ -222,28 +214,6 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 	minSpeechDur := p.cfg.MinSpeechDur
 	silenceDuration := p.cfg.SilenceDuration
 	maxSegmentDur := p.cfg.MaxSegmentDur
-
-	if label == "mic" {
-		if p.cfg.MicMinSpeechDur != 0 {
-			minSpeechDur = p.cfg.MicMinSpeechDur
-		}
-		if p.cfg.MicSilenceDuration != 0 {
-			silenceDuration = p.cfg.MicSilenceDuration
-		}
-		if p.cfg.MicMaxSegmentDur != 0 {
-			maxSegmentDur = p.cfg.MicMaxSegmentDur
-		}
-	} else if label == "speaker" {
-		if p.cfg.SpeakerMinSpeechDur != 0 {
-			minSpeechDur = p.cfg.SpeakerMinSpeechDur
-		}
-		if p.cfg.SpeakerSilenceDuration != 0 {
-			silenceDuration = p.cfg.SpeakerSilenceDuration
-		}
-		if p.cfg.SpeakerMaxSegmentDur != 0 {
-			maxSegmentDur = p.cfg.SpeakerMaxSegmentDur
-		}
-	}
 
 	// The session cap can only act on text that already exists, and text only
 	// reaches textBuf when a segment is split or speech ends. With segment
@@ -300,7 +270,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, silenceDuration, minSpeechDur)
 	p.emit(events.Event{Kind: events.KindListening, Source: label})
 
-	// Inactivity watchdog: a live capture stream (mic or SCStream) delivers PCM
+	// Inactivity watchdog: a live capture stream delivers PCM
 	// chunks continuously, even during silence, so a prolonged absence of chunks
 	// means the stream has died without closing its channel.  When that happens
 	// we return so runSource restarts the source.

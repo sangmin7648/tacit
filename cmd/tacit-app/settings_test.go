@@ -63,7 +63,7 @@ func TestSettings_SetAndClear(t *testing.T) {
 	for key, js := range map[string]string{
 		"speech_threshold":    `0.6`,
 		"energy_threshold":    `300`,
-		"capture_speaker":     `false`,
+		"experimental":        `true`,
 		"silence_duration":    `"8s"`,
 		"transcript_denylist": `["thanks for watching", "subscribe"]`,
 		"initial_prompt":      `"tacit: whisper"`,
@@ -92,17 +92,14 @@ func TestSettings_SetAndClear(t *testing.T) {
 	}
 }
 
-// A change setup would reject — no audio source, a model the provider lacks —
-// loads fine but stops `tacit listen` from starting, so it is refused and the
-// file is left alone.
+// A change setup would reject — a model the provider lacks — loads fine but
+// stops `tacit listen` from starting, so it is refused and the file is left
+// alone.
 func TestSettings_RefusesInvalidChoices(t *testing.T) {
-	settingsHome(t, "capture_speaker: false\nllm_provider: claude\nllm_model: sonnet\n")
+	settingsHome(t, "llm_provider: claude\nllm_model: sonnet\n")
 	svc := &SettingsService{}
 	before, _ := os.ReadFile(config.OverridePath())
 
-	if _, err := svc.Set("capture_mic", false); err == nil || !strings.Contains(err.Error(), "audio source") {
-		t.Errorf("turning off the last source: err = %v", err)
-	}
 	if _, err := svc.Clear("llm_model"); err == nil || !strings.Contains(err.Error(), "Claude model") {
 		t.Errorf("clearing the Claude model back to the ollama default: err = %v", err)
 	}
@@ -113,10 +110,7 @@ func TestSettings_RefusesInvalidChoices(t *testing.T) {
 		t.Errorf("a refused change was written:\n%s", after)
 	}
 
-	// The same keys still change when the result is valid.
-	if _, err := svc.Set("capture_mic", true); err != nil {
-		t.Errorf("Set(capture_mic, true): %v", err)
-	}
+	// The same key still changes when the result is valid.
 	if _, err := svc.Set("llm_model", "opus"); err != nil {
 		t.Errorf("Set(llm_model, opus): %v", err)
 	}

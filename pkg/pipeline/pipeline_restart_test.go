@@ -9,7 +9,6 @@ import (
 
 	"github.com/sangmin7648/tacit/pkg/capture"
 	"github.com/sangmin7648/tacit/pkg/config"
-	"github.com/sangmin7648/tacit/pkg/events"
 )
 
 // fakeSource is a scripted capture.AudioSource for exercising the runSource
@@ -56,7 +55,7 @@ func withTimings(t *testing.T, retry, stall time.Duration) {
 }
 
 // TestRunSourceRecoversFromReinitFailure is the regression test for the primary
-// bug: after sleep/wake, speaker_create fails transiently and the old code gave
+// bug: after sleep/wake, re-initialising a source fails transiently and the old code gave
 // up permanently.  runSource must keep retrying until Stream() succeeds.
 func TestRunSourceRecoversFromReinitFailure(t *testing.T) {
 	withTimings(t, 5*time.Millisecond, 10*time.Second)
@@ -67,7 +66,7 @@ func TestRunSourceRecoversFromReinitFailure(t *testing.T) {
 	src := &fakeSource{}
 	src.streamFn = func(ctx context.Context, call int) (<-chan []int16, error) {
 		if call <= failN {
-			return nil, fmt.Errorf("simulated speaker_create failure #%d", call)
+			return nil, fmt.Errorf("simulated re-init failure #%d", call)
 		}
 		if call == failN+1 {
 			close(firstSuccess)
@@ -174,87 +173,5 @@ func TestRunSourceExitsOnCancel(t *testing.T) {
 	case <-done:
 	case <-time.After(1 * time.Second):
 		t.Fatal("runSource did not exit promptly on ctx cancel (watchdog timeout is 10s)")
-	}
-}
-
-// deniedSource fails every Stream the way Speaker does without Screen
-// Recording permission.
-func deniedSource() *fakeSource {
-	return &fakeSource{streamFn: func(ctx context.Context, call int) (<-chan []int16, error) {
-		return nil, fmt.Errorf("speaker capture: The user declined TCCs: %w", capture.ErrPermissionDenied)
-	}}
-}
-
-// A refused Screen Recording permission is not retried: a grant reaches the
-// process only once it restarts, and every attempt can show macOS's permission
-// dialog again — every retryDelay, forever.
-func TestRunSourceStopsOnPermissionDenied(t *testing.T) {
-	withTimings(t, time.Millisecond, 10*time.Second)
-	p := &Pipeline{cfg: config.DefaultConfig()}
-	rec := &recorder{}
-	p.SetObserver(rec)
-
-	src := deniedSource()
-	done := make(chan struct{})
-	go func() { _ = p.runSource(context.Background(), src, "speaker", make(chan classifyItem, 4)); close(done) }()
-
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("runSource kept retrying a refused permission; Stream called %d times", src.callCount())
-	}
-	if got := src.callCount(); got != 1 {
-		t.Errorf("Stream called %d times, want 1", got)
-	}
-	e, ok := rec.first(events.KindError)
-	if !ok || e.Reason != events.ReasonPermissionDenied || e.Source != "speaker" {
-		t.Errorf("error event = %+v, %v; want reason permission_denied from speaker", e, ok)
-	}
-}
-
-// Losing system audio to a refused permission leaves the microphone running.
-func TestRunKeepsOtherSourcesOnPermissionDenied(t *testing.T) {
-	withTimings(t, time.Millisecond, 10*time.Second)
-	p := &Pipeline{cfg: config.DefaultConfig()}
-	rec := &recorder{}
-	p.SetObserver(rec)
-
-	mic := &fakeSource{streamFn: func(ctx context.Context, call int) (<-chan []int16, error) {
-		ch := make(chan []int16)
-		go func() { <-ctx.Done(); close(ch) }()
-		return ch, nil
-	}}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		_ = p.Run(ctx, []capture.AudioSource{mic, deniedSource()}, []string{"mic", "speaker"})
-		close(done)
-	}()
-
-	deadline := time.Now().Add(2 * time.Second)
-	for rec.count(events.KindError) == 0 {
-		if time.Now().After(deadline) {
-			cancel()
-			t.Fatal("no permission_denied event")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	select {
-	case <-done:
-		t.Fatal("Run returned while the microphone was still capturing")
-	case <-time.After(50 * time.Millisecond):
-	}
-	if got := mic.callCount(); got != 1 {
-		t.Errorf("mic Stream called %d times, want 1 (still on its first session)", got)
-	}
-
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Run did not return after cancel")
-	}
-	if n := rec.count(events.KindError); n != 1 {
-		t.Errorf("%d error events (%v), want one: the refusal, not a retry each time", n, rec.kinds())
 	}
 }

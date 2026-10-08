@@ -6,7 +6,6 @@
   // How the window lays settings out. A key missing here — one added to Config
   // later — still shows, under Other, with its key as its label.
   const GROUPS = [
-    { title: 'Capture', keys: ['capture_mic', 'capture_speaker'] },
     { title: 'Transcription', keys: ['whisper_model', 'language', 'initial_prompt', 'experimental'] },
     {
       title: 'Classifier',
@@ -19,21 +18,9 @@
       title: 'Speech detection',
       keys: ['speech_threshold', 'energy_threshold', 'min_speech_duration', 'silence_duration', 'max_segment_duration', 'max_session_duration'],
     },
-    {
-      title: 'Microphone',
-      keys: ['mic_min_speech_duration', 'mic_silence_duration', 'mic_max_segment_duration'],
-      help: "The microphone's own timings. Changing one above changes it here too, unless you set it here; 0s also takes the one above.",
-    },
-    {
-      title: 'System audio',
-      keys: ['speaker_min_speech_duration', 'speaker_silence_duration', 'speaker_max_segment_duration'],
-      help: "System audio's own timings. Changing one above changes it here too, unless you set it here; 0s also takes the one above.",
-    },
   ]
 
   const LABELS = {
-    capture_mic: ['Microphone', 'Transcribe what the microphone hears.'],
-    capture_speaker: ['System audio', 'Transcribe what the Mac plays — calls, videos. Needs Screen Recording.'],
     whisper_model: ['Whisper model', 'The speech-to-text model.'],
     language: ['Language', 'A language code such as en or ko, or auto to detect. Fixing it cuts wrong-language transcripts.'],
     initial_prompt: ['Initial prompt', 'Words to prime transcription with — names, jargon.'],
@@ -50,12 +37,6 @@
     silence_duration: ['Silence that ends speech', ''],
     max_segment_duration: ['Longest segment', 'Longer speech is split. 0s turns it off.'],
     max_session_duration: ['Longest session', 'Classify after this much continuous speech. 0s turns it off.'],
-    mic_min_speech_duration: ['Shortest speech', ''],
-    mic_silence_duration: ['Silence that ends speech', ''],
-    mic_max_segment_duration: ['Longest segment', ''],
-    speaker_min_speech_duration: ['Shortest speech', ''],
-    speaker_silence_duration: ['Silence that ends speech', ''],
-    speaker_max_segment_duration: ['Longest segment', ''],
   }
 
   let data = $state(null)
