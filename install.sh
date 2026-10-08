@@ -89,12 +89,11 @@ ln -sfn "$APP_DIR/Tacit.app/Contents/Helpers/tacit" "$INSTALL_DIR/tacit"
 [ -e "$INSTALL_DIR/tacit-dev" ] || rm -rf "$INSTALL_DIR/ten_vad.framework"
 
 if [ "$UPDATING" = 1 ]; then
-  # macOS ties an ad-hoc signed app's permissions to that exact build, so the
-  # old grants no longer apply — yet System Settings still shows them on, and
-  # the new build is refused. Clear them so Tacit can ask again.
+  # macOS ties an ad-hoc signed app's microphone grant to that exact build, so
+  # the old grant no longer applies — yet System Settings still shows it on,
+  # and the new build hears nothing. Clear it so Tacit can ask again.
   tccutil reset Microphone "$APP_ID" >/dev/null 2>&1 || true
-  tccutil reset ScreenCapture "$APP_ID" >/dev/null 2>&1 || true
-  warn "Updated: Tacit will ask for Microphone and Screen Recording again."
+  warn "Updated: Tacit will ask for the microphone again."
 fi
 info "Installed $APP_DIR/Tacit.app and linked $INSTALL_DIR/tacit to it"
 

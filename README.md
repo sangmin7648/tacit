@@ -15,7 +15,7 @@ tacit listen   # start capturing
 
 This installs the menu-bar app, **Tacit.app**, into `~/Applications`, and links `~/.local/bin/tacit` to the CLI inside it, so the terminal and the app always run the same version. Use either: `open ~/Applications/Tacit.app` walks you through setup in a window, or run `tacit setup` in a terminal.
 
-`tacit update` (or running the install command again) updates both. Tacit.app isn't notarized, so install it this way rather than from a browser download; after an update macOS asks for Microphone and Screen Recording again.
+`tacit update` (or running the install command again) updates both. Tacit.app isn't notarized, so install it this way rather than from a browser download; after an update macOS asks for the microphone again.
 
 ---
 
