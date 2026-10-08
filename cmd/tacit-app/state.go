@@ -31,6 +31,13 @@ type state struct {
 	// speakerDenied says the running daemon gave up on system audio because
 	// Screen Recording was refused. It clears when the daemon changes.
 	speakerDenied bool
+
+	// latest is a release newer than this build, once a check has found one;
+	// upToDate says the last check found none.
+	latest   string
+	upToDate bool
+	// updateFailed says the update that reopened the app failed.
+	updateFailed bool
 }
 
 // observe folds one event into the state.
