@@ -24,7 +24,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Build
-        run: make build
+        run: make build VERSION="${GITHUB_REF_NAME}"
 
       - name: Ad-hoc code sign
         run: codesign --force --sign - tacit
@@ -36,11 +36,30 @@ jobs:
           tar -czf "${ARCHIVE}" tacit ten_vad.framework
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/tacit-app/frontend/package-lock.json
+
+      # The app carries its own copy of the CLI (Contents/Helpers/tacit). It is
+      # ad-hoc signed, not notarized: install.sh fetches it with curl, which
+      # sets no quarantine flag, so Gatekeeper does not check it.
+      - name: Build and package Mac app
+        run: |
+          make app VERSION="${GITHUB_REF_NAME}"
+          APP_ARCHIVE="Tacit-${GITHUB_REF_NAME}-darwin-arm64.zip"
+          ditto -c -k --keepParent build/Tacit.app "${APP_ARCHIVE}"
+          echo "APP_ARCHIVE=${APP_ARCHIVE}" >> "$GITHUB_ENV"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: tacit-darwin-arm64
-          path: ${{ env.ARCHIVE }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.APP_ARCHIVE }}
 
   release:
     needs: build
@@ -55,5 +74,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: tacit-*.tar.gz
+          files: |
+            tacit-*.tar.gz
+            Tacit-*.zip
           generate_release_notes: true
