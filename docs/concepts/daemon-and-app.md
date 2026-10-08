@@ -1,5 +1,5 @@
 ---
-source: [cmd/tacit, cmd/tacit-app, pkg/daemon, pkg/events]
+source: [tacit/cmd/tacit, tacit/cmd/tacit-app, tacit/pkg/daemon, tacit/pkg/events]
 verified: 9825e8e
 ---
 

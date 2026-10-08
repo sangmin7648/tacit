@@ -1,5 +1,5 @@
 ---
-source: [pkg/process, pkg/pipeline]
+source: [tacit/pkg/process, tacit/pkg/pipeline]
 verified: 9825e8e
 ---
 

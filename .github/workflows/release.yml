@@ -11,6 +11,9 @@ permissions:
 jobs:
   build:
     runs-on: macos-15
+    defaults:
+      run:
+        working-directory: tacit
 
     steps:
       - name: Checkout with submodules
@@ -21,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version-file: tacit/go.mod
 
       - name: Build
         run: make build VERSION="${GITHUB_REF_NAME}"
@@ -41,7 +44,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: cmd/tacit-app/frontend/package-lock.json
+          cache-dependency-path: tacit/cmd/tacit-app/frontend/package-lock.json
 
       # The app carries its own copy of the CLI (Contents/Helpers/tacit). It is
       # ad-hoc signed, not notarized: install.sh fetches it with curl, which
@@ -58,8 +61,8 @@ jobs:
         with:
           name: tacit-darwin-arm64
           path: |
-            ${{ env.ARCHIVE }}
-            ${{ env.APP_ARCHIVE }}
+            tacit/${{ env.ARCHIVE }}
+            tacit/${{ env.APP_ARCHIVE }}
 
   release:
     needs: build

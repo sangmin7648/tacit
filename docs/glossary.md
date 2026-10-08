@@ -1,5 +1,5 @@
 ---
-source: [pkg, cmd, skills]
+source: [tacit/pkg, tacit/cmd, tacit/skills]
 verified: 9825e8e
 ---
 

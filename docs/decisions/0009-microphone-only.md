@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-10-09
-source: [pkg/capture, pkg/config, cmd/tacit-app]
+source: [tacit/pkg/capture, tacit/pkg/config, tacit/cmd/tacit-app]
 verified: 9825e8e
 ---
 

@@ -1,7 +1,7 @@
 ---
 status: accepted
 date: 2026-03-28
-source: [pkg/stt, pkg/model]
+source: [tacit/pkg/stt, tacit/pkg/model]
 verified: 9825e8e
 ---
 

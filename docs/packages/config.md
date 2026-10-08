@@ -1,5 +1,5 @@
 ---
-source: [pkg/config]
+source: [tacit/pkg/config]
 verified: 9825e8e
 ---
 

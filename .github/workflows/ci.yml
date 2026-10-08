@@ -9,6 +9,9 @@ on:
 jobs:
   build-and-test:
     runs-on: macos-15
+    defaults:
+      run:
+        working-directory: tacit
 
     steps:
       - name: Checkout with submodules
@@ -19,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          go-version-file: tacit/go.mod
 
       - name: Build
         run: make build
@@ -32,7 +35,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: cmd/tacit-app/frontend/package-lock.json
+          cache-dependency-path: tacit/cmd/tacit-app/frontend/package-lock.json
 
       - name: Build Mac app
         run: make app

@@ -1,5 +1,5 @@
 ---
-source: [pkg/stt]
+source: [tacit/pkg/stt]
 verified: 9825e8e
 ---
 
