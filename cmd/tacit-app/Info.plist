@@ -25,9 +25,8 @@
 	<true/>
 	<!-- Shown in the microphone permission prompt. The bundled CLI that does
 	     the capturing (Contents/Helpers/tacit) runs as this app's child, so
-	     macOS attributes its microphone and Screen Recording access to Tacit
-	     rather than to a terminal. Screen Recording has no usage-description
-	     key. -->
+	     macOS attributes its microphone access to Tacit rather than to a
+	     terminal. -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Tacit transcribes what you say on this Mac. Audio is processed on-device and never leaves it.</string>
 </dict>

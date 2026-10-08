@@ -2,12 +2,10 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/sangmin7648/tacit/pkg/setup"
 )
@@ -79,7 +77,7 @@ func TestOptions_PrefillsFromConfig(t *testing.T) {
 	}
 
 	want := setup.Defaults()
-	want.LLMProvider, want.LLMModel, want.Language, want.CaptureSpeaker = "claude", "sonnet", "ko", false
+	want.LLMProvider, want.LLMModel, want.Language = "claude", "sonnet", "ko"
 	if _, err := s.Apply(want); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -116,148 +114,5 @@ func TestUserPath(t *testing.T) {
 		if got := userPath(c.path, c.home); got != c.want {
 			t.Errorf("userPath(%q, %q)\n got %q\nwant %q", c.path, c.home, got, c.want)
 		}
-	}
-}
-
-// Granting Screen Recording makes macOS quit and reopen the app. By then the
-// choices are saved, so the app counts as configured — without a record of
-// the unfinished run, the window would not reopen, and would start over if
-// opened by hand.
-func TestProgress_ResumesAfterRelaunch(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	s := &OnboardingService{}
-	if _, err := s.Apply(setup.Defaults()); err != nil {
-		t.Fatal(err)
-	}
-
-	// Steps before the save are not worth resuming: nothing is saved yet.
-	for _, step := range []int{0, 1} {
-		if err := s.SaveProgress(step); err != nil {
-			t.Fatal(err)
-		}
-		if got := pendingStep(); got != 0 {
-			t.Fatalf("after SaveProgress(%d), pendingStep = %d, want 0", step, got)
-		}
-	}
-
-	if err := s.SaveProgress(3); err != nil {
-		t.Fatal(err)
-	}
-	// A relaunch is a fresh process: only what is on disk carries over.
-	o, err := (&OnboardingService{}).Options()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !o.Configured || o.ResumeStep != 3 {
-		t.Errorf("after relaunch: configured=%v resume_step=%d, want true/3", o.Configured, o.ResumeStep)
-	}
-
-	s.Finish(false)
-	if got := pendingStep(); got != 0 {
-		t.Errorf("after Finish, pendingStep = %d, want 0", got)
-	}
-	if o, _ := s.Options(); o.ResumeStep != 0 {
-		t.Errorf("after Finish, resume_step = %d, want 0", o.ResumeStep)
-	}
-}
-
-func TestPendingStep_IgnoresGarbage(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	os.MkdirAll(filepath.Dir(progressPath()), 0o755)
-	for _, content := range []string{"", "three", "1", "-4"} {
-		os.WriteFile(progressPath(), []byte(content), 0o644)
-		if got := pendingStep(); got != 0 {
-			t.Errorf("pendingStep with %q = %d, want 0", content, got)
-		}
-	}
-}
-
-// stubSystemAudio replaces the ScreenCaptureKit check, which shows macOS's
-// permission dialog each time it runs without access, and counts the runs.
-func stubSystemAudio(t *testing.T, result bool) *int {
-	t.Helper()
-	calls := 0
-	orig := checkSystemAudio
-	checkSystemAudio = func() bool { calls++; return result }
-	t.Cleanup(func() { checkSystemAudio = orig })
-	return &calls
-}
-
-// Polling the dialog-showing check once a second put macOS's "would like to
-// record this computer's screen and audio" dialog in an endless loop. The
-// polled path must never run it.
-func TestPermissions_NeverRunsPromptingCheck(t *testing.T) {
-	calls := stubSystemAudio(t, true)
-	s := &OnboardingService{}
-	for i := 0; i < 20; i++ {
-		s.Permissions()
-	}
-	if *calls != 0 {
-		t.Errorf("Permissions ran the ScreenCaptureKit check %d times; it is polled every second and must never prompt", *calls)
-	}
-}
-
-// Whatever the window does, the check that can show the dialog runs at most
-// once per verifyMinInterval while access is missing.
-func TestVerifyScreenRecording_RateLimited(t *testing.T) {
-	calls := stubSystemAudio(t, false)
-	s := &OnboardingService{}
-	for i := 0; i < 50; i++ {
-		if s.VerifyScreenRecording() {
-			t.Fatal("reported allowed while the check says no")
-		}
-	}
-	if *calls != 1 {
-		t.Fatalf("50 rapid calls ran the prompting check %d times, want 1", *calls)
-	}
-	if s.Permissions().ScreenRecording && !screenRecordingPreflight() {
-		t.Error("Permissions reports allowed after a failed verify")
-	}
-
-	// Past the interval, a user's "Check again" does run it again.
-	s.screenLastRun = time.Now().Add(-verifyMinInterval)
-	s.VerifyScreenRecording()
-	if *calls != 2 {
-		t.Errorf("after the interval: %d runs, want 2", *calls)
-	}
-}
-
-// Once ScreenCaptureKit has said yes, that stands: the polled status shows it
-// and no further check — and so no dialog — ever runs in this process.
-func TestVerifyScreenRecording_SuccessSticks(t *testing.T) {
-	calls := stubSystemAudio(t, true)
-	s := &OnboardingService{}
-	if !s.VerifyScreenRecording() {
-		t.Fatal("verify failed with the check succeeding")
-	}
-	if !s.Permissions().ScreenRecording {
-		t.Error("Permissions does not reflect the verified grant")
-	}
-	s.screenLastRun = time.Time{}
-	for i := 0; i < 10; i++ {
-		s.VerifyScreenRecording()
-	}
-	if *calls != 1 {
-		t.Errorf("check ran %d times after succeeding, want 1", *calls)
-	}
-}
-
-// The window's polling timer must not reach the prompting check either —
-// that is the loop this all guards against. refreshPerms is what the timer
-// calls.
-func TestAppSvelte_PollingDoesNotVerify(t *testing.T) {
-	src, err := os.ReadFile("frontend/src/App.svelte")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := regexp.MustCompile(`(?s)async function refreshPerms\(\) \{(.*?)\n  \}`).FindStringSubmatch(string(src))
-	if body == nil {
-		t.Fatal("refreshPerms not found in App.svelte")
-	}
-	if strings.Contains(body[1], "verify") {
-		t.Errorf("refreshPerms (run by the 1s poll) calls verify:%s", body[1])
-	}
-	if !strings.Contains(string(src), "setInterval(refreshPerms,") {
-		t.Error("the poll no longer runs refreshPerms; re-check what it calls")
 	}
 }

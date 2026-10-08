@@ -44,26 +44,22 @@ type Language struct {
 
 // Choices are the answers setup collects.
 type Choices struct {
-	LLMProvider    string `json:"llm_provider"`
-	LLMModel       string `json:"llm_model"`
-	SkillAgent     string `json:"skill_agent"`
-	CaptureMic     bool   `json:"capture_mic"`
-	CaptureSpeaker bool   `json:"capture_speaker"`
-	Language       string `json:"language"`
-	Experimental   bool   `json:"experimental"`
+	LLMProvider  string `json:"llm_provider"`
+	LLMModel     string `json:"llm_model"`
+	SkillAgent   string `json:"skill_agent"`
+	Language     string `json:"language"`
+	Experimental bool   `json:"experimental"`
 }
 
 // Defaults returns the answers a user gets by accepting every suggestion.
 func Defaults() Choices {
 	d := config.DefaultConfig()
 	return Choices{
-		LLMProvider:    d.LLMProvider,
-		LLMModel:       d.LLMModel,
-		SkillAgent:     d.SkillAgent,
-		CaptureMic:     d.CaptureMic,
-		CaptureSpeaker: d.CaptureSpeaker,
-		Language:       d.Language,
-		Experimental:   d.Experimental,
+		LLMProvider:  d.LLMProvider,
+		LLMModel:     d.LLMModel,
+		SkillAgent:   d.SkillAgent,
+		Language:     d.Language,
+		Experimental: d.Experimental,
 	}
 }
 
@@ -72,13 +68,11 @@ func Defaults() Choices {
 // defaults.
 func FromConfig(cfg *config.Config) Choices {
 	return Choices{
-		LLMProvider:    cfg.LLMProvider,
-		LLMModel:       cfg.LLMModel,
-		SkillAgent:     cfg.SkillAgent,
-		CaptureMic:     cfg.CaptureMic,
-		CaptureSpeaker: cfg.CaptureSpeaker,
-		Language:       cfg.Language,
-		Experimental:   cfg.Experimental,
+		LLMProvider:  cfg.LLMProvider,
+		LLMModel:     cfg.LLMModel,
+		SkillAgent:   cfg.SkillAgent,
+		Language:     cfg.Language,
+		Experimental: cfg.Experimental,
 	}
 }
 
@@ -115,8 +109,6 @@ func (c Choices) Validate() error {
 		return fmt.Errorf("unknown Claude model %q (want one of %s)", c.LLMModel, strings.Join(ClaudeModels, ", "))
 	case !slices.Contains(Agents, c.SkillAgent):
 		return fmt.Errorf("unknown skill agent %q (want one of %s)", c.SkillAgent, strings.Join(Agents, ", "))
-	case !c.CaptureMic && !c.CaptureSpeaker:
-		return errors.New("at least one audio source must be selected")
 	case strings.TrimSpace(c.Language) == "":
 		return errors.New("a transcription language is required")
 	}
@@ -161,7 +153,7 @@ func Apply(c Choices) (*Result, error) {
 	res.BackupPath = backup
 
 	if err := config.WriteSetupOverride(res.OverridePath, c.LLMProvider, c.LLMModel, c.SkillAgent,
-		c.Language, c.CaptureMic, c.CaptureSpeaker, c.Experimental); err != nil {
+		c.Language, c.Experimental); err != nil {
 		return res, fmt.Errorf("writing config override: %w", err)
 	}
 

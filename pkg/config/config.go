@@ -35,13 +35,6 @@ type Config struct {
 	LLMProvider     string        `yaml:"llm_provider"`
 	LLMModel        string        `yaml:"llm_model"`
 	SkillAgent      string        `yaml:"skill_agent"`
-	// CaptureMic enables microphone capture. When true, speech from the
-	// microphone is transcribed and stored. Defaults to true.
-	CaptureMic bool `yaml:"capture_mic"`
-	// CaptureSpeaker enables system-audio capture via ScreenCaptureKit (macOS 13+).
-	// When true, audio from speakers (Google Meet, YouTube, etc.) is also
-	// transcribed and stored. Requires Screen Recording permission.
-	CaptureSpeaker bool `yaml:"capture_speaker"`
 	// MaxSegmentDur caps the maximum length of a single speech segment sent to
 	// STT. When a segment grows beyond this, it is force-split and transcribed
 	// immediately even if speech is still ongoing. This prevents unbounded
@@ -70,43 +63,25 @@ type Config struct {
 	// read as silence. Deliberately low so only unambiguous cases are caught.
 	// 0 disables. Default 0.2.
 	MinCharRate float64 `yaml:"min_char_rate"`
-
-	// Source-specific overrides (mic)
-	MicMinSpeechDur    time.Duration `yaml:"mic_min_speech_duration"`
-	MicSilenceDuration time.Duration `yaml:"mic_silence_duration"`
-	MicMaxSegmentDur   time.Duration `yaml:"mic_max_segment_duration"`
-
-	// Source-specific overrides (speaker)
-	SpeakerMinSpeechDur    time.Duration `yaml:"speaker_min_speech_duration"`
-	SpeakerSilenceDuration time.Duration `yaml:"speaker_silence_duration"`
-	SpeakerMaxSegmentDur   time.Duration `yaml:"speaker_max_segment_duration"`
 }
 
 // DefaultConfig returns a Config populated with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		WhisperModel:           "large-v3-turbo",
-		Language:               "auto",
-		Experimental:           false,
-		MinSpeechDur:           5 * time.Second,
-		SilenceDuration:        3 * time.Second,
-		SpeechThreshold:        0.5,
-		EnergyThreshold:        200,
-		LLMProvider:            "ollama",
-		LLMModel:               "qwen3.5",
-		SkillAgent:             "claude",
-		CaptureMic:             true,
-		CaptureSpeaker:         true,
-		MaxSegmentDur:          30 * time.Second,
-		MaxSessionDur:          5 * time.Minute,
-		DedupWindow:            3 * time.Hour,
-		MinCharRate:            0.2,
-		MicMinSpeechDur:        2 * time.Second,
-		MicSilenceDuration:     10 * time.Second,
-		MicMaxSegmentDur:       30 * time.Second,
-		SpeakerMinSpeechDur:    5 * time.Second,
-		SpeakerSilenceDuration: 3 * time.Second,
-		SpeakerMaxSegmentDur:   30 * time.Second,
+		WhisperModel:    "large-v3-turbo",
+		Language:        "auto",
+		Experimental:    false,
+		MinSpeechDur:    2 * time.Second,
+		SilenceDuration: 10 * time.Second,
+		SpeechThreshold: 0.5,
+		EnergyThreshold: 200,
+		LLMProvider:     "ollama",
+		LLMModel:        "qwen3.5",
+		SkillAgent:      "claude",
+		MaxSegmentDur:   30 * time.Second,
+		MaxSessionDur:   5 * time.Minute,
+		DedupWindow:     3 * time.Hour,
+		MinCharRate:     0.2,
 	}
 }
 
@@ -183,40 +158,8 @@ func LoadWithOverride(configPath, overridePath string) (*Config, error) {
 		if err := loadFile(overridePath, cfg); err != nil {
 			return nil, fmt.Errorf("loading %s: %w", overridePath, err)
 		}
-		set, err := LoadOverrideKeys(overridePath)
-		if err != nil {
-			return nil, fmt.Errorf("loading %s: %w", overridePath, err)
-		}
-		applySharedTimings(cfg, set)
 	}
 	return cfg, nil
-}
-
-// applySharedTimings makes a shared timing the user overrode apply to each
-// source whose own value they did not override. The per-source defaults are
-// tuned per source, so they win over the shared default — but not over a
-// value the user chose: `silence_duration: 5s` or `max_segment_duration: 0`
-// in the override file must take effect.
-func applySharedTimings(cfg *Config, set map[string]bool) {
-	for _, t := range []struct {
-		key          string
-		shared       time.Duration
-		mic, speaker *time.Duration
-	}{
-		{"min_speech_duration", cfg.MinSpeechDur, &cfg.MicMinSpeechDur, &cfg.SpeakerMinSpeechDur},
-		{"silence_duration", cfg.SilenceDuration, &cfg.MicSilenceDuration, &cfg.SpeakerSilenceDuration},
-		{"max_segment_duration", cfg.MaxSegmentDur, &cfg.MicMaxSegmentDur, &cfg.SpeakerMaxSegmentDur},
-	} {
-		if !set[t.key] {
-			continue
-		}
-		if !set["mic_"+t.key] {
-			*t.mic = t.shared
-		}
-		if !set["speaker_"+t.key] {
-			*t.speaker = t.shared
-		}
-	}
 }
 
 // LoadOverrideKeys returns the set of YAML keys explicitly present in the
@@ -261,19 +204,11 @@ func WriteDefault(path string) error {
 			"llm_provider: %s\n"+
 			"llm_model: %s\n"+
 			"skill_agent: %s\n"+
-			"capture_mic: %v\n"+
-			"capture_speaker: %v\n"+
 			"max_segment_duration: %s\n"+
 			"max_session_duration: %s\n"+
 			"transcript_denylist: []\n"+
 			"dedup_window: %s\n"+
-			"min_char_rate: %.2f\n"+
-			"mic_min_speech_duration: %s\n"+
-			"mic_silence_duration: %s\n"+
-			"mic_max_segment_duration: %s\n"+
-			"speaker_min_speech_duration: %s\n"+
-			"speaker_silence_duration: %s\n"+
-			"speaker_max_segment_duration: %s\n",
+			"min_char_rate: %.2f\n",
 		cfg.WhisperModel,
 		cfg.Language,
 		cfg.Experimental,
@@ -284,18 +219,10 @@ func WriteDefault(path string) error {
 		cfg.LLMProvider,
 		cfg.LLMModel,
 		cfg.SkillAgent,
-		cfg.CaptureMic,
-		cfg.CaptureSpeaker,
 		formatDuration(cfg.MaxSegmentDur),
 		formatDuration(cfg.MaxSessionDur),
 		formatDuration(cfg.DedupWindow),
 		cfg.MinCharRate,
-		formatDuration(cfg.MicMinSpeechDur),
-		formatDuration(cfg.MicSilenceDuration),
-		formatDuration(cfg.MicMaxSegmentDur),
-		formatDuration(cfg.SpeakerMinSpeechDur),
-		formatDuration(cfg.SpeakerSilenceDuration),
-		formatDuration(cfg.SpeakerMaxSegmentDur),
 	)
 	return os.WriteFile(path, []byte(content), 0644)
 }
@@ -327,19 +254,11 @@ func overrideTemplate(defaults *Config) string {
 		fmt.Sprintf("llm_provider: %s", defaults.LLMProvider),
 		fmt.Sprintf("llm_model: %s", defaults.LLMModel),
 		fmt.Sprintf("skill_agent: %s", defaults.SkillAgent),
-		fmt.Sprintf("capture_mic: %v", defaults.CaptureMic),
-		fmt.Sprintf("capture_speaker: %v", defaults.CaptureSpeaker),
 		fmt.Sprintf("max_segment_duration: %s", formatDuration(defaults.MaxSegmentDur)),
 		fmt.Sprintf("max_session_duration: %s", formatDuration(defaults.MaxSessionDur)),
 		"transcript_denylist: []",
 		fmt.Sprintf("dedup_window: %s", formatDuration(defaults.DedupWindow)),
 		fmt.Sprintf("min_char_rate: %.2f", defaults.MinCharRate),
-		fmt.Sprintf("mic_min_speech_duration: %s", formatDuration(defaults.MicMinSpeechDur)),
-		fmt.Sprintf("mic_silence_duration: %s", formatDuration(defaults.MicSilenceDuration)),
-		fmt.Sprintf("mic_max_segment_duration: %s", formatDuration(defaults.MicMaxSegmentDur)),
-		fmt.Sprintf("speaker_min_speech_duration: %s", formatDuration(defaults.SpeakerMinSpeechDur)),
-		fmt.Sprintf("speaker_silence_duration: %s", formatDuration(defaults.SpeakerSilenceDuration)),
-		fmt.Sprintf("speaker_max_segment_duration: %s", formatDuration(defaults.SpeakerMaxSegmentDur)),
 	}
 
 	var sb strings.Builder
@@ -419,7 +338,7 @@ func EventLogPath() string {
 // Every other line — settings setup never asks about, and the user's own
 // comments — is left exactly as it was: the answers are applied one key at a
 // time through SetOverride and ClearOverride.
-func WriteSetupOverride(path string, provider, model, agent, language string, captureMic, captureSpeaker, experimental bool) error {
+func WriteSetupOverride(path string, provider, model, agent, language string, experimental bool) error {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		if err := WriteOverrideTemplate(path, DefaultConfig()); err != nil {
 			return err
@@ -436,8 +355,6 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ca
 		{"llm_provider", provider, d.LLMProvider},
 		{"llm_model", model, d.LLMModel},
 		{"skill_agent", agent, d.SkillAgent},
-		{"capture_mic", captureMic, d.CaptureMic},
-		{"capture_speaker", captureSpeaker, d.CaptureSpeaker},
 	}
 	for _, a := range answers {
 		var err error
