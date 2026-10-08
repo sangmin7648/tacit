@@ -19,9 +19,7 @@ This installs the menu-bar app, **Tacit.app**, into `~/Applications`, and links 
 
 ---
 
-Spoken ideas disappear. tacit transcribes them on-device, classifies them with Ollama, and surfaces them as live context in any AI conversation — automatically.
-
-<!-- TODO: Add demo GIF showing tacit listen → speech → /tacit.knowledge retrieval -->
+Spoken ideas disappear. tacit transcribes them on-device, classifies them with a local Ollama model or Claude, and surfaces them as live context in any AI conversation — automatically.
 
 ---
 
@@ -33,7 +31,7 @@ speak → capture → VAD → STT → classify → store → retrieve
 
 1. **Capture** — Records the microphone in real time
 2. **Process** — Voice Activity Detection filters silence; Whisper transcribes speech on-device
-3. **Classify** — Ollama extracts title, category, keywords, and summary from the transcript
+3. **Classify** — Ollama (default) or Claude extracts title, category, keywords, and summary from the transcript
 4. **Store** — Saves a structured Markdown entry to `~/.tacit/<category>/`
 5. **Retrieve** — `/tacit.knowledge` searches your knowledge base from inside any Claude conversation
 
@@ -125,7 +123,7 @@ graph LR
     CAP --> VAD[VAD\nten-vad / Silero]
     VAD --> BUF[Segment Buffer]
     BUF --> STT[STT\nwhisper.cpp]
-    STT --> CLS[Classify\nOllama]
+    STT --> CLS[Classify\nOllama / Claude]
     CLS --> KB[Knowledge Base\n~/.tacit/]
 ```
 
@@ -153,7 +151,8 @@ Entries are stored under `~/.tacit/<category>/YYYYMMDD-HHMMSS.md` — plain file
 ## Requirements
 
 - macOS 13 or later, Apple Silicon
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
+- A classifier: [Ollama](https://ollama.com) (the default) or the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
+- To use the `/tacit.*` skills: the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), the only agent supported today
 
 ---
 
@@ -185,7 +184,7 @@ make e2e-test
 <details>
 <summary>Contributing</summary>
 
-Issues and pull requests are welcome. Please open an issue first for significant changes.
+Issues and pull requests are welcome. Please open an issue first for significant changes. How the system fits together, and why, is in [`docs/`](docs/index.md).
 
 ```bash
 make test       # run unit tests
