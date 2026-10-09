@@ -1,6 +1,6 @@
 .PHONY: build clean whisper-lib test e2e-test install rg-download app
 
-WHISPER_DIR  := third_party/whisper.cpp
+WHISPER_DIR  := core/internal/components/transcriber/whisper.cpp
 WHISPER_BUILD := $(WHISPER_DIR)/build
 
 # Stacit libraries produced by whisper.cpp cmake build
@@ -48,13 +48,13 @@ PLIST_VERSION := $(or $(shell echo '$(VERSION)' | sed -nE 's/^v?([0-9]+\.[0-9]+\
 
 # ── Targets ──────────────────────────────────────────────
 
-TEN_VAD_FRAMEWORK := third_party/ten-vad/lib/macOS/ten_vad.framework
+TEN_VAD_FRAMEWORK := core/internal/components/speech-detector/ten-vad/lib/macOS/ten_vad.framework
 
 RG_VERSION := 14.1.1
 RG_ARM64_URL := https://github.com/BurntSushi/ripgrep/releases/download/$(RG_VERSION)/ripgrep-$(RG_VERSION)-aarch64-apple-darwin.tar.gz
 RG_AMD64_URL := https://github.com/BurntSushi/ripgrep/releases/download/$(RG_VERSION)/ripgrep-$(RG_VERSION)-x86_64-apple-darwin.tar.gz
 
-pkg/search/rg-darwin-arm64:
+core/internal/components/note-manager/rg-darwin-arm64:
 	@echo "Downloading ripgrep $(RG_VERSION) for darwin/arm64..."
 	@tmpdir=$$(mktemp -d) && \
 	  curl -fsSL $(RG_ARM64_URL) | tar -xz -C $$tmpdir && \
@@ -62,7 +62,7 @@ pkg/search/rg-darwin-arm64:
 	  rm -rf $$tmpdir
 	@echo "Downloaded: $@"
 
-pkg/search/rg-darwin-amd64:
+core/internal/components/note-manager/rg-darwin-amd64:
 	@echo "Downloading ripgrep $(RG_VERSION) for darwin/amd64..."
 	@tmpdir=$$(mktemp -d) && \
 	  curl -fsSL $(RG_AMD64_URL) | tar -xz -C $$tmpdir && \
@@ -70,10 +70,10 @@ pkg/search/rg-darwin-amd64:
 	  rm -rf $$tmpdir
 	@echo "Downloaded: $@"
 
-rg-download: pkg/search/rg-darwin-arm64 pkg/search/rg-darwin-amd64
+rg-download: core/internal/components/note-manager/rg-darwin-arm64 core/internal/components/note-manager/rg-darwin-amd64
 
 build: whisper-lib rg-download
-	go build -ldflags "$(GO_LDFLAGS)" -o tacit ./cmd/tacit/
+	go build -ldflags "$(GO_LDFLAGS)" -o tacit ./app/cli/
 ifeq ($(UNAME_S),Darwin)
 	@echo "Bundling ten_vad.framework..."
 	rm -rf ten_vad.framework
@@ -83,7 +83,7 @@ endif
 
 # PKGS and ARGS narrow a run while keeping the CGo flags above, which a bare
 # `go test` of a whisper-linked package lacks:
-#   make test PKGS=./pkg/pipeline/ ARGS='-run TestRunSource -count=1'
+#   make test PKGS=./core/workflows/listen/ ARGS='-run TestRunSource -count=1'
 test: whisper-lib
 	go test $(or $(PKGS),./...) $(ARGS)
 
@@ -102,17 +102,18 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 	cmake --build $(WHISPER_BUILD) --config Release -j
 
 e2e-test: build
-	go test -tags e2e -v -count=1 ./pkg/pipeline/ -run TestE2E
-	go test -tags integration -v -count=1 ./pkg/process/ -run TestClassifier
+	go test -tags e2e -v -count=1 ./core/workflows/listen/ -run TestE2E
+	go test -tags integration -v -count=1 ./core/internal/components/note-classifier/ -run TestClassifier
+	go test -tags integration -v -count=1 ./core/workflows/listen/ -run TestClassifier
 
 # ── Mac app ──────────────────────────────────────────────
 #
-# Tacit.app is the menu-bar front end (cmd/tacit-app) with the CLI bundled
+# Tacit.app is the menu-bar front end (app/desktop) with the CLI bundled
 # beside it, which it runs as `tacit listen`:
 #
 #   Contents/MacOS/Tacit                  menu-bar app (pure Go + Wails), with
 #                                         the onboarding window's frontend
-#                                         (cmd/tacit-app/frontend, Svelte)
+#                                         (app/desktop/frontend, Svelte)
 #                                         embedded; building it needs Node
 #   Contents/Helpers/tacit                the CLI from `make build`
 #   Contents/Frameworks/ten_vad.framework
@@ -136,7 +137,7 @@ e2e-test: build
 #   tccutil reset Microphone io.github.sangmin7648.tacit
 
 APP := build/Tacit.app
-FRONTEND := cmd/tacit-app/frontend
+FRONTEND := app/desktop/frontend
 SIGN_IDENTITY ?= -
 
 # CGO_* are overridden for the app: the whisper link flags exported above are the
@@ -146,11 +147,11 @@ app: build
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Helpers $(APP)/Contents/Frameworks
 	CGO_CFLAGS="$(MIN_FLAG)" CGO_LDFLAGS="$(MIN_FLAG)" \
-		go build -ldflags "$(GO_LDFLAGS)" -o $(APP)/Contents/MacOS/Tacit ./cmd/tacit-app/
+		go build -ldflags "$(GO_LDFLAGS)" -o $(APP)/Contents/MacOS/Tacit ./app/desktop/
 	cp tacit $(APP)/Contents/Helpers/tacit
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/Helpers/tacit
 	cp -R ten_vad.framework $(APP)/Contents/Frameworks/
-	cp cmd/tacit-app/Info.plist $(APP)/Contents/Info.plist
+	cp app/desktop/Info.plist $(APP)/Contents/Info.plist
 	plutil -replace CFBundleShortVersionString -string "$(PLIST_VERSION)" $(APP)/Contents/Info.plist
 	plutil -replace CFBundleVersion -string "$(PLIST_VERSION)" $(APP)/Contents/Info.plist
 	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)/Contents/Frameworks/ten_vad.framework
@@ -180,5 +181,5 @@ clean:
 	rm -rf build
 	rm -rf ten_vad.framework
 	rm -f tacit
-	rm -f pkg/search/rg-darwin-arm64 pkg/search/rg-darwin-amd64
+	rm -f core/internal/components/note-manager/rg-darwin-arm64 core/internal/components/note-manager/rg-darwin-amd64
 	go clean

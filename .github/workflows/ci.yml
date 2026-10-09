@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: tacit/cmd/tacit-app/frontend/package-lock.json
+          cache-dependency-path: tacit/app/desktop/frontend/package-lock.json
 
       - name: Build Mac app
         run: make app

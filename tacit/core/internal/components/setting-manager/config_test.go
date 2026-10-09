@@ -1,0 +1,558 @@
+package settingmanager
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestDefaultConfig(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.WhisperModel != "large-v3-turbo" {
+		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "large-v3-turbo")
+	}
+	if cfg.Language != "auto" {
+		t.Errorf("Language: got %q, want %q", cfg.Language, "auto")
+	}
+	if cfg.Experimental != false {
+		t.Errorf("Experimental: got %v, want %v", cfg.Experimental, false)
+	}
+	if cfg.MinSpeechDur != 2*time.Second {
+		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 2*time.Second)
+	}
+	if cfg.SilenceDuration != 10*time.Second {
+		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, 10*time.Second)
+	}
+	if cfg.MaxSegmentDur != 30*time.Second {
+		t.Errorf("MaxSegmentDur: got %v, want %v", cfg.MaxSegmentDur, 30*time.Second)
+	}
+	if cfg.SpeechThreshold != 0.5 {
+		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.5)
+	}
+	if cfg.LLMProvider != "ollama" {
+		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "ollama")
+	}
+	if cfg.LLMModel != "qwen3.5" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "qwen3.5")
+	}
+}
+
+func TestLoadWithOverride_ValidYAML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+
+	content := `whisper_model: large
+min_speech_duration: 5s
+silence_duration: 2s
+speech_threshold: 0.8
+llm_provider: claude
+llm_model: sonnet
+`
+	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	cfg, err := LoadWithOverride(cfgPath, "")
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+
+	if cfg.WhisperModel != "large" {
+		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "large")
+	}
+	if cfg.MinSpeechDur != 5*time.Second {
+		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 5*time.Second)
+	}
+	if cfg.SilenceDuration != 2*time.Second {
+		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, 2*time.Second)
+	}
+	if cfg.SpeechThreshold != 0.8 {
+		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.8)
+	}
+	if cfg.LLMProvider != "claude" {
+		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "claude")
+	}
+	if cfg.LLMModel != "sonnet" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "sonnet")
+	}
+}
+
+func TestLoadWithOverride_NoFiles(t *testing.T) {
+	cfg, err := LoadWithOverride("/nonexistent/config.yaml", "/nonexistent/config-override.yaml")
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error for missing files: %v", err)
+	}
+
+	defaults := DefaultConfig()
+	if cfg.WhisperModel != defaults.WhisperModel {
+		t.Errorf("WhisperModel: got %q, want default %q", cfg.WhisperModel, defaults.WhisperModel)
+	}
+	if cfg.MinSpeechDur != defaults.MinSpeechDur {
+		t.Errorf("MinSpeechDur: got %v, want default %v", cfg.MinSpeechDur, defaults.MinSpeechDur)
+	}
+	if cfg.LLMModel != defaults.LLMModel {
+		t.Errorf("LLMModel: got %q, want default %q", cfg.LLMModel, defaults.LLMModel)
+	}
+}
+
+func TestLoadWithOverride_PartialConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+
+	// Only override two fields; the rest should keep defaults.
+	content := `whisper_model: small
+speech_threshold: 0.7
+`
+	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	cfg, err := LoadWithOverride(cfgPath, "")
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+
+	if cfg.WhisperModel != "small" {
+		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "small")
+	}
+	if cfg.SpeechThreshold != 0.7 {
+		t.Errorf("SpeechThreshold: got %v, want %v", cfg.SpeechThreshold, 0.7)
+	}
+
+	defaults := DefaultConfig()
+	if cfg.MinSpeechDur != defaults.MinSpeechDur {
+		t.Errorf("MinSpeechDur: got %v, want default %v", cfg.MinSpeechDur, defaults.MinSpeechDur)
+	}
+	if cfg.SilenceDuration != defaults.SilenceDuration {
+		t.Errorf("SilenceDuration: got %v, want default %v", cfg.SilenceDuration, defaults.SilenceDuration)
+	}
+	if cfg.LLMModel != defaults.LLMModel {
+		t.Errorf("LLMModel: got %q, want default %q", cfg.LLMModel, defaults.LLMModel)
+	}
+}
+
+func TestLoadWithOverride_OverrideWins(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	overridePath := filepath.Join(dir, "config-override.yaml")
+
+	if err := os.WriteFile(cfgPath, []byte("llm_model: base-model\n"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	if err := os.WriteFile(overridePath, []byte("llm_model: override-model\n"), 0644); err != nil {
+		t.Fatalf("failed to write override: %v", err)
+	}
+
+	cfg, err := LoadWithOverride(cfgPath, overridePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+
+	if cfg.LLMModel != "override-model" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "override-model")
+	}
+}
+
+// README documents 0 as disabling several durations; YAML reads a bare 0 as
+// an int, which cannot decode into a time.Duration without help.
+func TestLoadWithOverride_BareZeroDuration(t *testing.T) {
+	dir := t.TempDir()
+	overridePath := filepath.Join(dir, "config-override.yaml")
+	data := "max_segment_duration: 0\nmax_session_duration: 0.0\ndedup_window: 0\nenergy_threshold: 150\n"
+	if err := os.WriteFile(overridePath, []byte(data), 0644); err != nil {
+		t.Fatalf("failed to write override: %v", err)
+	}
+
+	cfg, err := LoadWithOverride("", overridePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+	if cfg.MaxSegmentDur != 0 || cfg.MaxSessionDur != 0 || cfg.DedupWindow != 0 {
+		t.Errorf("durations: got segment=%v session=%v dedup=%v, want all 0",
+			cfg.MaxSegmentDur, cfg.MaxSessionDur, cfg.DedupWindow)
+	}
+	if cfg.EnergyThreshold != 150 {
+		t.Errorf("EnergyThreshold: got %v, want 150", cfg.EnergyThreshold)
+	}
+}
+
+// Any other bare number would mean nanoseconds, which is never what was meant.
+func TestLoadWithOverride_BareNonZeroDurationNeedsUnit(t *testing.T) {
+	for _, tc := range []struct{ line, want string }{
+		{"max_segment_duration: 30", `max_segment_duration needs a unit, e.g. "30s"`},
+		{"silence_duration: 1.5", `silence_duration needs a unit, e.g. "1.5s"`},
+	} {
+		dir := t.TempDir()
+		overridePath := filepath.Join(dir, "config-override.yaml")
+		if err := os.WriteFile(overridePath, []byte("llm_model: x\n"+tc.line+"\n"), 0644); err != nil {
+			t.Fatalf("failed to write override: %v", err)
+		}
+
+		_, err := LoadWithOverride("", overridePath)
+		if err == nil {
+			t.Errorf("%q: expected error, got nil", tc.line)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "line 2") {
+			t.Errorf("%q: error %q should contain %q and the line number", tc.line, err, tc.want)
+		}
+	}
+}
+
+func TestLoadWithOverride_CommentOnlyOverride(t *testing.T) {
+	dir := t.TempDir()
+	overridePath := filepath.Join(dir, "config-override.yaml")
+	if err := WriteOverrideTemplate(overridePath, DefaultConfig()); err != nil {
+		t.Fatalf("WriteOverrideTemplate: %v", err)
+	}
+
+	cfg, err := LoadWithOverride("", overridePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+	if cfg.MaxSegmentDur != DefaultConfig().MaxSegmentDur {
+		t.Errorf("MaxSegmentDur: got %v, want default", cfg.MaxSegmentDur)
+	}
+}
+
+func TestLoadWithOverride_PartialOverride(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	overridePath := filepath.Join(dir, "config-override.yaml")
+
+	cfgContent := `whisper_model: large
+llm_model: base-model
+llm_provider: ollama
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	// Override only llm_model.
+	if err := os.WriteFile(overridePath, []byte("llm_model: override-model\n"), 0644); err != nil {
+		t.Fatalf("failed to write override: %v", err)
+	}
+
+	cfg, err := LoadWithOverride(cfgPath, overridePath)
+	if err != nil {
+		t.Fatalf("LoadWithOverride returned error: %v", err)
+	}
+
+	if cfg.LLMModel != "override-model" {
+		t.Errorf("LLMModel: got %q, want %q", cfg.LLMModel, "override-model")
+	}
+	// Non-overridden fields from config.yaml should be preserved.
+	if cfg.WhisperModel != "large" {
+		t.Errorf("WhisperModel: got %q, want %q", cfg.WhisperModel, "large")
+	}
+	if cfg.LLMProvider != "ollama" {
+		t.Errorf("LLMProvider: got %q, want %q", cfg.LLMProvider, "ollama")
+	}
+}
+
+func TestLoadOverrideKeys_Empty(t *testing.T) {
+	keys, err := LoadOverrideKeys("/nonexistent/config-override.yaml")
+	if err != nil {
+		t.Fatalf("LoadOverrideKeys returned error for missing file: %v", err)
+	}
+	if len(keys) != 0 {
+		t.Errorf("expected empty keys map, got %v", keys)
+	}
+}
+
+func TestLoadOverrideKeys_PartialYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+
+	content := `llm_model: sonnet
+llm_provider: claude
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write override: %v", err)
+	}
+
+	keys, err := LoadOverrideKeys(path)
+	if err != nil {
+		t.Fatalf("LoadOverrideKeys returned error: %v", err)
+	}
+
+	if !keys["llm_model"] {
+		t.Error("expected llm_model to be in override keys")
+	}
+	if !keys["llm_provider"] {
+		t.Error("expected llm_provider to be in override keys")
+	}
+	if keys["whisper_model"] {
+		t.Error("expected whisper_model NOT to be in override keys")
+	}
+}
+
+func TestWriteOverrideTemplate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+
+	defaults := DefaultConfig()
+	if err := WriteOverrideTemplate(path, defaults); err != nil {
+		t.Fatalf("WriteOverrideTemplate returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read template: %v", err)
+	}
+
+	content := string(data)
+
+	// Should start with the header comment.
+	if len(content) == 0 || content[0] != '#' {
+		t.Error("expected file to start with a comment")
+	}
+
+	// All field lines should be commented out — unmarshaling should yield zero/empty Config.
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+	if cfg.WhisperModel != "" || cfg.LLMModel != "" || cfg.LLMProvider != "" {
+		t.Errorf("expected all fields to be empty (commented out), got WhisperModel=%q LLMModel=%q LLMProvider=%q",
+			cfg.WhisperModel, cfg.LLMModel, cfg.LLMProvider)
+	}
+
+	// Default field values should appear as comments.
+	if !containsLine(content, defaults.WhisperModel) {
+		t.Errorf("expected template to mention default whisper_model %q", defaults.WhisperModel)
+	}
+	if !containsLine(content, defaults.LLMModel) {
+		t.Errorf("expected template to mention default llm_model %q", defaults.LLMModel)
+	}
+}
+
+func TestWriteDefault(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	if err := WriteDefault(path); err != nil {
+		t.Fatalf("WriteDefault returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to load written config: %v", err)
+	}
+
+	defaults := DefaultConfig()
+	if cfg.MinSpeechDur != defaults.MinSpeechDur {
+		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, defaults.MinSpeechDur)
+	}
+	if cfg.SilenceDuration != defaults.SilenceDuration {
+		t.Errorf("SilenceDuration: got %v, want %v", cfg.SilenceDuration, defaults.SilenceDuration)
+	}
+	// dedup_window is written as "3h"; the reader has to parse that back.
+	if cfg.DedupWindow != defaults.DedupWindow {
+		t.Errorf("DedupWindow: got %v, want %v", cfg.DedupWindow, defaults.DedupWindow)
+	}
+	if cfg.MinCharRate != defaults.MinCharRate {
+		t.Errorf("MinCharRate: got %v, want %v", cfg.MinCharRate, defaults.MinCharRate)
+	}
+}
+
+func TestWriteSetupOverride_AcceptingDefaultsWritesNoActiveOverrides(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+	defaults := DefaultConfig()
+
+	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
+		defaults.Language, defaults.Experimental); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.LLMProvider != "" || cfg.LLMModel != "" || cfg.SkillAgent != "" || cfg.Language != "" {
+		t.Errorf("expected wizard choices matching defaults to stay commented out, got %+v", cfg)
+	}
+}
+
+func TestWriteSetupOverride_NonDefaultChoicesAreActive(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+
+	if err := WriteSetupOverride(path, "claude", "opus", "claude", "ko", true); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.LLMProvider != "claude" || cfg.LLMModel != "opus" || cfg.Language != "ko" {
+		t.Errorf("expected non-default wizard choices to be active, got %+v", cfg)
+	}
+
+	if !cfg.Experimental {
+		t.Errorf("expected experimental: true to be active, got %+v", cfg)
+	}
+}
+
+// TestWriteSetupOverride_UpgradeClearsStaleDefaultPin simulates a user
+// upgrading from an older tacit whose setup wizard unconditionally pinned
+// llm_provider even when the user just accepted the default. Re-running setup
+// and accepting today's default should clear that stale pin so the override
+// file stops shadowing DefaultConfig() — future default changes then apply
+// automatically without the user needing to edit anything by hand.
+func TestWriteSetupOverride_UpgradeClearsStaleDefaultPin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+	defaults := DefaultConfig()
+
+	// Old override file (pre-upgrade): explicitly pinned, but the value happens
+	// to equal today's default — i.e. it was never a deliberate customization.
+	if err := os.WriteFile(path, []byte("llm_provider: "+defaults.LLMProvider+"\n"), 0644); err != nil {
+		t.Fatalf("failed to seed override file: %v", err)
+	}
+
+	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
+		defaults.Language, defaults.Experimental); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read override file: %v", err)
+	}
+	if containsLine(string(data), "\nllm_provider: "+defaults.LLMProvider+"\n") {
+		t.Errorf("expected stale llm_provider pin to be cleared (commented out) on re-setup, got:\n%s", data)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.LLMProvider != "" {
+		t.Errorf("expected llm_provider to no longer be pinned in the override, got %q", cfg.LLMProvider)
+	}
+}
+
+func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-override.yaml")
+	defaults := DefaultConfig()
+
+	// User previously hand-edited durations that setup never asks about.
+	seed := "whisper_model: small\n" +
+		"min_speech_duration: 7s\n" +
+		"silence_duration: 12s\n" +
+		"dedup_window: 6h\n" +
+		"min_char_rate: 0.35\n" +
+		"initial_prompt: \"hello, world\"\n"
+	if err := os.WriteFile(path, []byte(seed), 0644); err != nil {
+		t.Fatalf("failed to seed override file: %v", err)
+	}
+
+	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
+		defaults.Language, defaults.Experimental); err != nil {
+		t.Fatalf("WriteSetupOverride returned error: %v", err)
+	}
+
+	cfg := &Config{}
+	if err := loadFile(path, cfg); err != nil {
+		t.Fatalf("failed to parse override: %v", err)
+	}
+	if cfg.WhisperModel != "small" {
+		t.Errorf("WhisperModel: got %q, want %q (should survive re-running setup)", cfg.WhisperModel, "small")
+	}
+	if cfg.MinSpeechDur != 7*time.Second {
+		t.Errorf("MinSpeechDur: got %v, want 7s (should survive re-running setup)", cfg.MinSpeechDur)
+	}
+	if cfg.SilenceDuration != 12*time.Second {
+		t.Errorf("SilenceDuration: got %v, want 12s (should survive re-running setup)", cfg.SilenceDuration)
+	}
+	if cfg.InitialPrompt != "hello, world" {
+		t.Errorf("InitialPrompt: got %q, want %q (should survive re-running setup)", cfg.InitialPrompt, "hello, world")
+	}
+	if cfg.DedupWindow != 6*time.Hour {
+		t.Errorf("DedupWindow: got %v, want 6h (should survive re-running setup)", cfg.DedupWindow)
+	}
+	if cfg.MinCharRate != 0.35 {
+		t.Errorf("MinCharRate: got %v, want 0.35 (should survive re-running setup)", cfg.MinCharRate)
+	}
+}
+
+func TestBaseDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("cannot determine home dir: %v", err)
+	}
+
+	want := filepath.Join(home, ".tacit")
+	got := BaseDir()
+	if got != want {
+		t.Errorf("BaseDir: got %q, want %q", got, want)
+	}
+}
+
+// containsLine reports whether s contains the given substring on any line.
+func containsLine(s, substr string) bool {
+	return len(substr) > 0 && len(s) > 0 && contains(s, substr)
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsRaw(s, substr))
+}
+
+func containsRaw(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// tacit setup rewrites config-override.yaml from a fixed field list, so a field
+// missing from that list is silently wiped. transcript_denylist was.
+func TestWriteSetupOverride_PreservesDenylist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config-override.yaml")
+	original := "experimental: true\ntranscript_denylist:\n  - \"내 커스텀 환각 문구\"\n  - \"another phrase\"\n"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", true); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadWithOverride("", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"내 커스텀 환각 문구", "another phrase"}
+	if len(cfg.TranscriptDenylist) != len(want) {
+		t.Fatalf("tacit setup wiped transcript_denylist: got %v, want %v", cfg.TranscriptDenylist, want)
+	}
+	for i, w := range want {
+		if cfg.TranscriptDenylist[i] != w {
+			t.Errorf("entry %d = %q, want %q", i, cfg.TranscriptDenylist[i], w)
+		}
+	}
+}
+
+// A user who never set the field should still see it in the generated file, so
+// it is discoverable without reading the docs.
+func TestWriteSetupOverride_MentionsDenylistWhenUnset(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config-override.yaml")
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", false); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "transcript_denylist") {
+		t.Error("transcript_denylist is absent from the generated override file")
+	}
+}

@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: tacit/cmd/tacit-app/frontend/package-lock.json
+          cache-dependency-path: tacit/app/desktop/frontend/package-lock.json
 
       # The app carries its own copy of the CLI (Contents/Helpers/tacit). It is
       # ad-hoc signed, not notarized: install.sh fetches it with curl, which
