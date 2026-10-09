@@ -17,9 +17,8 @@ func TestWriter_RoundTrip(t *testing.T) {
 	}
 
 	w.Observe(Event{Kind: KindListening, Time: time.Now(), Source: "mic"})
-	w.Observe(Event{Kind: KindTranscribed, Time: time.Now(), Source: "mic", Text: "hello there", Seconds: 4.5})
-	w.Observe(Event{Kind: KindStored, Time: time.Now(), Source: "mic",
-		Path: "/tmp/x.md", Title: "Hello", Category: "ideas"})
+	w.Observe(Event{Kind: KindTranscribed, Time: time.Now(), Source: "mic"})
+	w.Observe(Event{Kind: KindStored, Time: time.Now()})
 
 	if err := w.Err(); err != nil {
 		t.Fatalf("writer recorded error: %v", err)
@@ -38,11 +37,8 @@ func TestWriter_RoundTrip(t *testing.T) {
 	if got[0].Kind != KindListening || got[0].Source != "mic" {
 		t.Errorf("event 0 = %+v", got[0])
 	}
-	if got[1].Text != "hello there" || got[1].Seconds != 4.5 {
-		t.Errorf("event 1 = %+v", got[1])
-	}
-	if got[2].Path != "/tmp/x.md" || got[2].Title != "Hello" || got[2].Category != "ideas" {
-		t.Errorf("event 2 = %+v", got[2])
+	if got[1].Kind != KindTranscribed || got[2].Kind != KindStored || got[2].Source != "" {
+		t.Errorf("events 1, 2 = %+v, %+v", got[1], got[2])
 	}
 }
 
@@ -80,8 +76,7 @@ func TestWriter_Rotates(t *testing.T) {
 		t.Fatalf("NewWriter: %v", err)
 	}
 	for i := 0; i < 40; i++ {
-		w.Observe(Event{Kind: KindTranscribed, Time: time.Now(), Source: "mic",
-			Text: strings.Repeat("x", 40)})
+		w.Observe(Event{Kind: KindTranscribed, Time: time.Now(), Source: strings.Repeat("x", 40)})
 	}
 	if err := w.Err(); err != nil {
 		t.Fatalf("writer recorded error: %v", err)
@@ -111,7 +106,7 @@ func TestWriter_Rotates(t *testing.T) {
 // to it would make the log useless exactly when something went wrong.
 func TestDecode_SkipsTornLine(t *testing.T) {
 	in := `{"kind":"listening","time":"2026-03-14T15:09:26Z"}
-{"kind":"stored","time":"2026-03-14T15:09:27Z","path":"/tmp/a.md"}
+{"kind":"stored","time":"2026-03-14T15:09:27Z","source":"mic"}
 {"kind":"transcri`
 	got, err := Decode(strings.NewReader(in))
 	if err != nil {
@@ -120,7 +115,7 @@ func TestDecode_SkipsTornLine(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d events, want 2", len(got))
 	}
-	if got[1].Path != "/tmp/a.md" {
+	if got[1].Kind != KindStored || got[1].Source != "mic" {
 		t.Errorf("event 1 = %+v", got[1])
 	}
 }
@@ -169,5 +164,5 @@ func TestWriter_ConcurrentObserve(t *testing.T) {
 }
 
 func TestDiscard_Safe(t *testing.T) {
-	Discard.Observe(Event{Kind: KindError, Error: "boom"})
+	Discard.Observe(Event{Kind: KindStored})
 }

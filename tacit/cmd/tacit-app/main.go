@@ -23,6 +23,7 @@ import (
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/events"
+	"github.com/sangmin7648/tacit/pkg/storage"
 )
 
 // frontend holds the built windows — onboarding, the notes browser and
@@ -77,11 +78,7 @@ func main() {
 	t := &trayApp{app: app, tray: app.SystemTray.New(), onboarding: onboarding, knowledge: knowledge, settings: settings}
 	onboarding.tray, settings.tray = t, t
 
-	history, err := events.ReadFile(config.EventLogPath())
-	if err != nil {
-		log.Printf("reading event log: %v", err)
-	}
-	t.st.seedRecent(history)
+	t.st.recent = recentEntries()
 	t.st.running, t.st.pid = daemon.Status(config.PIDPath())
 	t.st.ownPID = adopt(t.st.running, t.st.pid)
 	t.st.updateFailed = lastUpdateFailed()
@@ -108,13 +105,13 @@ func main() {
 		}
 		go func() {
 			err := events.Follow(ctx, config.EventLogPath(), pollInterval, func(e events.Event) {
-				t.update(func(s *state) { s.observe(e) })
-				if e.Kind == events.KindStored {
-					knowledge.notifyStored(EntrySummary{
-						Title: e.Title, Category: e.Category, CreatedAt: e.Time,
-						Keywords: []string{}, Path: e.Path, MatchLines: []string{},
-					})
+				if e.Kind != events.KindStored {
+					t.update(func(s *state) { s.observe(e) })
+					return
 				}
+				recent := recentEntries()
+				t.update(func(s *state) { s.observe(e); s.recent = recent })
+				knowledge.notifyStored()
 			})
 			if err != nil {
 				log.Printf("following event log: %v", err)
@@ -164,6 +161,18 @@ func (t *trayApp) watchPID(ctx context.Context) {
 	}
 }
 
+// recentEntries returns the newest notes for the Recent menu. They come from
+// the notes folder rather than the event log, so a deleted note drops out and
+// a rotated log loses nothing.
+func recentEntries() []*storage.KnowledgeEntry {
+	entries, err := storage.ListEntries(config.BaseDir(), time.Time{})
+	if err != nil {
+		log.Printf("listing notes: %v", err)
+		return nil
+	}
+	return entries[:min(len(entries), recentLimit)]
+}
+
 // render redraws the tray from any goroutine once the app is running; all
 // AppKit work goes through InvokeSync.
 func (t *trayApp) render() {
@@ -174,7 +183,7 @@ func (t *trayApp) render() {
 func (t *trayApp) draw() {
 	t.mu.Lock()
 	s := t.st
-	s.recent = append([]events.Event(nil), t.st.recent...)
+	s.recent = append([]*storage.KnowledgeEntry(nil), t.st.recent...)
 	t.mu.Unlock()
 
 	menu := t.app.NewMenu()
@@ -194,7 +203,7 @@ func (t *trayApp) draw() {
 	} else {
 		menu.Add("Recent").SetEnabled(false)
 		for _, e := range s.recent {
-			path := e.Path
+			path := e.FilePath
 			menu.Add(entryLabel(e)).OnClick(func(*application.Context) { openPath(path) })
 		}
 	}

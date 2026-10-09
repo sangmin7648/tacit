@@ -7,8 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +14,7 @@ import (
 	"github.com/sangmin7648/tacit/pkg/capture"
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/events"
+	"github.com/sangmin7648/tacit/pkg/storage"
 )
 
 // TestE2E plays a recording through the same path a live microphone takes —
@@ -61,15 +60,15 @@ func TestE2E(t *testing.T) {
 	cancel()
 	<-done
 
-	stored, _ := rec.first(events.KindStored)
-	body, err := os.ReadFile(stored.Path)
+	entries, err := storage.ListEntries(p.baseDir, time.Time{})
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("want one entry in the temp knowledge base, got %d (err %v)", len(entries), err)
+	}
+	body, err := os.ReadFile(entries[0].FilePath)
 	if err != nil {
 		t.Fatalf("read stored entry: %v", err)
 	}
-	if !strings.HasPrefix(stored.Path, p.baseDir+string(filepath.Separator)) {
-		t.Fatalf("entry %s written outside the temp knowledge base", stored.Path)
-	}
-	t.Logf("stored %s:\n%s", stored.Path, body)
+	t.Logf("stored %s:\n%s", entries[0].FilePath, body)
 }
 
 // playback streams samples in mic-sized chunks, then holds the stream open

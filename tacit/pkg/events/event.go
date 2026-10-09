@@ -1,11 +1,10 @@
-// Package events carries the pipeline's observable moments to anything that
-// wants to watch a running daemon — today the CLI's own log, tomorrow the Mac
-// app's menu bar and activity feed.
+// Package events tells a front end what a running daemon is doing right now,
+// so the menu bar can show it and refresh its notes when one is stored. The
+// daemon runs as its own process, so the front end has no other way to know.
 //
-// The pipeline already narrated itself through log.Printf, but only to a human
-// reading stderr: a second front end would have had to scrape English prose to
-// learn that a segment was stored. An Event is that same narration as data.
-// Emitting one never replaces the log line it accompanies.
+// Events carry only what a front end displays. Why a segment was dropped, and
+// what was said, belong in the daemon log, which is the record a person reads
+// to diagnose a run.
 package events
 
 import "time"
@@ -27,27 +26,20 @@ const (
 	// fires for a split of ongoing speech, so it does not always follow a
 	// KindSpeechEnded.
 	KindTranscribing Kind = "transcribing"
-	// KindTranscribed carries the text whisper returned and kept.
+	// KindTranscribed reports that whisper returned text worth classifying.
 	KindTranscribed Kind = "transcribed"
-	// KindDiscarded reports speech dropped before classification — filler,
-	// hallucinated boilerplate, too sparse for its duration, or a stock repeat.
-	// Reason says which.
+	// KindDiscarded reports speech dropped before classification — too short,
+	// filler, hallucinated boilerplate, or a stock repeat.
 	KindDiscarded Kind = "discarded"
-	// KindClassifying reports a classify call starting. Count is how many
-	// transcripts went into it.
+	// KindClassifying reports a classify call starting.
 	KindClassifying Kind = "classifying"
 	// KindStored reports a knowledge entry written to disk.
 	KindStored Kind = "stored"
-	// KindSkipped reports a transcript the classifier called meaningless. It is
-	// the one path that intentionally throws speech away.
+	// KindSkipped reports a transcript the classifier called meaningless.
 	KindSkipped Kind = "skipped"
-	// KindError reports a failure the daemon absorbed and continued past.
-	KindError Kind = "error"
 )
 
-// Event is one observable moment. Every field but Kind and Time is optional,
-// and which ones are populated depends on Kind; a reader should treat a missing
-// field as unknown rather than as an empty value that means something.
+// Event is one observable moment.
 type Event struct {
 	Kind Kind      `json:"kind"`
 	Time time.Time `json:"time"`
@@ -55,27 +47,6 @@ type Event struct {
 	// Source is the capture source the event came from ("mic"), or
 	// empty for events that belong to the daemon as a whole.
 	Source string `json:"source,omitempty"`
-
-	// Text is the transcript an event concerns, for the kinds that have one.
-	Text string `json:"text,omitempty"`
-
-	// Seconds is the audio duration an event concerns, for the kinds that have
-	// one. It is audio length, never wall-clock elapsed time.
-	Seconds float64 `json:"seconds,omitempty"`
-
-	// Count is how many transcripts a classify call covers.
-	Count int `json:"count,omitempty"`
-
-	// Path, Title and Category describe a stored knowledge entry.
-	Path     string `json:"path,omitempty"`
-	Title    string `json:"title,omitempty"`
-	Category string `json:"category,omitempty"`
-
-	// Reason explains a discard or a restart in a short, stable token.
-	Reason string `json:"reason,omitempty"`
-
-	// Error is the message of a failure the daemon continued past.
-	Error string `json:"error,omitempty"`
 }
 
 // Observer receives pipeline events. Observe is called from the pipeline's own

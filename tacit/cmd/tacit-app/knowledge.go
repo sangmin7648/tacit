@@ -147,13 +147,13 @@ func inKnowledgeBase(path string) (string, error) {
 	return p, nil
 }
 
-// notifyStored forwards a stored event to the browser window, if it is open.
-func (k *KnowledgeService) notifyStored(e EntrySummary) {
+// notifyStored tells the browser window, if it is open, to reload.
+func (k *KnowledgeService) notifyStored() {
 	k.mu.Lock()
 	open := k.window != nil
 	k.mu.Unlock()
 	if open {
-		application.Get().Event.Emit(storedEvent, e)
+		application.Get().Event.Emit(storedEvent)
 	}
 }
 

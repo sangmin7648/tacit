@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -64,8 +63,7 @@ func sourcedItems(source string, texts ...string) []classifyItem {
 	return out
 }
 
-// A stored entry is the event a front end exists to show. It has to carry
-// enough to render a row without reopening the file.
+// A stored event is what tells a front end to refresh its notes.
 func TestClassifyLoop_EmitsStored(t *testing.T) {
 	fake := &fakeClassifier{
 		singleFn: func(call int, text string) (*process.ClassifyResult, error) {
@@ -82,17 +80,8 @@ func TestClassifyLoop_EmitsStored(t *testing.T) {
 	if !ok {
 		t.Fatalf("no %q event; got %v", events.KindStored, rec.kinds())
 	}
-	if e.Title != "검색 랭킹 논의" {
-		t.Errorf("Title = %q, want %q", e.Title, "검색 랭킹 논의")
-	}
-	if e.Category != "work" {
-		t.Errorf("Category = %q, want %q", e.Category, "work")
-	}
 	if e.Source != "mic" {
 		t.Errorf("Source = %q, want %q", e.Source, "mic")
-	}
-	if !strings.HasSuffix(e.Path, ".md") {
-		t.Errorf("Path = %q, want a .md file", e.Path)
 	}
 	if e.Time.IsZero() {
 		t.Error("Time is zero; emit must stamp every event")
@@ -102,8 +91,8 @@ func TestClassifyLoop_EmitsStored(t *testing.T) {
 	}
 }
 
-// A skip is the one path that intentionally throws speech away, so it must be
-// visible as its own kind rather than as a silent absence of a stored event.
+// A skip ends the work on a transcript, so the menu bar must hear of it to
+// stop showing it as in progress.
 func TestClassifyLoop_EmitsSkippedNotStored(t *testing.T) {
 	fake := &fakeClassifier{
 		singleFn: func(call int, text string) (*process.ClassifyResult, error) {
@@ -123,16 +112,13 @@ func TestClassifyLoop_EmitsSkippedNotStored(t *testing.T) {
 	if e.Source != "mic" {
 		t.Errorf("Source = %q, want %q", e.Source, "mic")
 	}
-	if e.Text == "" {
-		t.Error("Text is empty; a skip event is the only record of what was discarded")
-	}
 	if n := rec.count(events.KindStored); n != 0 {
 		t.Errorf("stored events = %d, want 0", n)
 	}
 }
 
 // The deduper drops a stock hallucination before a classify call is spent on
-// it. That drop is invisible in the stored entries, so it needs an event.
+// it; the menu bar needs to hear that the transcript's work is over.
 func TestClassifyLoop_EmitsDiscardedOnStockRepeat(t *testing.T) {
 	fake := &fakeClassifier{}
 	p := newTestPipeline(t, fake)
@@ -145,21 +131,17 @@ func TestClassifyLoop_EmitsDiscardedOnStockRepeat(t *testing.T) {
 		runClassify(t, p, sourcedItems("mic", stock)...)
 	}
 
-	e, ok := rec.first(events.KindDiscarded)
-	if !ok {
+	if _, ok := rec.first(events.KindDiscarded); !ok {
 		t.Fatalf("no %q event; got %v", events.KindDiscarded, rec.kinds())
-	}
-	if e.Reason != "stock_repeat" {
-		t.Errorf("Reason = %q, want %q", e.Reason, "stock_repeat")
 	}
 	if got := rec.count(events.KindStored); got != dedupKeepFirst {
 		t.Errorf("stored events = %d, want %d", got, dedupKeepFirst)
 	}
 }
 
-// A classify failure still stores the transcript unclassified (issue #12), and
-// the front end needs both facts: the error and the entry.
-func TestClassifyLoop_EmitsErrorAndStillStores(t *testing.T) {
+// A classify failure still stores the transcript unclassified (issue #12), so
+// the front end hears of the entry like any other.
+func TestClassifyLoop_ClassifyFailureStillEmitsStored(t *testing.T) {
 	fake := &fakeClassifier{
 		singleFn: func(call int, text string) (*process.ClassifyResult, error) {
 			return nil, errBoom
@@ -171,13 +153,6 @@ func TestClassifyLoop_EmitsErrorAndStillStores(t *testing.T) {
 
 	runClassify(t, p, sourcedItems("mic", "기획전 티어 정책 논의")...)
 
-	e, ok := rec.first(events.KindError)
-	if !ok {
-		t.Fatalf("no %q event; got %v", events.KindError, rec.kinds())
-	}
-	if e.Reason != "classify_failed" {
-		t.Errorf("Reason = %q, want %q", e.Reason, "classify_failed")
-	}
 	if n := rec.count(events.KindStored); n != 1 {
 		t.Errorf("stored events = %d, want 1 (a classify failure must not lose the transcript)", n)
 	}

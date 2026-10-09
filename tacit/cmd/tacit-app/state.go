@@ -6,14 +6,15 @@ import (
 	"unicode/utf8"
 
 	"github.com/sangmin7648/tacit/pkg/events"
+	"github.com/sangmin7648/tacit/pkg/storage"
 )
 
 // recentLimit is how many stored entries the menu lists.
 const recentLimit = 5
 
-// state is everything the menu shows. It is built from two sources: the PID
-// file, which says whether a daemon is running (whoever started it), and the
-// event log, which says what that daemon is doing.
+// state is everything the menu shows. It is built from three sources: the PID
+// file, which says whether a daemon is running (whoever started it), the event
+// log, which says what that daemon is doing, and the notes folder.
 type state struct {
 	running bool
 	pid     int
@@ -25,7 +26,7 @@ type state struct {
 	// activity is the latest event kind from the running daemon.
 	activity events.Kind
 	// recent holds the newest stored entries, newest first.
-	recent []events.Event
+	recent []*storage.KnowledgeEntry
 	// lastErr describes why a daemon this app started exited on its own.
 	lastErr string
 
@@ -40,31 +41,14 @@ type state struct {
 // observe folds one event into the state.
 func (s *state) observe(e events.Event) {
 	switch e.Kind {
-	case events.KindStored:
-		s.recent = append([]events.Event{e}, s.recent...)
-		if len(s.recent) > recentLimit {
-			s.recent = s.recent[:recentLimit]
-		}
-		s.activity = events.KindListening
 	case events.KindListening, events.KindSpeechStarted, events.KindSpeechEnded,
 		events.KindTranscribing, events.KindClassifying:
 		s.activity = e.Kind
-	case events.KindTranscribed, events.KindDiscarded, events.KindSkipped:
+	case events.KindTranscribed, events.KindDiscarded, events.KindSkipped, events.KindStored:
 		// The segment is done with; classification may still follow, but a
 		// transcribed segment waits in a queue until then, so show idle.
 		s.activity = events.KindListening
 	}
-}
-
-// seedRecent fills recent from the log's history, oldest first as ReadFile
-// returns it.
-func (s *state) seedRecent(history []events.Event) {
-	for _, e := range history {
-		if e.Kind == events.KindStored {
-			s.observe(e)
-		}
-	}
-	s.activity = ""
 }
 
 // label is the menu-bar text: one glyph for what the daemon is doing.
@@ -95,10 +79,10 @@ func (s *state) statusLine() string {
 }
 
 // entryLabel is how a stored entry reads in the Recent list.
-func entryLabel(e events.Event) string {
+func entryLabel(e *storage.KnowledgeEntry) string {
 	title := e.Title
 	if title == "" {
-		title = filepath.Base(e.Path)
+		title = filepath.Base(e.FilePath)
 	}
 	const max = 48
 	if utf8.RuneCountInString(title) > max {
