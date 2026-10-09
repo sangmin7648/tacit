@@ -1,7 +1,7 @@
-// Command tacit-app is the macOS menu-bar app. It controls and watches the
+// Command Tacit is the macOS menu-bar app. It controls and watches the
 // tacit daemon — the bundled CLI's `tacit listen` — and lists what it stores.
 //
-// It shares every decision with the CLI through pkg/*; it adds only the menu.
+// It shares every decision with the CLI through core/workflows; it adds only the menu.
 package main
 
 import (

@@ -1,5 +1,5 @@
 // The settings window's only door to Go. Each function calls a method of
-// SettingsService (cmd/tacit-app/settings.go) by name; a Go test
+// SettingsService (app/desktop/settings.go) by name; a Go test
 // (onboarding_test.go) reads this file and checks every name against the
 // service, as it does for backend.js.
 //

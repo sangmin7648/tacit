@@ -1,10 +1,11 @@
-// Package events tells a front end what a running daemon is doing right now,
-// so the menu bar can show it and refresh its notes when one is stored. The
-// daemon runs as its own process, so the front end has no other way to know.
+// Events tell a front end what a running daemon is doing right now, so the
+// menu bar can show it and refresh its notes when one is stored. The daemon
+// runs as its own process, so the front end has no other way to know.
 //
 // Events carry only what a front end displays. Why a segment was dropped, and
 // what was said, belong in the daemon log, which is the record a person reads
 // to diagnose a run.
+
 package listen
 
 import "time"

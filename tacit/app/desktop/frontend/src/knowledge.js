@@ -1,5 +1,5 @@
 // The notes browser's only door to Go. Each function calls a method of
-// KnowledgeService (cmd/tacit-app/knowledge.go) by name; a Go test
+// KnowledgeService (app/desktop/knowledge.go) by name; a Go test
 // (onboarding_test.go) reads this file and checks every name — and
 // STORED — against the service, as it does for backend.js.
 //

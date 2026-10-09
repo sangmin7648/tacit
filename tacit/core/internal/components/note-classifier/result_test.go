@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// FallbackResult feeds storage.Write, which rejects an empty or over-long
+// FallbackResult feeds notemanager.Write, which rejects an empty or over-long
 // title, so it has to produce a usable one for any transcript.
 func TestFallbackResult_IsStorable(t *testing.T) {
 	long := ""
@@ -18,7 +18,7 @@ func TestFallbackResult_IsStorable(t *testing.T) {
 			t.Errorf("empty title for input %q", text[:min(len(text), 40)])
 		}
 		if n := len([]rune(r.Title)); n > 100 {
-			t.Errorf("title too long for storage.Write: %d runes", n)
+			t.Errorf("title too long for notemanager.Write: %d runes", n)
 		}
 		if r.Category != UnsortedCategory {
 			t.Errorf("category = %q, want %q", r.Category, UnsortedCategory)
@@ -75,7 +75,7 @@ func TestUsable(t *testing.T) {
 	}
 }
 
-// Finalize is the last thing between a classification and storage.Write, so
+// Finalize is the last thing between a classification and notemanager.Write, so
 // every field it produces has to satisfy that validation.
 func TestFinalize_AlwaysStorable(t *testing.T) {
 	const text = "태그 롤백 논의를 했고 CDC 파이프라인부터 다시 봐야 한다"
@@ -99,10 +99,10 @@ func TestFinalize_AlwaysStorable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Finalize(tt.in, text)
 			if got.Title == "" {
-				t.Error("title is empty; storage.Write would reject it")
+				t.Error("title is empty; notemanager.Write would reject it")
 			}
 			if n := len([]rune(got.Title)); n > 100 {
-				t.Errorf("title is %d runes; storage.Write rejects over 100", n)
+				t.Errorf("title is %d runes; notemanager.Write rejects over 100", n)
 			}
 			if got.Category != tt.wantCategory {
 				t.Errorf("category = %q, want %q", got.Category, tt.wantCategory)

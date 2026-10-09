@@ -116,7 +116,7 @@ Usage:
 }
 
 // cmdSetup runs the interactive setup wizard. It only asks and reports: the
-// decisions live in pkg/setup, which the Mac app's onboarding calls too.
+// decisions live in the onboard workflow, which the Mac app's onboarding calls too.
 func cmdSetup() {
 	fmt.Println("=== tacit setup ===")
 	fmt.Println()

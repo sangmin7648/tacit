@@ -31,12 +31,12 @@ func FallbackResult(text string) *ClassifyResult {
 	}
 }
 
-// maxTitleRunes mirrors the limit storage.Write enforces. Finalize truncates to
+// maxTitleRunes mirrors the limit notemanager.Write enforces. Finalize truncates to
 // it so a verbose model cannot make an entry unwritable.
 const maxTitleRunes = 100
 
 // NormalizeCategory reduces whatever the model returned to the single-level,
-// traversal-free name storage.Write will accept. It returns "" when nothing
+// traversal-free name notemanager.Write will accept. It returns "" when nothing
 // usable is left; Finalize substitutes UnsortedCategory in that case.
 func NormalizeCategory(category string) string {
 	// Keep only the first segment: models return "dev/backend" despite being
@@ -52,7 +52,7 @@ func NormalizeCategory(category string) string {
 	return category
 }
 
-// Finalize makes a classification storable. storage.Write rejects an empty or
+// Finalize makes a classification storable. notemanager.Write rejects an empty or
 // over-long title and an empty or multi-level category, and Usable() is true as
 // soon as any one field is filled — so a result with, say, a category but no
 // title passed the usable check and then died at the write, losing the

@@ -97,7 +97,7 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32, opts Option
 	// here changed nothing. suppress_nst is the only decode setting this flag
 	// actually flips, and it masks symbol tokens ("(", "♪") rather than whole
 	// sentences; stock hallucinated phrases made of ordinary words are stripped
-	// after transcription instead, in process.FilterHallucinations.
+	// after transcription instead, in FilterHallucinations.
 	if opts.Experimental {
 		params.suppress_nst = C.bool(true)
 	}

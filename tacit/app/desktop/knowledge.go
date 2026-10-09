@@ -21,8 +21,8 @@ import (
 const storedEvent = "knowledge:stored"
 
 // KnowledgeService is what the knowledge browser window calls. Listing and
-// search are pkg/storage's and pkg/search's — the same code behind `tacit
-// list` and `tacit search` — so the window and the CLI find the same notes.
+// search are the browse workflow's — the same code behind `tacit list` and
+// `tacit search` — so the window and the CLI find the same notes.
 type KnowledgeService struct {
 	mu     sync.Mutex
 	window *application.WebviewWindow
@@ -56,7 +56,7 @@ func summarize(e *browse.Note, matches []string) EntrySummary {
 	}
 }
 
-// since turns a range in days into the cutoff pkg/storage and pkg/search take;
+// since turns a range in days into the cutoff the browse workflow takes;
 // zero or less means everything.
 func since(days int) time.Time {
 	if days <= 0 {

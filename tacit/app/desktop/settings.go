@@ -17,7 +17,7 @@ import (
 )
 
 // SettingsService is what the settings window calls. Reading and writing are
-// pkg/config's Fields, SetOverride and ClearOverride — the same code behind
+// the configure workflow's Fields, Set and Unset — the same code behind
 // `tacit config view|set|unset` — so an edit here keeps the rest of
 // config-override.yaml, comments included, and a value the file could not load
 // is refused with nothing written.

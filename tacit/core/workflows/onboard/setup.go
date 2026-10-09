@@ -1,4 +1,4 @@
-// Package setup applies the choices made during first-run setup. It holds the
+// Package onboard applies the choices made during first-run setup. It holds the
 // decisions `tacit setup` makes, without the prompting, so the terminal wizard
 // and the Mac app's onboarding window share one implementation: each collects
 // Choices its own way, then calls Apply.

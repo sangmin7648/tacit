@@ -1,5 +1,3 @@
-// Package daemon provides PID file management with stale detection
-// for the tacit daemon process.
 package listen
 
 import (

@@ -23,7 +23,7 @@ import (
 const modelProgressEvent = "onboarding:model-progress"
 
 // OnboardingService is what the onboarding window calls. Every decision it
-// makes is pkg/setup's — the same code `tacit setup` runs — so the window and
+// makes is the onboard workflow's — the same code `tacit setup` runs — so the window and
 // the terminal wizard cannot drift apart.
 type OnboardingService struct {
 	tray *trayApp

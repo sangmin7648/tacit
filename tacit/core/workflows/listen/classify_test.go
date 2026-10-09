@@ -354,7 +354,7 @@ func TestClassifyLoop_ExplicitSkipIsHonoured(t *testing.T) {
 	}
 }
 
-// A result that Usable() accepts can still be rejected by storage.Write. The
+// A result that Usable() accepts can still be rejected by notemanager.Write. The
 // real qwen3.5 returns exactly this — a category with an empty title — and it
 // used to die at the write with only a "Write error" line, losing the
 // transcript the same way issue #12 did.

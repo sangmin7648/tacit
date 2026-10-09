@@ -1,5 +1,5 @@
 // The onboarding window's only door to Go. Each function calls a method of
-// OnboardingService (cmd/tacit-app/onboarding.go) by name; names are plain
+// OnboardingService (app/desktop/onboarding.go) by name; names are plain
 // strings, so a Go test (onboarding_test.go) reads this file and checks every
 // one of them — and MODEL_PROGRESS — against the service.
 //
