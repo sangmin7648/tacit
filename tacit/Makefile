@@ -43,8 +43,6 @@ export CGO_LDFLAGS := $(foreach lib,$(WHISPER_LIBS),$(abspath $(lib))) $(PLATFOR
 # checkout, e.g. v0.11.0-16-gfe768d8.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GO_LDFLAGS := -X main.version=$(VERSION)
-# CFBundleShortVersionString takes numbers only: v0.11.0-16-gfe768d8 -> 0.11.0.
-PLIST_VERSION := $(or $(shell echo '$(VERSION)' | sed -nE 's/^v?([0-9]+\.[0-9]+\.[0-9]+).*/\1/p'),0.0.0)
 
 # ── Targets ──────────────────────────────────────────────
 
@@ -108,33 +106,8 @@ e2e-test: build
 
 # ── Mac app ──────────────────────────────────────────────
 #
-# Tacit.app is the menu-bar front end (app/desktop) with the CLI bundled
-# beside it, which it runs as `tacit listen`:
-#
-#   Contents/MacOS/Tacit                  menu-bar app (pure Go + Wails), with
-#                                         the onboarding window's frontend
-#                                         (app/desktop/frontend, Svelte)
-#                                         embedded; building it needs Node
-#   Contents/Helpers/tacit                the CLI from `make build`
-#   Contents/Frameworks/ten_vad.framework
-#
-# The CLI is in Helpers, not beside the app in MacOS: the default macOS
-# filesystem is case-insensitive, so MacOS/tacit would overwrite MacOS/Tacit.
-# The framework lives in Frameworks, where codesign expects nested code, so the
-# bundled CLI gets an extra rpath to find it there.
-#
-# Signing is ad-hoc by default. macOS keys the microphone grant to an ad-hoc
-# build's exact hash, so every rebuild asks again; sign with
-# a stable identity (e.g. a self-signed "Code Signing" certificate made in
-# Keychain Access) to keep grants across rebuilds:
-#
-#   make app SIGN_IDENTITY="Tacit Dev"
-#
-# Symptom of an ad-hoc rebuild: System Settings shows Tacit allowed for the
-# microphone, yet the daemon it starts hears nothing — the grant belongs to an
-# earlier build. Reset it and grant again:
-#
-#   tccutil reset Microphone io.github.sangmin7648.tacit
+# Builds the menu-bar app and hands it, with the CLI, to packaging/mac, which
+# assembles and signs Tacit.app. The layout and signing notes are there.
 
 APP := build/Tacit.app
 FRONTEND := app/desktop/frontend
@@ -144,21 +117,10 @@ SIGN_IDENTITY ?= -
 # CLI's, and the app links none of it.
 app: build
 	cd $(FRONTEND) && npm ci --no-audit --no-fund && npm run build
-	rm -rf $(APP)
-	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Helpers $(APP)/Contents/Frameworks
+	mkdir -p build
 	CGO_CFLAGS="$(MIN_FLAG)" CGO_LDFLAGS="$(MIN_FLAG)" \
-		go build -ldflags "$(GO_LDFLAGS)" -o $(APP)/Contents/MacOS/Tacit ./app/desktop/
-	cp tacit $(APP)/Contents/Helpers/tacit
-	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/Helpers/tacit
-	cp -R ten_vad.framework $(APP)/Contents/Frameworks/
-	cp app/desktop/Info.plist $(APP)/Contents/Info.plist
-	plutil -replace CFBundleShortVersionString -string "$(PLIST_VERSION)" $(APP)/Contents/Info.plist
-	plutil -replace CFBundleVersion -string "$(PLIST_VERSION)" $(APP)/Contents/Info.plist
-	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)/Contents/Frameworks/ten_vad.framework
-	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)/Contents/Helpers/tacit
-	codesign --force --sign "$(SIGN_IDENTITY)" $(APP)
-	codesign --verify --strict --deep $(APP)
-	@echo "Built $(APP)"
+		go build -ldflags "$(GO_LDFLAGS)" -o build/Tacit ./app/desktop/
+	packaging/mac/build-app.sh $(APP) build/Tacit tacit ten_vad.framework "$(VERSION)" "$(SIGN_IDENTITY)"
 
 INSTALL_DIR := $(HOME)/.local/bin
 
