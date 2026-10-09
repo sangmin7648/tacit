@@ -17,6 +17,7 @@ import (
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/events"
+	"github.com/sangmin7648/tacit/pkg/model"
 	"github.com/sangmin7648/tacit/pkg/pipeline"
 	"github.com/sangmin7648/tacit/pkg/search"
 	"github.com/sangmin7648/tacit/pkg/setup"
@@ -196,6 +197,13 @@ func cmdSetup() {
 		fmt.Printf("  Run 'tacit config edit' to set your overrides in config-override.yaml.\n\n")
 	}
 	fmt.Printf("Updated reference config: %s\n", res.ReferencePath)
+
+	cfg := loadConfig()
+	modelFile := filepath.Base(config.ModelPath(cfg.WhisperModel))
+	if err := setup.DownloadModel(context.Background(), model.PrintProgress(modelFile)); err != nil {
+		log.Fatalf("Downloading %s failed: %v", modelFile, err)
+	}
+	fmt.Println()
 
 	fmt.Println("Setup complete.")
 }

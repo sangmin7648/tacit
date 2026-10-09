@@ -13,7 +13,6 @@ import (
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
 
 	"github.com/sangmin7648/tacit/pkg/config"
-	"github.com/sangmin7648/tacit/pkg/model"
 	"github.com/sangmin7648/tacit/pkg/setup"
 )
 
@@ -109,10 +108,6 @@ func (s *OnboardingService) Apply(c setup.Choices) (*setup.Result, error) {
 // reporting progress through modelProgressEvent. The window cancels it by
 // cancelling the call, which cancels ctx; the partial file is removed.
 func (s *OnboardingService) DownloadModel(ctx context.Context) error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return err
-	}
 	app := application.Get()
 	var last time.Time
 	progress := func(done, total int64) {
@@ -122,7 +117,7 @@ func (s *OnboardingService) DownloadModel(ctx context.Context) error {
 			app.Event.Emit(modelProgressEvent, ModelProgress{Done: done, Total: total})
 		}
 	}
-	if err := model.Download(ctx, config.ModelPath(cfg.WhisperModel), progress); err != nil {
+	if err := setup.DownloadModel(ctx, progress); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return errors.New("download cancelled")
 		}

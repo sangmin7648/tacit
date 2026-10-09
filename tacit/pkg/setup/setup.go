@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/sangmin7648/tacit/pkg/config"
+	"github.com/sangmin7648/tacit/pkg/model"
 	"github.com/sangmin7648/tacit/pkg/process"
 	"github.com/sangmin7648/tacit/skills"
 )
@@ -167,6 +168,17 @@ func Apply(c Choices) (*Result, error) {
 		return res, fmt.Errorf("writing reference config: %w", err)
 	}
 	return res, nil
+}
+
+// DownloadModel fetches the whisper model the saved settings name, unless it
+// is already there. Setup ends with it, in the terminal and in the app alike,
+// so the first listen does not stall on a download of a gigabyte or more.
+func DownloadModel(ctx context.Context, progress model.Progress) error {
+	cfg, err := config.LoadWithOverride(config.ConfigPath(), config.OverridePath())
+	if err != nil {
+		return err
+	}
+	return model.Download(ctx, config.ModelPath(cfg.WhisperModel), progress)
 }
 
 // backupLegacyReference copies config.yaml aside when it looks hand-edited and

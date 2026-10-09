@@ -32,8 +32,7 @@ func EnsureModelFromURL(modelPath, url string) error {
 	modelFile := filepath.Base(modelPath)
 	fmt.Printf("Downloading %s...\n", modelFile)
 
-	p := &printer{filename: modelFile}
-	written, err := download(context.Background(), modelPath, url, p.report)
+	written, err := download(context.Background(), modelPath, url, PrintProgress(modelFile))
 	if err != nil {
 		return err
 	}
@@ -127,7 +126,12 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// printer is the CLI's Progress: one line, redrawn in place every 5%.
+// PrintProgress is the CLI's Progress: one line, redrawn in place every 5%.
+func PrintProgress(filename string) Progress {
+	p := &printer{filename: filename}
+	return p.report
+}
+
 type printer struct {
 	filename string
 	lastPct  int
