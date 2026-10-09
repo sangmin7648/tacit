@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -22,18 +21,10 @@ import (
 	"github.com/sangmin7648/tacit/pkg/vad"
 )
 
-// ErrSkipped is returned by ProcessFile when the audio content is classified
-// as meaningless and intentionally not stored. It is not a processing error.
-var ErrSkipped = errors.New("content classified as meaningless, skipping")
-
 // dedupKeepFirst is how many verbatim copies of a transcript are stored per
 // dedup window before the rest are treated as whisper stock hallucinations and
 // dropped. Two leaves room for a real remark that genuinely recurs.
 const dedupKeepFirst = 2
-
-// fileSource is the Source label on events from ProcessFile, distinguishing a
-// one-shot file run from the live "mic" capture source.
-const fileSource = "file"
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
 type Pipeline struct {
@@ -593,85 +584,4 @@ func newKnowledgeEntry(classified *process.ClassifyResult, content string, ts ti
 		Summary:   final.Summary,
 		Content:   content,
 	}
-}
-
-// ProcessFile processes an audio file through the full pipeline:
-// decode → STT → classify → save as markdown knowledge entry.
-// Returns the path to the created knowledge file.
-func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, error) {
-	log.Printf("Decoding audio file: %s", audioPath)
-	samples, err := audio.DecodeFile(audioPath)
-	if err != nil {
-		return "", fmt.Errorf("decode audio: %w", err)
-	}
-	duration := audio.DurationFromSamples(len(samples), audio.SampleRate)
-	log.Printf("Decoded %d samples (%.2f seconds)", len(samples), duration.Seconds())
-
-	if duration < p.cfg.MinSpeechDur {
-		return "", fmt.Errorf("audio too short: %v (minimum: %v)", duration, p.cfg.MinSpeechDur)
-	}
-
-	log.Printf("Running STT...")
-	p.whisperMu.Lock()
-	text, err := p.whisper.Transcribe(ctx, samples, p.sttOptions())
-	p.whisperMu.Unlock()
-	if err != nil {
-		return "", fmt.Errorf("transcribe: %w", err)
-	}
-	if text == "" {
-		return "", fmt.Errorf("STT produced empty text")
-	}
-	log.Printf("STT result: %s", text)
-
-	raw := text
-	text = process.FilterHallucinations(text, p.cfg.TranscriptDenylist)
-	if text == "" {
-		log.Printf("Transcript was entirely hallucinated boilerplate")
-		p.emit(events.Event{Kind: events.KindDiscarded, Source: fileSource, Text: raw, Reason: "hallucination"})
-		return "", ErrSkipped
-	}
-	if process.IsFiller(text) {
-		log.Printf("Transcript is filler only")
-		p.emit(events.Event{Kind: events.KindDiscarded, Source: fileSource, Text: text, Reason: "filler"})
-		return "", ErrSkipped
-	}
-	p.emit(events.Event{Kind: events.KindTranscribed, Source: fileSource, Text: text, Seconds: duration.Seconds()})
-
-	log.Printf("Classifying with LLM...")
-	p.emit(events.Event{Kind: events.KindClassifying, Source: fileSource, Count: 1})
-	classifyStart := time.Now()
-	existingCategories := storage.ListCategories(p.baseDir)
-	classified, err := p.classifier.Classify(ctx, text, existingCategories)
-	if err != nil {
-		log.Printf("Classify error (%v); retrying once", err)
-		classified, err = p.classifier.Classify(ctx, text, existingCategories)
-	}
-	switch {
-	case err != nil:
-		// Storing the transcript unclassified beats returning an error and
-		// leaving a successful transcription with nowhere to go.
-		log.Printf("Classify failed (%v); storing unclassified", err)
-		classified = process.FallbackResult(text)
-	case classified.Skip:
-		p.emit(events.Event{Kind: events.KindSkipped, Source: fileSource, Text: text})
-		return "", ErrSkipped
-	case !classified.Usable():
-		log.Printf("Classifier returned no content fields; storing unclassified")
-		classified = process.FallbackResult(text)
-	default:
-		log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
-	}
-
-	entry := newKnowledgeEntry(classified, text, time.Now())
-
-	filePath, err := storage.Write(p.baseDir, entry)
-	if err != nil {
-		p.emit(events.Event{Kind: events.KindError, Source: fileSource, Reason: "write_failed", Error: err.Error()})
-		return "", fmt.Errorf("write knowledge entry: %w", err)
-	}
-	log.Printf("Saved knowledge entry: %s", filePath)
-	p.emit(events.Event{Kind: events.KindStored, Source: fileSource, Path: filePath,
-		Title: entry.Title, Category: entry.Category, Text: text})
-
-	return filePath, nil
 }

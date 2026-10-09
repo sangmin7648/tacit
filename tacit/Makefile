@@ -102,7 +102,7 @@ $(WHISPER_BUILD)/src/libwhisper.a:
 	cmake --build $(WHISPER_BUILD) --config Release -j
 
 e2e-test: build
-	./tacit process testdata/test_voice_recording.m4a
+	go test -tags e2e -v -count=1 ./pkg/pipeline/ -run TestE2E
 	go test -tags integration -v -count=1 ./pkg/process/ -run TestClassifier
 
 # ── Mac app ──────────────────────────────────────────────

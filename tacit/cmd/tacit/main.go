@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -43,8 +42,6 @@ func main() {
 		// before the wizard asks its questions rather than after.
 		loadConfig()
 		cmdSetup()
-	case "process":
-		cmdProcess(loadConfig())
 	case "listen":
 		cmdListen(loadConfig())
 	case "stop":
@@ -106,7 +103,6 @@ func printUsage() {
 
 Usage:
   tacit setup                  Install Claude Code skill for knowledge base
-  tacit process <audio-file>   Process an audio file into a knowledge entry
   tacit listen                 Start the voice capture daemon (foreground)
   tacit stop                   Stop the voice capture daemon
   tacit status [--json]        Check daemon status
@@ -285,7 +281,6 @@ func selectOption(options []string, defaultIdx int) int {
 	return cur
 }
 
-// cmdProcess handles the "process" subcommand: audio file → knowledge entry.
 // openEventLog attaches the daemon event log to p, so a front end can follow
 // this run. A failure here is reported and swallowed: the event log is an
 // observation channel, and losing it must never cost the user a transcript.
@@ -303,47 +298,6 @@ func openEventLog(p *pipeline.Pipeline) func() {
 		}
 		w.Close()
 	}
-}
-
-func cmdProcess(cfg *config.Config) {
-	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: tacit process <audio-file>\n")
-		os.Exit(1)
-	}
-
-	audioPath := os.Args[2]
-	if _, err := os.Stat(audioPath); err != nil {
-		log.Fatalf("Audio file not found: %s", audioPath)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	p, err := pipeline.New(cfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize pipeline: %v", err)
-	}
-
-	closeEvents := openEventLog(p)
-
-	filePath, err := p.ProcessFile(ctx, audioPath)
-	p.Close() // Close before printing to avoid ggml cleanup race
-	// Closed explicitly rather than deferred: every exit below is an os.Exit or
-	// log.Fatalf, and neither runs deferred functions.
-	if closeEvents != nil {
-		closeEvents()
-	}
-
-	if err != nil {
-		if errors.Is(err, pipeline.ErrSkipped) {
-			fmt.Println("Content classified as meaningless, skipping.")
-			os.Exit(0)
-		}
-		log.Fatalf("Processing failed: %v", err)
-	}
-
-	fmt.Printf("Knowledge entry created: %s\n", filePath)
-	os.Exit(0) // Exit immediately to avoid ggml Metal cleanup crash
 }
 
 // cmdListen starts the voice capture pipeline in the foreground.
