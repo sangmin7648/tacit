@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"sync"
 	"time"
 
@@ -180,13 +179,29 @@ func (p *Pipeline) runSource(ctx context.Context, src micrecorder.AudioSource, l
 // runSourceOnce runs one capture session for a source.  It returns when ctx is
 // cancelled or the source's stream channel is closed (normal or unexpected).
 func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSource, label string, classifyCh chan<- classifyItem) error {
-	// Init per-source VAD (256 samples = 16 ms at 16 kHz).
-	const hopSize = 256
-	v, err := speechdetector.New(hopSize, float32(p.cfg.SpeechThreshold))
-	if err != nil {
-		return fmt.Errorf("init vad: %w", err)
+	// The session cap can only act on text that already exists, and text only
+	// reaches textBuf when a segment is split or speech ends. With segment
+	// splitting off, an uninterrupted meeting therefore produces nothing to
+	// flush and max_session_duration would silently do nothing — so fall back
+	// to splitting at the session cap instead.
+	maxSessionDur := p.cfg.MaxSessionDur
+	splitDur := p.cfg.MaxSegmentDur
+	if splitDur == 0 && maxSessionDur > 0 {
+		splitDur = maxSessionDur
 	}
-	defer v.Close()
+
+	det, err := speechdetector.NewDetector(speechdetector.Options{
+		SpeechThreshold: float32(p.cfg.SpeechThreshold),
+		EnergyThreshold: p.cfg.EnergyThreshold,
+		MinSpeech:       p.cfg.MinSpeechDur,
+		Silence:         p.cfg.SilenceDuration,
+		Split:           splitDur,
+		PreRoll:         p.cfg.Experimental,
+	})
+	if err != nil {
+		return fmt.Errorf("init speech detector: %w", err)
+	}
+	defer det.Close()
 
 	stream, err := src.Stream(ctx)
 	if err != nil {
@@ -195,33 +210,6 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 		}
 		return fmt.Errorf("start stream: %w", err)
 	}
-
-	minSpeechDur := p.cfg.MinSpeechDur
-	silenceDuration := p.cfg.SilenceDuration
-	maxSegmentDur := p.cfg.MaxSegmentDur
-
-	// The session cap can only act on text that already exists, and text only
-	// reaches textBuf when a segment is split or speech ends. With segment
-	// splitting off, an uninterrupted meeting therefore produces nothing to
-	// flush and max_session_duration would silently do nothing — so fall back
-	// to splitting at the session cap instead.
-	maxSessionDur := p.cfg.MaxSessionDur
-	splitDur := maxSegmentDur
-	if splitDur == 0 && maxSessionDur > 0 {
-		splitDur = maxSessionDur
-	}
-
-	segBuf := speechdetector.NewSegmentBuffer(micrecorder.SampleRate, minSpeechDur, splitDur)
-	var frameBuf []int16
-	silenceFrames := 0
-	silenceLimit := int(silenceDuration.Seconds() * float64(micrecorder.SampleRate) / float64(hopSize))
-
-	// preRoll keeps a short window of the most recent pre-speech audio so the
-	// onset of a phrase isn't clipped when VAD fires a frame or two late — a
-	// common cause of mis-transcribed first words. Experimental-only.
-	const preRollFrames = 12 // ~192ms at 16ms/frame
-	const preRollMax = preRollFrames * hopSize
-	var preRoll []float32
 
 	// textBuf accumulates STT results from split chunks within one speech session.
 	// All chunks are joined and sent as a single classify item when silence is
@@ -251,8 +239,16 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 		log.Printf("[%s] flushing transcript for classification (%s)", label, reason)
 		classifyCh <- classifyItem{text: text, timestamp: start, source: label}
 	}
+	transcribe := func(seg *speechdetector.AudioSegment) {
+		if seg == nil {
+			return
+		}
+		if text := p.transcribeSync(ctx, seg, label); text != "" {
+			textBuf = append(textBuf, text)
+		}
+	}
 
-	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, silenceDuration, minSpeechDur)
+	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
 	p.emit(Event{Kind: KindListening, Source: label})
 
 	// Inactivity watchdog: a live capture stream delivers PCM
@@ -284,95 +280,33 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 			return nil
 		}
 
-		frameBuf = append(frameBuf, chunk...)
-
-		processed := 0
-		for processed+hopSize <= len(frameBuf) {
-			frame := frameBuf[processed : processed+hopSize]
-			processed += hopSize
-
-			_, isSpeech, err := v.Process(frame)
-			if err != nil {
-				log.Printf("[%s] VAD error: %v", label, err)
-				continue
-			}
-
-			// Energy gate.
-			if isSpeech && p.cfg.EnergyThreshold > 0 {
-				var sum float64
-				for _, s := range frame {
-					sum += float64(s) * float64(s)
+		for _, ev := range det.Feed(chunk) {
+			switch ev.Kind {
+			case speechdetector.SpeechStarted:
+				if len(textBuf) == 0 {
+					sessionStart = time.Now()
 				}
-				rms := math.Sqrt(sum / float64(len(frame)))
-				if rms < p.cfg.EnergyThreshold {
-					isSpeech = false
-				}
-			}
+				log.Printf("[%s] speech started", label)
+				p.emit(Event{Kind: KindSpeechStarted, Source: label})
 
-			if isSpeech {
-				silenceFrames = 0
-				if !segBuf.IsActive() {
-					if len(textBuf) == 0 {
-						sessionStart = time.Now()
-					}
-					segBuf.Start()
-					// Prepend buffered pre-speech audio to recover a clipped onset.
-					if p.cfg.Experimental && len(preRoll) > 0 {
-						segBuf.Append(preRoll)
-						preRoll = preRoll[:0]
-					}
-					log.Printf("[%s] speech started", label)
-					p.emit(Event{Kind: KindSpeechStarted, Source: label})
+			case speechdetector.SegmentSplit:
+				log.Printf("[%s] segment capped at %.1fs, splitting", label, ev.Duration.Seconds())
+				transcribe(ev.Segment)
+				if maxSessionDur > 0 && !sessionStart.IsZero() && time.Since(sessionStart) >= maxSessionDur {
+					flush("session cap reached")
 				}
-				segBuf.Append(micrecorder.Int16ToFloat32(frame))
 
-				// Force-split long segments to cap memory usage; accumulate
-				// the resulting text to merge into one file at session end.
-				if splitDur > 0 && segBuf.Duration() >= splitDur {
-					log.Printf("[%s] segment capped at %.1fs, splitting", label, segBuf.Duration().Seconds())
-					seg, ok := segBuf.Finish()
-					if ok {
-						if text := p.transcribeSync(ctx, seg, label); text != "" {
-							textBuf = append(textBuf, text)
-						}
-					}
-					if maxSessionDur > 0 && !sessionStart.IsZero() && time.Since(sessionStart) >= maxSessionDur {
-						flush("session cap reached")
-					}
-					segBuf.Start() // speech is still ongoing; restart immediately
+			case speechdetector.SpeechEnded:
+				log.Printf("[%s] speech ended (%.1fs)", label, ev.Duration.Seconds())
+				p.emit(Event{Kind: KindSpeechEnded, Source: label})
+				if ev.Segment == nil && len(textBuf) == 0 {
+					log.Printf("[%s] segment too short, discarding", label)
+					p.emit(Event{Kind: KindDiscarded, Source: label})
 				}
-			} else if segBuf.IsActive() {
-				segBuf.Append(micrecorder.Int16ToFloat32(frame))
-				silenceFrames++
-
-				if silenceFrames >= silenceLimit {
-					log.Printf("[%s] speech ended (%.1fs)", label, segBuf.Duration().Seconds())
-					p.emit(Event{Kind: KindSpeechEnded, Source: label})
-					seg, ok := segBuf.Finish()
-					silenceFrames = 0
-					if ok {
-						if text := p.transcribeSync(ctx, seg, label); text != "" {
-							textBuf = append(textBuf, text)
-						}
-					} else if len(textBuf) == 0 {
-						log.Printf("[%s] segment too short, discarding", label)
-						p.emit(Event{Kind: KindDiscarded, Source: label})
-					}
-					// Flush accumulated text as a single classify item.
-					flush("speech ended")
-				}
-			} else if p.cfg.Experimental {
-				// Leading silence: keep the most recent frames as pre-roll so a
-				// late-firing VAD onset doesn't clip the first word.
-				preRoll = append(preRoll, micrecorder.Int16ToFloat32(frame)...)
-				if over := len(preRoll) - preRollMax; over > 0 {
-					preRoll = preRoll[:copy(preRoll, preRoll[over:])]
-				}
+				transcribe(ev.Segment)
+				flush("speech ended")
 			}
 		}
-		// Compact: move unprocessed samples to front to prevent memory leak.
-		n := copy(frameBuf, frameBuf[processed:])
-		frameBuf = frameBuf[:n]
 	}
 }
 

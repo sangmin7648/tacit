@@ -20,10 +20,10 @@ type VAD struct {
 	hop    int
 }
 
-// New creates a VAD instance.
+// newVAD creates a VAD instance.
 // hopSize: number of samples per frame (160 or 256 for 16kHz = 10ms or 16ms).
 // threshold: detection threshold [0.0, 1.0].
-func New(hopSize int, threshold float32) (*VAD, error) {
+func newVAD(hopSize int, threshold float32) (*VAD, error) {
 	var handle C.ten_vad_handle_t
 	ret := C.ten_vad_create(&handle, C.size_t(hopSize), C.float(threshold))
 	if ret != 0 {
