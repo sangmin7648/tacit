@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-10-09
-source: [install.sh, tacit/cmd/tacit-app/upgrade.go]
-verified: 9825e8e
+source: [install.sh, tacit/app/desktop/upgrade.go]
+verified: a6db5d7
 ---
 
 # 0008. One installer for the CLI and the app

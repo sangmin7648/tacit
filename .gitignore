@@ -2,9 +2,9 @@
 /tacit/tacit
 /tacit/ten_vad.framework
 /tacit/build/
-/tacit/third_party/whisper.cpp/build/
-/tacit/pkg/search/rg-darwin-arm64
-/tacit/pkg/search/rg-darwin-amd64
-/tacit/cmd/tacit-app/frontend/node_modules/
-/tacit/cmd/tacit-app/frontend/dist/*
-!/tacit/cmd/tacit-app/frontend/dist/.gitkeep
+/tacit/core/internal/components/transcriber/whisper.cpp/build/
+/tacit/core/internal/components/note-manager/rg-darwin-arm64
+/tacit/core/internal/components/note-manager/rg-darwin-amd64
+/tacit/app/desktop/frontend/node_modules/
+/tacit/app/desktop/frontend/dist/*
+!/tacit/app/desktop/frontend/dist/.gitkeep

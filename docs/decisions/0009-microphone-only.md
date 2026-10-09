@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-10-09
-source: [tacit/pkg/capture, tacit/pkg/config, tacit/cmd/tacit-app]
-verified: 9825e8e
+source: [tacit/core/internal/components/mic-recorder, tacit/core/internal/components/setting-manager, tacit/app/desktop]
+verified: a6db5d7
 ---
 
 # 0009. Capture the microphone only

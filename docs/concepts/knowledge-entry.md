@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg/storage, tacit/pkg/config]
-verified: 9825e8e
+source: [tacit/core/internal/components/note-manager, tacit/core/internal/components/setting-manager]
+verified: a6db5d7
 ---
 
 # Knowledge entry and the knowledge base

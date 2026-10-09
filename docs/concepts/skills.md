@@ -1,6 +1,6 @@
 ---
-source: [tacit/skills, tacit/cmd/tacit]
-verified: 9825e8e
+source: [tacit/core/internal/components/skill-installer, tacit/app/cli]
+verified: a6db5d7
 ---
 
 # Skills

@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-09-27
-source: [tacit/cmd/tacit-app, tacit/pkg/daemon, tacit/pkg/events]
-verified: 9825e8e
+source: [tacit/app/desktop, tacit/core/internal/components/status-reporter, tacit/core/workflows/control]
+verified: a6db5d7
 ---
 
 # 0004. The app drives the CLI daemon

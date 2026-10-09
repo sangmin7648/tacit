@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg/search, tacit/pkg/storage, tacit/cmd/tacit]
-verified: 9825e8e
+source: [tacit/core/internal/components/note-manager, tacit/app/cli]
+verified: a6db5d7
 ---
 
 # Searching the knowledge base

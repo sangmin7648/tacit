@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg/events, tacit/pkg/pipeline]
-verified: f0db000
+source: [tacit/core/internal/components/status-reporter, tacit/core/workflows/listen]
+verified: a6db5d7
 ---
 
 # Events

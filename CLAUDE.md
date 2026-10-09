@@ -6,9 +6,26 @@ The Go module, Makefile, and all code live in `tacit/`; run every `make` and `go
 
 **Read `docs/index.md` first.** It lists every document and what it covers. The code is the source of truth; `docs/` explains the *why* and the *shape* at a high level.
 
+## Code layout
+
+The folders say what tacit does; keep it that way. Rationale: [0011](docs/decisions/0011-app-workflows-components.md).
+
+```
+tacit/app/<binary>/                    cli, desktop: parse input, show output, decide nothing
+tacit/packaging/<os>/                  turn the binaries into what a user installs
+tacit/core/workflows/<verb>/           what an app can ask for: listen, control, onboard, browse, configure
+tacit/core/internal/components/<-er>/  the parts workflows combine
+```
+
+- **Names.** A workflow folder is a verb; a component folder is an -er/-or noun (`transcriber`, `note-manager`). The Go package is the folder name without hyphens.
+- **Direction.** app → workflow → component. Workflows never import each other; components never import each other, except `setting-manager` and the audio format in `mic-recorder`. `internal/` makes the compiler reject an app importing a component.
+- **Types.** When an app needs a component's type, the workflow re-exports it as an alias (`type Note = notemanager.KnowledgeEntry`).
+- **Linking.** Go links whole packages. Code the desktop app imports must not share a package with CGo audio code; split the package instead.
+- **Belongings.** Third-party code, bundled binaries and `testdata/` live inside the folder that uses them. Operating-system differences go in file suffixes (`_darwin.go`) inside the component.
+
 ## Build rules
 
-- Never verify with `go build ./...`. `pkg/stt` reaches whisper.cpp through CGo and fails until `make build` has produced the libraries. Use `make build`, `make test`, and `make e2e-test`.
+- Never verify with `go build ./...`. The transcriber reaches whisper.cpp through CGo and fails until `make build` has produced the libraries. Use `make build`, `make test`, and `make e2e-test`.
 - After changing pipeline behaviour, run `make e2e-test`.
 - Everything except the AI agent (the Claude Code CLI) is linked into the binary. The build output must be portable with no runtime library installs.
 
@@ -39,7 +56,9 @@ docs/log.md         append-only record of doc changes
 docs/overview.md    the whole system in one page
 docs/glossary.md    domain terms
 docs/concepts/      one page per idea that spans packages
-docs/packages/      one page per package or binary under pkg/, cmd/, skills/
+docs/apps/          one page per binary under app/, and per target under packaging/
+docs/workflows/     one page per workflow under core/workflows/
+docs/components/    one page per component under core/internal/components/
 docs/decisions/     NNNN-title.md, one decision each
 ```
 
@@ -49,7 +68,7 @@ Every page under `docs/` starts with front matter:
 
 ```yaml
 ---
-source: [pkg/pipeline, pkg/process]   # code the page describes; paths, not symbols
+source: [tacit/core/workflows/listen]  # code the page describes; paths, not symbols
 verified: 9825e8e                      # commit at which the page was last checked
 ---
 ```

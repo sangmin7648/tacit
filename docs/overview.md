@@ -1,6 +1,6 @@
 ---
-source: [tacit/cmd, tacit/pkg, tacit/skills]
-verified: 9825e8e
+source: [tacit/app, tacit/core, tacit/core/internal/components/skill-installer]
+verified: a6db5d7
 ---
 
 # Overview
@@ -17,10 +17,14 @@ microphone -> VAD -> segment -> Whisper -> filters -> LLM classify -> Markdown e
 
 | Deliverable | What it is | Page |
 |---|---|---|
-| `tacit` CLI | Setup, the `listen` daemon, and the read commands (`list`, `search`, `get`) | [cmd-tacit](packages/cmd-tacit.md) |
-| Tacit.app | Menu-bar app that starts and watches the daemon, plus onboarding, settings, and a knowledge browser | [cmd-tacit-app](packages/cmd-tacit-app.md) |
+| `tacit` CLI | Setup, the `listen` daemon, and the read commands (`list`, `search`, `get`) | [cli](apps/cli.md) |
+| Tacit.app | Menu-bar app that starts and watches the daemon, plus onboarding, settings, and a knowledge browser | [desktop](apps/desktop.md), [packaging-mac](apps/packaging-mac.md) |
 | Skills | Instructions installed into an AI agent so it can query the knowledge base | [skills](concepts/skills.md) |
 | Knowledge base | The Markdown files under `~/.tacit/` | [knowledge-entry](concepts/knowledge-entry.md) |
+
+## Code layout
+
+Everything is under `tacit/`. `app/` holds the two binaries, `core/workflows/` what they can ask for (listen, control, onboard, browse, configure), and `core/internal/components/` the parts the workflows combine. Dependencies run one way, and the compiler enforces it. See [0011](decisions/0011-app-workflows-components.md).
 
 ## Reading order
 
