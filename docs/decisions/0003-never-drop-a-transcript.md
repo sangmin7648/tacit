@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-08-26
-source: [tacit/pkg/pipeline, tacit/pkg/process, tacit/pkg/storage]
-verified: 9825e8e
+source: [tacit/core/workflows/listen, tacit/core/internal/components/note-classifier, tacit/core/internal/components/transcriber, tacit/core/internal/components/note-manager]
+verified: a6db5d7
 ---
 
 # 0003. Never drop a successfully transcribed segment

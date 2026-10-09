@@ -1,6 +1,6 @@
 ---
-source: [install.sh, tacit/Makefile, .github/workflows, tacit/cmd/tacit-app/upgrade.go]
-verified: 9825e8e
+source: [install.sh, tacit/Makefile, .github/workflows, tacit/app/desktop/upgrade.go]
+verified: a6db5d7
 ---
 
 # Distribution, install and update

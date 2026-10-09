@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-03-28
-source: [tacit/pkg/storage, tacit/pkg/search]
-verified: 9825e8e
+source: [tacit/core/internal/components/note-manager]
+verified: a6db5d7
 ---
 
 # 0002. Markdown files are the database

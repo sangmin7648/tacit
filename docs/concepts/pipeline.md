@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg/pipeline, tacit/pkg/capture, tacit/pkg/vad, tacit/pkg/stt, tacit/pkg/audio]
-verified: f0db000
+source: [tacit/core/workflows/listen, tacit/core/internal/components/mic-recorder, tacit/core/internal/components/speech-detector, tacit/core/internal/components/transcriber]
+verified: a6db5d7
 ---
 
 # Pipeline

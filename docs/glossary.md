@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg, tacit/cmd, tacit/skills]
-verified: f0db000
+source: [tacit/core, tacit/app, tacit/core/internal/components/skill-installer]
+verified: a6db5d7
 ---
 
 # Glossary

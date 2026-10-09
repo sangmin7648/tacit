@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg/config, tacit/pkg/setup, tacit/cmd/tacit]
-verified: 9825e8e
+source: [tacit/core/internal/components/setting-manager, tacit/core/workflows/onboard, tacit/app/cli]
+verified: a6db5d7
 ---
 
 # Configuration

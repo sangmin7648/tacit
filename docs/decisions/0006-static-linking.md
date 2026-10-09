@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-03-28
-source: [tacit/Makefile, tacit/third_party]
-verified: 9825e8e
+source: [tacit/Makefile, tacit/core/internal/components/transcriber/whisper.cpp, tacit/core/internal/components/speech-detector/ten-vad]
+verified: a6db5d7
 ---
 
 # 0006. Link everything except the AI agent into the build

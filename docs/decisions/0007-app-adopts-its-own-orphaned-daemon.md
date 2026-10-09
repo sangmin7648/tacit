@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-10-09
-source: [tacit/cmd/tacit-app]
-verified: 9825e8e
+source: [tacit/app/desktop]
+verified: a6db5d7
 ---
 
 # 0007. The app adopts a daemon it started on an earlier run

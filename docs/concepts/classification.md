@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg/process, tacit/pkg/pipeline, tacit/pkg/storage]
-verified: 9825e8e
+source: [tacit/core/internal/components/note-classifier, tacit/core/internal/components/transcriber, tacit/core/workflows/listen, tacit/core/internal/components/note-manager]
+verified: a6db5d7
 ---
 
 # Classification

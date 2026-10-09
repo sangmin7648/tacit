@@ -1,6 +1,6 @@
 ---
-source: [tacit/pkg/pipeline, tacit/pkg/audio, tacit/pkg/vad, tacit/pkg/config]
-verified: 9825e8e
+source: [tacit/core/workflows/listen, tacit/core/internal/components/speech-detector, tacit/core/internal/components/setting-manager]
+verified: a6db5d7
 ---
 
 # Segmentation
@@ -8,6 +8,8 @@ verified: 9825e8e
 Segmentation decides where one utterance ends and what is sent to Whisper and to the classifier. Four timings and two thresholds control it; the per-field reference is in the README.
 
 ## Two levels
+
+Segments are [speech-detector](../components/speech-detector.md)'s; sessions are [listen](../workflows/listen.md)'s.
 
 - **Segment**: the unit sent to Whisper. It starts when VAD hears speech and ends after a configured stretch of silence. A cap forces a split in unbroken speech so a segment never grows without bound.
 - **Session**: the unit sent to the classifier. Text from the segments of one stretch of speech is joined and flushed when silence ends the session, or earlier once a session cap passes.

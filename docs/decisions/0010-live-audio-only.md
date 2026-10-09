@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-10-09
-source: [tacit/pkg/pipeline, tacit/pkg/audio, tacit/cmd/tacit]
-verified: f0db000
+source: [tacit/core/workflows/listen, tacit/core/internal/components/speech-detector, tacit/app/cli]
+verified: a6db5d7
 ---
 
 # 0010. Process live audio only

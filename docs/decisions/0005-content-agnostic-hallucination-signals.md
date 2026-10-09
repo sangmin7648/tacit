@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-09-07
-source: [tacit/pkg/process, tacit/pkg/pipeline]
-verified: 9825e8e
+source: [tacit/core/internal/components/note-classifier, tacit/core/internal/components/transcriber, tacit/core/workflows/listen]
+verified: a6db5d7
 ---
 
 # 0005. Catch hallucinations with content-agnostic signals

@@ -1,6 +1,6 @@
 ---
-source: [tacit/cmd/tacit, tacit/cmd/tacit-app, tacit/pkg/daemon, tacit/pkg/events]
-verified: f0db000
+source: [tacit/app/cli, tacit/app/desktop, tacit/core/internal/components/status-reporter, tacit/core/workflows/control]
+verified: a6db5d7
 ---
 
 # Daemon and the Mac app

@@ -1,8 +1,8 @@
 ---
 status: accepted
 date: 2026-03-28
-source: [tacit/pkg/stt, tacit/pkg/model]
-verified: 9825e8e
+source: [tacit/core/internal/components/transcriber, tacit/core/internal/components/model-downloader]
+verified: a6db5d7
 ---
 
 # 0001. Transcribe on the device
