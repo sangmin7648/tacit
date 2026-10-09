@@ -21,6 +21,7 @@ import (
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
 
 	"github.com/sangmin7648/tacit/pkg/config"
+	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/events"
 )
 
@@ -81,7 +82,7 @@ func main() {
 		log.Printf("reading event log: %v", err)
 	}
 	t.st.seedRecent(history)
-	t.st.running, t.st.pid = daemonStatus(config.PIDPath())
+	t.st.running, t.st.pid = daemon.Status(config.PIDPath())
 	t.st.ownPID = adopt(t.st.running, t.st.pid)
 	t.st.updateFailed = lastUpdateFailed()
 	// Before Run there is no native tray yet: the tray records the label and
@@ -101,7 +102,7 @@ func main() {
 		go t.watchUpdates(ctx)
 		// Reopened by an update that stopped the daemon: listen again.
 		if slices.Contains(os.Args[1:], resumeFlag) && isConfigured() {
-			if running, _ := daemonStatus(config.PIDPath()); !running {
+			if running, _ := daemon.Status(config.PIDPath()); !running {
 				go t.start()
 			}
 		}
@@ -144,7 +145,7 @@ func (t *trayApp) watchPID(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		running, pid := daemonStatus(config.PIDPath())
+		running, pid := daemon.Status(config.PIDPath())
 		t.mu.Lock()
 		changed := running != t.st.running || pid != t.st.pid
 		if changed && t.st.running {
@@ -266,7 +267,7 @@ func (t *trayApp) reap(cmd *exec.Cmd) {
 }
 
 func (t *trayApp) stop() {
-	if err := stopDaemon(config.PIDPath()); err != nil {
+	if err := daemon.Stop(config.PIDPath()); err != nil {
 		t.update(func(s *state) { s.lastErr = "Couldn't stop: " + err.Error() })
 	}
 }
@@ -279,7 +280,7 @@ func (t *trayApp) quit() {
 	pid := t.st.pid
 	t.mu.Unlock()
 	if own {
-		if err := stopDaemon(config.PIDPath()); err != nil {
+		if err := daemon.Stop(config.PIDPath()); err != nil {
 			log.Printf("stopping daemon on quit: %v", err)
 		} else {
 			// The app exits before watchPID would see the daemon stop.
@@ -340,8 +341,8 @@ func (t *trayApp) upgrade() {
 		return
 	}
 	if own {
-		if err := stopAndWait(context.Background(), config.PIDPath(), restartTimeout); err != nil {
-			fail(err)
+		if err := daemon.StopAndWait(context.Background(), config.PIDPath(), restartTimeout); err != nil {
+			fail(fmt.Errorf("%w; start it from the menu once it has", err))
 			return
 		}
 		clearOwned(pid)

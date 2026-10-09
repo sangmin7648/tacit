@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // WritePID writes the current process PID to the specified file path.
@@ -83,4 +85,43 @@ func CleanStalePID(path string) error {
 	}
 
 	return RemovePID(path)
+}
+
+// Status reports whether the daemon recorded in the PID file at path is alive.
+func Status(path string) (running bool, pid int) {
+	pid, err := ReadPID(path)
+	if err != nil || !IsRunning(pid) {
+		return false, 0
+	}
+	return true, pid
+}
+
+// Stop sends SIGTERM to the running daemon. The daemon finishes classifying
+// what it has already heard before it exits.
+func Stop(path string) error {
+	running, pid := Status(path)
+	if !running {
+		return errors.New("tacit is not running")
+	}
+	return syscall.Kill(pid, syscall.SIGTERM)
+}
+
+// StopAndWait stops the running daemon and waits, up to timeout, for it to
+// exit, so one started next does not find it still holding the PID file.
+func StopAndWait(ctx context.Context, path string, timeout time.Duration) error {
+	if err := Stop(path); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	for {
+		if running, _ := Status(path); !running {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("tacit is still stopping after %v", timeout)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }

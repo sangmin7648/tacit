@@ -13,6 +13,7 @@ import (
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
 
 	"github.com/sangmin7648/tacit/pkg/config"
+	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/setup"
 )
 
@@ -156,7 +157,7 @@ func (s *OnboardingService) Finish(startListening bool) {
 		w.Hide()
 	}
 	if startListening {
-		if running, _ := daemonStatus(config.PIDPath()); !running {
+		if running, _ := daemon.Status(config.PIDPath()); !running {
 			s.tray.start()
 		}
 	}

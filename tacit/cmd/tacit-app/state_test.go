@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/events"
 )
 
@@ -127,7 +128,7 @@ while :; do sleep 0.05; done
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		if running, pid := daemonStatus(pidPath); running {
+		if running, pid := daemon.Status(pidPath); running {
 			if pid != cmd.Process.Pid {
 				t.Fatalf("PID file says %d, spawned %d", pid, cmd.Process.Pid)
 			}
@@ -139,7 +140,7 @@ while :; do sleep 0.05; done
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if err := stopDaemon(pidPath); err != nil {
+	if err := daemon.Stop(pidPath); err != nil {
 		t.Fatalf("stopDaemon: %v", err)
 	}
 	select {
@@ -150,10 +151,10 @@ while :; do sleep 0.05; done
 	case <-time.After(3 * time.Second):
 		t.Fatal("daemon did not exit after stopDaemon")
 	}
-	if running, _ := daemonStatus(pidPath); running {
+	if running, _ := daemon.Status(pidPath); running {
 		t.Error("still reported running after stop")
 	}
-	if err := stopDaemon(pidPath); err == nil {
+	if err := daemon.Stop(pidPath); err == nil {
 		t.Error("stopDaemon on a stopped daemon returned nil")
 	}
 

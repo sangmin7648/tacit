@@ -366,28 +366,15 @@ func cmdListen(cfg *config.Config) {
 // cmdStop sends SIGTERM to the running daemon.
 func cmdStop() {
 	pidPath := config.PIDPath()
-
-	pid, err := daemon.ReadPID(pidPath)
-	if err != nil {
+	running, pid := daemon.Status(pidPath)
+	if !running {
+		daemon.RemovePID(pidPath)
 		fmt.Println("tacit is not running")
 		return
 	}
-
-	if !daemon.IsRunning(pid) {
-		daemon.RemovePID(pidPath)
-		fmt.Println("tacit is not running (stale PID cleaned)")
-		return
+	if err := daemon.Stop(pidPath); err != nil {
+		log.Fatalf("Failed to stop tacit (PID %d): %v", pid, err)
 	}
-
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		log.Fatalf("Failed to find process %d: %v", pid, err)
-	}
-
-	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		log.Fatalf("Failed to send SIGTERM to %d: %v", pid, err)
-	}
-
 	fmt.Printf("Sent SIGTERM to tacit (PID: %d)\n", pid)
 }
 

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +11,6 @@ import (
 	"time"
 
 	"github.com/sangmin7648/tacit/pkg/config"
-	"github.com/sangmin7648/tacit/pkg/daemon"
 )
 
 // cliPath is the tacit CLI bundled at Tacit.app/Contents/Helpers/tacit — not
@@ -85,47 +82,9 @@ func spawnListen(cli, logPath string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-// daemonStatus reads the PID file the way `tacit status` does.
-func daemonStatus(pidPath string) (running bool, pid int) {
-	pid, err := daemon.ReadPID(pidPath)
-	if err != nil || !daemon.IsRunning(pid) {
-		return false, 0
-	}
-	return true, pid
-}
-
-// stopDaemon sends SIGTERM to the running daemon, as `tacit stop` does.
-func stopDaemon(pidPath string) error {
-	running, pid := daemonStatus(pidPath)
-	if !running {
-		return errors.New("tacit is not running")
-	}
-	return syscall.Kill(pid, syscall.SIGTERM)
-}
-
 // restartTimeout bounds how long a restart waits for the daemon to exit. It
 // finishes classifying what it has heard first, which takes a while.
 const restartTimeout = 30 * time.Second
-
-// stopAndWait stops the running daemon and waits, up to timeout, for it to
-// exit — so one started next does not find it still holding the PID file.
-func stopAndWait(ctx context.Context, pidPath string, timeout time.Duration) error {
-	if err := stopDaemon(pidPath); err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	for {
-		if running, _ := daemonStatus(pidPath); !running {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return errors.New("tacit is still stopping; start it from the menu once it has")
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
-}
 
 // ownerPath records which daemon the app started. A daemon outlives the app
 // that started it when that app crashes or is killed; without the record the
