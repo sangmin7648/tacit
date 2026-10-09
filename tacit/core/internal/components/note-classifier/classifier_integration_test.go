@@ -100,7 +100,7 @@ func TestClassifier_Classify_Integration(t *testing.T) {
 	for _, tc := range singleTestCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := classifier.Classify(ctx, tc.text, nil)
+			result, err := classifier.Classify(ctx, tc.text, nil, nil)
 			if err != nil {
 				t.Fatalf("Classify() error: %v", err)
 			}

@@ -24,6 +24,20 @@ import (
 // dropped. Two leaves room for a real remark that genuinely recurs.
 const dedupKeepFirst = 2
 
+// continuationWindow is how long after its last write a note can still take
+// more speech. Past it, a new session starts a fresh note whatever the topic:
+// a day-old note that happens to match is a different occasion, not a pause.
+const continuationWindow = 30 * time.Minute
+
+// lastNote is the note the next session may continue. Only classifyLoop, a
+// single goroutine, touches it.
+type lastNote struct {
+	path    string
+	title   string
+	summary string
+	updated time.Time
+}
+
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
 type Pipeline struct {
 	cfg        *settingmanager.Config
@@ -33,6 +47,7 @@ type Pipeline struct {
 	deduper    *transcriber.TranscriptDeduper
 	baseDir    string
 	observer   statusreporter.Observer
+	last       *lastNote
 }
 
 // New creates a new pipeline with the given configuration.
@@ -413,6 +428,14 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 
 		existingCategories := notemanager.ListCategories(p.baseDir)
 
+		// Only a single classify call can carry the previous note, so a backlog
+		// batch peels its first item off to be judged against it.
+		if len(batch) > 1 && p.previousNote() != nil {
+			p.emit(statusreporter.Event{Kind: statusreporter.KindClassifying, Source: batch[0].source})
+			p.classifyAndStore(ctx, batch[0], existingCategories)
+			batch = batch[1:]
+		}
+
 		if len(batch) == 1 {
 			log.Printf("Classifying 1 segment...")
 			p.emit(statusreporter.Event{Kind: statusreporter.KindClassifying, Source: batch[0].source})
@@ -451,15 +474,19 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 // the classifier errors out or answers with nothing usable, the entry is stored
 // unclassified so it still turns up in `tacit list`.
 func (p *Pipeline) classifyAndStore(ctx context.Context, item classifyItem, existingCategories []string) {
-	classified, err := p.classifier.Classify(ctx, item.text, existingCategories)
+	previous := p.previousNote()
+	classified, err := p.classifier.Classify(ctx, item.text, existingCategories, previous)
 	if err != nil && ctx.Err() == nil {
 		log.Printf("Classify error (%v); retrying once", err)
-		classified, err = p.classifier.Classify(ctx, item.text, existingCategories)
+		classified, err = p.classifier.Classify(ctx, item.text, existingCategories, previous)
 	}
 	if err != nil {
 		log.Printf("Classify failed (%v); storing unclassified: %s", err, TruncateForLog(item.text))
-		p.storeEntry(noteclassifier.FallbackResult(item.text), item)
+		p.storeUnclassified(item)
 		return
+	}
+	if previous == nil {
+		classified.Continues = false
 	}
 	p.dispatch(item, classified)
 }
@@ -475,14 +502,40 @@ func (p *Pipeline) dispatch(item classifyItem, classified *noteclassifier.Classi
 		p.emit(statusreporter.Event{Kind: statusreporter.KindSkipped, Source: item.source})
 	case !classified.Usable():
 		log.Printf("Classifier returned no content fields; storing unclassified: %s", TruncateForLog(item.text))
-		p.storeEntry(noteclassifier.FallbackResult(item.text), item)
+		p.storeUnclassified(item)
 	default:
 		p.storeEntry(classified, item)
 	}
 }
 
-// storeEntry saves a classified item as a knowledge entry.
+// previousNote returns the note a new session may continue, or nil when there
+// is none or it was last written longer ago than continuationWindow.
+func (p *Pipeline) previousNote() *noteclassifier.PreviousNote {
+	if p.last == nil {
+		return nil
+	}
+	ago := time.Since(p.last.updated)
+	if ago > continuationWindow {
+		p.last = nil
+		return nil
+	}
+	return &noteclassifier.PreviousNote{Title: p.last.title, Summary: p.last.summary, Ago: ago}
+}
+
+// storeUnclassified stores a transcript the classifier could not handle. It is
+// never offered as a note to continue: its title is just the first words.
+func (p *Pipeline) storeUnclassified(item classifyItem) {
+	p.storeEntry(noteclassifier.FallbackResult(item.text), item)
+	p.last = nil
+}
+
+// storeEntry saves a classified item as a knowledge entry, appending it to the
+// previous note instead when the classifier said it continues that note.
 func (p *Pipeline) storeEntry(classified *noteclassifier.ClassifyResult, item classifyItem) {
+	if classified.Continues && p.appendToLast(classified, item) {
+		p.emit(statusreporter.Event{Kind: statusreporter.KindStored, Source: item.source})
+		return
+	}
 	entry := newKnowledgeEntry(classified, item.text, item.timestamp)
 	filePath, err := notemanager.Write(p.baseDir, entry)
 	if err != nil {
@@ -490,7 +543,35 @@ func (p *Pipeline) storeEntry(classified *noteclassifier.ClassifyResult, item cl
 		return
 	}
 	log.Printf("Knowledge entry saved: %s", filePath)
+	p.last = &lastNote{path: filePath, title: entry.Title, summary: entry.Summary, updated: time.Now()}
 	p.emit(statusreporter.Event{Kind: statusreporter.KindStored, Source: item.source})
+}
+
+// appendToLast adds the item's transcript to the previous note. It re-reads the
+// file rather than trusting memory so edits the user made by hand survive, and
+// it reports false, leaving the caller to store a new note, when the file is
+// gone or cannot be rewritten: the speech must land somewhere.
+func (p *Pipeline) appendToLast(classified *noteclassifier.ClassifyResult, item classifyItem) bool {
+	note, err := notemanager.Read(p.last.path)
+	if err != nil {
+		log.Printf("Cannot continue previous note (%v); storing a new one", err)
+		return false
+	}
+	final := noteclassifier.Finalize(classified, item.text)
+	note.Title = final.Title
+	note.Summary = final.Summary
+	if len(final.Keywords) > 0 {
+		note.Keywords = final.Keywords
+	}
+	note.Content = strings.TrimSpace(note.Content + "\n\n" + item.text)
+	filePath, err := notemanager.Write(p.baseDir, note)
+	if err != nil {
+		log.Printf("Cannot continue previous note (%v); storing a new one", err)
+		return false
+	}
+	log.Printf("Knowledge entry extended: %s", filePath)
+	p.last = &lastNote{path: filePath, title: note.Title, summary: note.Summary, updated: time.Now()}
+	return true
 }
 
 // newKnowledgeEntry builds the entry to write. It runs the classification

@@ -9,10 +9,10 @@ Start with [overview](overview.md); look words up in the [glossary](glossary.md)
 | Page | Covers | Verified |
 |---|---|---|
 | [pipeline](concepts/pipeline.md) | Audio to entry, stage by stage; restart and batching | a6db5d7 |
-| [segmentation](concepts/segmentation.md) | Segments vs sessions, the two caps, pre-roll | a6db5d7 |
+| [segmentation](concepts/segmentation.md) | Segments vs sessions, the two caps, pre-roll | 4b3ae33 |
 | [hallucination-filtering](concepts/hallucination-filtering.md) | The signals that remove Whisper's invented text | a6db5d7 |
-| [classification](concepts/classification.md) | LLM titling, skip, repair, batching | a6db5d7 |
-| [knowledge-entry](concepts/knowledge-entry.md) | Entry format, storage rules, what lives in `~/.tacit/` | a6db5d7 |
+| [classification](concepts/classification.md) | LLM titling, skip, repair, batching | 4b3ae33 |
+| [knowledge-entry](concepts/knowledge-entry.md) | Entry format, storage rules, what lives in `~/.tacit/` | 4b3ae33 |
 | [search](concepts/search.md) | List, search, get; why lexical | a6db5d7 |
 | [events](concepts/events.md) | Pipeline events as data, transport, rules | a6db5d7 |
 | [configuration](concepts/configuration.md) | Reference/override layering, shared setup | a6db5d7 |
@@ -43,3 +43,4 @@ The folders mirror `tacit/`. See [0011](decisions/0011-app-workflows-components.
 | [0009](decisions/0009-microphone-only.md) | Capture the microphone only | accepted |
 | [0010](decisions/0010-live-audio-only.md) | Process live audio only | accepted |
 | [0011](decisions/0011-app-workflows-components.md) | Arrange the code as apps, workflows and components | accepted |
+| [0012](decisions/0012-continuation-decided-by-the-classifier.md) | Continuation is decided by the classifier | accepted |

@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/internal/components/note-classifier, tacit/core/internal/components/transcriber, tacit/core/workflows/listen, tacit/core/internal/components/note-manager]
-verified: a6db5d7
+verified: 4b3ae33
 ---
 
 # Classification
@@ -15,11 +15,22 @@ Two interchangeable backends sit behind one interface: a local Ollama model, or 
 
 The transcript, plus the categories that already exist in the knowledge base, so it reuses them instead of inventing near-duplicates.
 
+It is also shown the most recently stored note (title, summary, how long ago it was written) when that note is recent enough, and says whether the transcript **continues** it. See [0012](../decisions/0012-continuation-decided-by-the-classifier.md).
+
 ## Three outcomes
 
 1. **Usable result**: stored as an entry.
 2. **Skip**: the model judged the text meaningless (filler, bare acknowledgements, call-connection chatter). The one deliberate discard; the dropped text is logged so it can be audited.
 3. **Failure or partial result**: the model errored, returned nothing usable, or filled only some fields. The entry is repaired and stored. A missing title is taken from the opening words, a missing category becomes `unsorted`.
+
+## Continuing a note
+
+A pause or the session cap cuts speech into several sessions, but a talk is one topic. When the classifier judges that a session carries on the previous note, the pipeline appends the transcript to that note and takes the new title and summary, which then describe the whole note. Otherwise a new note starts.
+
+- Only a note written within the last 30 minutes is offered, measured from its last write, so an hours-long talk stays one note while an unrelated note from earlier never absorbs new speech.
+- Notes stored unclassified are never continued.
+- If the previous file is gone or cannot be rewritten, the speech is stored as a new note.
+- Only a single classify call sees the previous note. In a backlog batch just the first item is judged against it.
 
 ## Batching and retry
 

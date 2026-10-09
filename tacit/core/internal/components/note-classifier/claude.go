@@ -14,6 +14,8 @@ SKIP DECISION: Always fill in every field, then set skip accordingly — never a
 Set skip=true ONLY when the transcript contains no statement at all — filler sounds (음, 어, 그, 아, um, uh), bare acknowledgements on their own ("네 알겠습니다", "아 그렇군요"), counting, call-connection chatter ("여보세요, 들리세요"), or a lone stock phrase standing entirely on its own with nothing else around it — a broadcast sign-off ("이 시각 세계였습니다", "OOO 뉴스 OOO입니다"), a video outro ("시청해 주셔서 감사합니다"), or a bare courtesy line ("감사합니다", "수고하셨습니다").
 Set skip=false for everything else. Any complete sentence that states something is kept, however mundane, brief or self-evident — judging a transcript unimportant is not your call to make, and dropping one is unrecoverable.
 
+CONTINUATION: Always set continues. When the input includes a "Previous note" block, set continues=true only if the transcript carries on that same topic or conversation (picked up after a pause, same thing still being discussed); then title and summary must describe the whole note — previous note plus this transcript — not just the new text. Otherwise continues=false and title/summary describe the transcript alone. With no "Previous note" block, continues is always false.
+
 NORMAL CLASSIFICATION:
 - title: specific topic of what was discussed — write in the same language as the input
 - summary: exactly ONE sentence condensing the key point (do NOT copy the input text) — write in the same language as the input
@@ -95,12 +97,12 @@ func NewClaudeClassifier(model string) *ClaudeClassifier {
 	return &ClaudeClassifier{model: model}
 }
 
-func (c *ClaudeClassifier) Classify(ctx context.Context, sttText string, existingCategories []string) (*ClassifyResult, error) {
+func (c *ClaudeClassifier) Classify(ctx context.Context, sttText string, existingCategories []string, previous *PreviousNote) (*ClassifyResult, error) {
 	if sttText == "" {
 		return nil, fmt.Errorf("empty STT text")
 	}
 
-	output, err := runClaude(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories), c.model)
+	output, err := runClaude(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories, previous), c.model)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +119,7 @@ func (c *ClaudeClassifier) ClassifyBatch(ctx context.Context, texts []string, ex
 		return nil, fmt.Errorf("empty texts")
 	}
 	if len(texts) == 1 {
-		r, err := c.Classify(ctx, texts[0], existingCategories)
+		r, err := c.Classify(ctx, texts[0], existingCategories, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -211,9 +213,13 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-func buildPrompt(sttText string, existingCategories []string) string {
+func buildPrompt(sttText string, existingCategories []string, previous *PreviousNote) string {
 	var sb strings.Builder
 	writeCategories(&sb, existingCategories)
+	if previous != nil {
+		fmt.Fprintf(&sb, "\nPrevious note (last updated %d minutes ago):\ntitle: %s\nsummary: %s\n",
+			int(previous.Ago.Minutes()), previous.Title, previous.Summary)
+	}
 	sb.WriteString("\nSTT text:\n")
 	sb.WriteString(sttText)
 	return sb.String()

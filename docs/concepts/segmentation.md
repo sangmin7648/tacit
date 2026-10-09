@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/workflows/listen, tacit/core/internal/components/speech-detector, tacit/core/internal/components/setting-manager]
-verified: a6db5d7
+verified: 4b3ae33
 ---
 
 # Segmentation
@@ -19,6 +19,10 @@ Segments are [speech-detector](../components/speech-detector.md)'s; sessions are
 Continuous speech, such as a meeting, never produces the silence that ends a session. Without a session cap it would pile minutes of speech into one entry, and a single classification failure would lose all of it. The session cap flushes periodically so the damage of one failure stays small.
 
 The session cap can only act on text that already exists, and text exists only after a segment ends or is split. If segment splitting is switched off, the session cap becomes the split point instead, so it never silently does nothing.
+
+## Sessions are not notes
+
+A session boundary does not always mean a new note: the classifier can fold a session into the previous note when the topic continues ([classification](classification.md)). The caps therefore bound the damage of one failure without splitting a long talk into many notes.
 
 ## Pre-roll
 

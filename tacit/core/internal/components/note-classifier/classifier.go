@@ -1,6 +1,9 @@
 package noteclassifier
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // ClassifyResult holds classification output from an LLM.
 type ClassifyResult struct {
@@ -9,6 +12,17 @@ type ClassifyResult struct {
 	Category string   `json:"category"`
 	Keywords []string `json:"keywords,omitempty"`
 	Skip     bool     `json:"skip,omitempty"`
+	// Continues is the model's verdict that the text carries on the PreviousNote
+	// it was shown. It is only honoured when a previous note was offered.
+	Continues bool `json:"continues,omitempty"`
+}
+
+// PreviousNote is the most recently stored note, offered to Classify so the
+// model can say whether new speech belongs in it instead of starting another.
+type PreviousNote struct {
+	Title   string
+	Summary string
+	Ago     time.Duration // since the note was last written
 }
 
 // Usable reports whether r carries enough content to store as a knowledge
@@ -20,6 +34,6 @@ func (r *ClassifyResult) Usable() bool {
 
 // Classifier is the strategy interface for LLM-based text classification.
 type Classifier interface {
-	Classify(ctx context.Context, sttText string, existingCategories []string) (*ClassifyResult, error)
+	Classify(ctx context.Context, sttText string, existingCategories []string, previous *PreviousNote) (*ClassifyResult, error)
 	ClassifyBatch(ctx context.Context, texts []string, existingCategories []string) ([]*ClassifyResult, error)
 }
