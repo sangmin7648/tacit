@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/internal/components/note-manager, tacit/core/internal/components/setting-manager]
-verified: a6db5d7
+verified: 4b3ae33
 ---
 
 # Knowledge entry and the knowledge base
@@ -15,7 +15,9 @@ A front-matter block (title, category, creation time, keywords), then a one-sent
 
 - A category is a single directory level. Slashes and path traversal are refused; non-ASCII names such as Korean are fine.
 - A title must be non-empty and at most 100 characters.
-- File names are timestamps, so entries sort by time within a category.
+- File names are timestamps, so entries sort by time within a category. The timestamp is when the entry's first speech began; later speech appended to the entry does not rename it.
+
+An entry can hold several sessions of speech: the raw transcript section grows when the classifier says new speech continues the entry. See [classification](classification.md).
 
 These rules are why classification output passes one normalising step before it is written. See [classification](classification.md).
 

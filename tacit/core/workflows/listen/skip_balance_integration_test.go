@@ -30,7 +30,7 @@ func TestClassifier_SkipBalance_Ollama(t *testing.T) {
 		// The pipeline strips hallucinated boilerplate before classifying, so
 		// the classifier sees what it would see in production.
 		cleaned := transcriber.FilterHallucinations(c.text, nil)
-		r, err := o.Classify(ctx, cleaned, categories)
+		r, err := o.Classify(ctx, cleaned, categories, nil)
 		if err != nil {
 			t.Fatalf("classify %q: %v", cleaned, err)
 		}
@@ -47,7 +47,7 @@ func TestClassifier_SkipBalance_Ollama(t *testing.T) {
 		if transcriber.IsFiller(text) {
 			continue // the Go gate already catches it; the model is never asked
 		}
-		r, err := o.Classify(ctx, text, categories)
+		r, err := o.Classify(ctx, text, categories, nil)
 		if err != nil {
 			t.Fatalf("classify %q: %v", text, err)
 		}

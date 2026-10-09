@@ -25,12 +25,14 @@ type fakeClassifier struct {
 	singleFn    func(call int, text string) (*noteclassifier.ClassifyResult, error)
 	batchFn     func(call int, texts []string) ([]*noteclassifier.ClassifyResult, error)
 	singleTexts []string
+	previous    []*noteclassifier.PreviousNote
 }
 
 var _ noteclassifier.Classifier = (*fakeClassifier)(nil)
 
-func (f *fakeClassifier) Classify(ctx context.Context, text string, cats []string) (*noteclassifier.ClassifyResult, error) {
+func (f *fakeClassifier) Classify(ctx context.Context, text string, cats []string, previous *noteclassifier.PreviousNote) (*noteclassifier.ClassifyResult, error) {
 	f.mu.Lock()
+	f.previous = append(f.previous, previous)
 	f.singleCalls++
 	call := f.singleCalls
 	f.singleTexts = append(f.singleTexts, text)
@@ -387,5 +389,98 @@ func TestClassifyLoop_PartialResultIsRepairedNotDropped(t *testing.T) {
 				t.Errorf("expected entry under %q: %v", tt.wantCategory, err)
 			}
 		})
+	}
+}
+
+func continuing(title string) func(int, string) (*noteclassifier.ClassifyResult, error) {
+	return func(call int, text string) (*noteclassifier.ClassifyResult, error) {
+		return &noteclassifier.ClassifyResult{Title: title, Summary: "s", Category: "dev", Continues: call > 1}, nil
+	}
+}
+
+func storedBodies(t *testing.T, p *Pipeline) []string {
+	t.Helper()
+	var bodies []string
+	filepath.WalkDir(p.baseDir, func(path string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(path, ".md") {
+			data, _ := os.ReadFile(path)
+			bodies = append(bodies, string(data))
+		}
+		return nil
+	})
+	return bodies
+}
+
+func TestClassifyLoop_ContinuationAppendsToPreviousNote(t *testing.T) {
+	fake := &fakeClassifier{singleFn: continuing("whole talk")}
+	p := newTestPipeline(t, fake)
+
+	runClassify(t, p, items("first part")...)
+	runClassify(t, p, items("second part")...)
+
+	bodies := storedBodies(t, p)
+	if len(bodies) != 1 {
+		t.Fatalf("want one note, got %d", len(bodies))
+	}
+	for _, want := range []string{`title: "whole talk"`, "first part", "second part"} {
+		if !strings.Contains(bodies[0], want) {
+			t.Errorf("note missing %q:\n%s", want, bodies[0])
+		}
+	}
+	if fake.previous[0] != nil || fake.previous[1] == nil {
+		t.Errorf("only the second call should see a previous note: %v", fake.previous)
+	}
+}
+
+func TestClassifyLoop_NotContinuingStartsNewNote(t *testing.T) {
+	p := newTestPipeline(t, &fakeClassifier{})
+	runClassify(t, p, items("one", "two")...)
+	if got := storedEntries(t, p); len(got) != 2 {
+		t.Fatalf("want two notes, got %v", got)
+	}
+}
+
+func TestClassifyLoop_NoteOutsideWindowIsNotOffered(t *testing.T) {
+	fake := &fakeClassifier{singleFn: continuing("x")}
+	p := newTestPipeline(t, fake)
+	runClassify(t, p, items("first")...)
+	p.last.updated = time.Now().Add(-continuationWindow - time.Minute)
+
+	runClassify(t, p, items("much later")...)
+
+	if last := fake.previous[len(fake.previous)-1]; last != nil {
+		t.Errorf("stale note offered: %v", last)
+	}
+}
+
+func TestClassifyLoop_FallbackNoteIsNotContinued(t *testing.T) {
+	fake := &fakeClassifier{singleFn: func(call int, text string) (*noteclassifier.ClassifyResult, error) {
+		if call <= 2 {
+			return nil, fmt.Errorf("boom")
+		}
+		return &noteclassifier.ClassifyResult{Title: "t", Summary: "s", Category: "dev", Continues: true}, nil
+	}}
+	p := newTestPipeline(t, fake)
+
+	runClassify(t, p, items("lost")...)
+	runClassify(t, p, items("lost", "next")[1])
+
+	if last := fake.previous[len(fake.previous)-1]; last != nil {
+		t.Errorf("fallback note offered: %v", last)
+	}
+	if got := storedEntries(t, p); len(got) != 2 {
+		t.Fatalf("want two notes, got %v", got)
+	}
+}
+
+func TestClassifyLoop_MissingPreviousFileStoresNewNote(t *testing.T) {
+	p := newTestPipeline(t, &fakeClassifier{singleFn: continuing("x")})
+	runClassify(t, p, items("first")...)
+	os.Remove(p.last.path)
+
+	runClassify(t, p, items("second")...)
+
+	if got := storedEntries(t, p); len(got) != 1 {
+		t.Fatalf("second text must not be lost: %v", got)
 	}
 }

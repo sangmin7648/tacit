@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/internal/components/note-manager]
-verified: a6db5d7
+verified: 4b3ae33
 ---
 
 # note-manager
