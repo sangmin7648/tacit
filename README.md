@@ -188,7 +188,7 @@ Issues and pull requests are welcome. Please open an issue first for significant
 
 ```bash
 make test       # run unit tests
-make e2e-test   # build + process test audio through full pipeline
+make e2e-test   # build + play a test recording through the full pipeline
 ```
 
 > **Note:** Do not run `go build ./...` directly — `pkg/stt` uses CGo against whisper.cpp and requires `make build` to compile first.

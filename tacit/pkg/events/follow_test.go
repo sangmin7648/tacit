@@ -64,8 +64,10 @@ func startFollow(t *testing.T, path string) *collector {
 	return c
 }
 
-func stored(title string) Event {
-	return Event{Kind: KindStored, Time: time.Now(), Title: title}
+// stored returns a stored event labelled by its Source, so a test can tell
+// which write it is.
+func stored(label string) Event {
+	return Event{Kind: KindStored, Time: time.Now(), Source: label}
 }
 
 // A front end opening mid-run wants what happens next; history is ReadFile's.
@@ -83,8 +85,8 @@ func TestFollow_OnlyNewEvents(t *testing.T) {
 	w.Observe(stored("after 2"))
 
 	got := c.waitFor(t, 2)
-	if got[0].Title != "after 1" || got[1].Title != "after 2" {
-		t.Errorf("got %q, %q; want the two events written after Follow began", got[0].Title, got[1].Title)
+	if got[0].Source != "after 1" || got[1].Source != "after 2" {
+		t.Errorf("got %q, %q; want the two events written after Follow began", got[0].Source, got[1].Source)
 	}
 	time.Sleep(30 * time.Millisecond)
 	if n := len(c.snapshot()); n != 2 {
@@ -104,8 +106,8 @@ func TestFollow_LogCreatedLater(t *testing.T) {
 	defer w.Close()
 	w.Observe(stored("first ever"))
 
-	if got := c.waitFor(t, 1); got[0].Title != "first ever" {
-		t.Errorf("got %q", got[0].Title)
+	if got := c.waitFor(t, 1); got[0].Source != "first ever" {
+		t.Errorf("got %q", got[0].Source)
 	}
 }
 
@@ -133,8 +135,8 @@ func TestFollow_SurvivesRotation(t *testing.T) {
 
 	got := c.waitFor(t, n)
 	for i, e := range got[:n] {
-		if want := fmt.Sprintf("entry %02d", i); e.Title != want {
-			t.Fatalf("event %d = %q, want %q (lost or reordered across rotation)", i, e.Title, want)
+		if want := fmt.Sprintf("entry %02d", i); e.Source != want {
+			t.Fatalf("event %d = %q, want %q (lost or reordered across rotation)", i, e.Source, want)
 		}
 	}
 }
@@ -158,9 +160,9 @@ func TestFollow_PartialLine(t *testing.T) {
 	if n := len(c.snapshot()); n != 0 {
 		t.Fatalf("delivered %d events from half a line", n)
 	}
-	f.WriteString(`"title":"joined"}` + "\n")
+	f.WriteString(`"source":"joined"}` + "\n")
 
-	if got := c.waitFor(t, 1); got[0].Title != "joined" {
+	if got := c.waitFor(t, 1); got[0].Source != "joined" {
 		t.Errorf("got %+v", got[0])
 	}
 }

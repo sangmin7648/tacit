@@ -7,8 +7,7 @@ import "time"
 //
 // The json tags are the shape `tacit list|search|get --json` print, and the
 // shape a front end binds to. They are a public contract: rename one only
-// alongside a bump of the CLI's JSON version. FilePath is "path" to match the
-// daemon event log's stored events.
+// alongside a bump of the CLI's JSON version.
 type KnowledgeEntry struct {
 	Title     string    `yaml:"title" json:"title"`
 	Category  string    `yaml:"category" json:"category"`

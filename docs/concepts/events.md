@@ -1,15 +1,19 @@
 ---
 source: [tacit/pkg/events, tacit/pkg/pipeline]
-verified: 9825e8e
+verified: f0db000
 ---
 
 # Events
 
-The pipeline narrates itself twice: as log lines for humans, and as **events** for programs. An event is one observable moment: listening, speech started or ended, transcribing, transcribed, discarded (with a reason), classifying, stored, skipped, or an absorbed error.
+An **event** tells a front end what the daemon is doing right now: listening, speech started or ended, transcribing, transcribed, discarded, classifying, stored, or skipped. It carries only its kind, its time, and the capture source.
 
 ## Why events exist
 
-A second front end (the menu-bar app) would otherwise have had to scrape English log prose to learn that an entry was stored. Events are that narration as data. Emitting one never replaces the log line beside it.
+The daemon is its own process, so the menu-bar app has no other way to know whether it is hearing speech or working on it. A stored event also tells the app to reload its notes.
+
+## What events do not carry
+
+What was said, why a segment was dropped, and what went wrong are in the daemon log, the record a person reads to diagnose a run. Events once duplicated them; no reader used the copies, and they spread transcripts into a second file.
 
 ## Transport
 
@@ -18,6 +22,5 @@ The daemon appends events to a line-delimited log file regardless of who started
 ## Rules
 
 - **Additive kinds.** A reader ignores kinds it does not know, so a newer daemon stays readable by an older app.
-- **Missing means unknown.** Most fields apply to only some kinds; absence is not an empty value.
 - **Logging cannot hurt the daemon.** A failure to write the event log is recorded but never stops the pipeline.
 - **Observers are fast.** They run inline with audio handling and must buffer anything slow.

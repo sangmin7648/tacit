@@ -1,11 +1,11 @@
 ---
 source: [tacit/pkg/pipeline, tacit/pkg/capture, tacit/pkg/vad, tacit/pkg/stt, tacit/pkg/audio]
-verified: 9825e8e
+verified: f0db000
 ---
 
 # Pipeline
 
-The pipeline turns an audio stream into stored entries. It is the core of the daemon, and `tacit process <file>` runs the same stages over a recorded file.
+The pipeline turns an audio stream into stored entries. It is the core of the daemon. The end-to-end test plays a recorded file through it as if it were the microphone, so it exercises the same stages. See [0010](../decisions/0010-live-audio-only.md).
 
 ## Stages
 

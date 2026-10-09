@@ -8,15 +8,15 @@ Start with [overview](overview.md); look words up in the [glossary](glossary.md)
 
 | Page | Covers | Verified |
 |---|---|---|
-| [pipeline](concepts/pipeline.md) | Audio to entry, stage by stage; restart and batching | 9825e8e |
+| [pipeline](concepts/pipeline.md) | Audio to entry, stage by stage; restart and batching | f0db000 |
 | [segmentation](concepts/segmentation.md) | Segments vs sessions, the two caps, pre-roll | 9825e8e |
 | [hallucination-filtering](concepts/hallucination-filtering.md) | The signals that remove Whisper's invented text | 9825e8e |
 | [classification](concepts/classification.md) | LLM titling, skip, repair, batching | 9825e8e |
 | [knowledge-entry](concepts/knowledge-entry.md) | Entry format, storage rules, what lives in `~/.tacit/` | 9825e8e |
 | [search](concepts/search.md) | List, search, get; why lexical | 9825e8e |
-| [events](concepts/events.md) | Pipeline events as data, transport, rules | 9825e8e |
+| [events](concepts/events.md) | Pipeline events as data, transport, rules | f0db000 |
 | [configuration](concepts/configuration.md) | Reference/override layering, shared setup | 9825e8e |
-| [daemon-and-app](concepts/daemon-and-app.md) | One daemon, terminal and app front ends, ownership | 9825e8e |
+| [daemon-and-app](concepts/daemon-and-app.md) | One daemon, terminal and app front ends, ownership | f0db000 |
 | [distribution](concepts/distribution.md) | Install, update, release | 9825e8e |
 | [skills](concepts/skills.md) | Agent skills and why they are not a server | 9825e8e |
 
@@ -37,3 +37,4 @@ Start with [overview](overview.md); look words up in the [glossary](glossary.md)
 | [0007](decisions/0007-app-adopts-its-own-orphaned-daemon.md) | The app adopts a daemon it started earlier | accepted |
 | [0008](decisions/0008-one-installer-for-cli-and-app.md) | One installer for the CLI and the app | accepted |
 | [0009](decisions/0009-microphone-only.md) | Capture the microphone only | accepted |
+| [0010](decisions/0010-live-audio-only.md) | Process live audio only | accepted |

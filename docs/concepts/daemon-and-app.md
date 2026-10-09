@@ -1,6 +1,6 @@
 ---
 source: [tacit/cmd/tacit, tacit/cmd/tacit-app, tacit/pkg/daemon, tacit/pkg/events]
-verified: 9825e8e
+verified: f0db000
 ---
 
 # Daemon and the Mac app
@@ -14,7 +14,8 @@ The app does not run the pipeline itself. It launches the CLI bundled inside the
 ## How the app knows what is happening
 
 - **Is a daemon running?** Read the PID file, the way `tacit status` does.
-- **What is it doing?** Read the event log: the latest event gives the menu-bar glyph and status line, and recent stored events fill the Recent list.
+- **What is it doing?** Read the event log: the latest event gives the menu-bar glyph.
+- **What did it store?** Read the notes folder, as `tacit list` does, and fill the Recent list; a stored event triggers a reload. Building the list from stored events kept deleted notes listed and lost them all when the log rotated.
 
 ## Ownership
 

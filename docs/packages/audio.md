@@ -1,13 +1,12 @@
 ---
 source: [tacit/pkg/audio]
-verified: 9825e8e
+verified: f0db000
 ---
 
 # audio
 
-Two jobs: decode an audio file into the raw samples the pipeline expects, and buffer live speech into segments.
+The audio format the pipeline works in, and the segment buffer: it collects samples between speech start and end, applies the minimum duration (too short is discarded) and the maximum (forces a split). See [segmentation](../concepts/segmentation.md).
 
-- **Decoding** uses the operating system's own decoder on macOS so common formats work with nothing installed; other platforms fall back to ffmpeg. Used by `tacit process`.
-- **Segment buffer** collects samples between speech start and end, applies the minimum duration (too short is discarded) and the maximum (forces a split). See [segmentation](../concepts/segmentation.md).
+It decodes no files: the app processes only live audio. See [0010](../decisions/0010-live-audio-only.md).
 
 Depends on nothing else in the project.

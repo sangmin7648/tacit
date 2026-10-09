@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sangmin7648/tacit/pkg/config"
+	"github.com/sangmin7648/tacit/pkg/daemon"
 )
 
 func TestSettingsJS_MatchesService(t *testing.T) {
@@ -148,27 +149,27 @@ func stubDaemon(t *testing.T, onTERM string) string {
 func TestStopAndWait_WaitsForExit(t *testing.T) {
 	pidPath := stubDaemon(t, "sleep 0.4; exit 0")
 	start := time.Now()
-	if err := stopAndWait(context.Background(), pidPath, 5*time.Second); err != nil {
+	if err := daemon.StopAndWait(context.Background(), pidPath, 5*time.Second); err != nil {
 		t.Fatalf("stopAndWait: %v", err)
 	}
 	if took := time.Since(start); took < 400*time.Millisecond {
 		t.Errorf("returned after %v, before the daemon exited", took)
 	}
-	if running, _ := daemonStatus(pidPath); running {
+	if running, _ := daemon.Status(pidPath); running {
 		t.Error("daemon still running after stopAndWait")
 	}
 }
 
 func TestStopAndWait_GivesUp(t *testing.T) {
 	pidPath := stubDaemon(t, ":") // ignores SIGTERM
-	err := stopAndWait(context.Background(), pidPath, 300*time.Millisecond)
+	err := daemon.StopAndWait(context.Background(), pidPath, 300*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "still stopping") {
 		t.Errorf("err = %v, want a timeout", err)
 	}
 }
 
 func TestStopAndWait_NotRunning(t *testing.T) {
-	if err := stopAndWait(context.Background(), filepath.Join(t.TempDir(), "tacit.pid"), time.Second); err == nil {
+	if err := daemon.StopAndWait(context.Background(), filepath.Join(t.TempDir(), "tacit.pid"), time.Second); err == nil {
 		t.Error("stopping a daemon that is not running succeeded")
 	}
 }

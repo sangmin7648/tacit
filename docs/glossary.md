@@ -1,6 +1,6 @@
 ---
 source: [tacit/pkg, tacit/cmd, tacit/skills]
-verified: 9825e8e
+verified: f0db000
 ---
 
 # Glossary
@@ -37,7 +37,7 @@ verified: 9825e8e
 
 **Daemon**: the long-running `tacit listen` process. Whoever starts it (terminal or app), it is the same process with a PID file and an event log.
 
-**Event**: a pipeline moment published as data (speech started, stored, discarded, ...), appended to the event log. See [events](concepts/events.md).
+**Event**: what the daemon is doing right now (speech started, transcribing, stored, ...), appended to the event log for the app's menu bar. See [events](concepts/events.md).
 
 **Override**: the user's own settings file, layered over the generated defaults. See [configuration](concepts/configuration.md).
 

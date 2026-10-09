@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -22,18 +21,10 @@ import (
 	"github.com/sangmin7648/tacit/pkg/vad"
 )
 
-// ErrSkipped is returned by ProcessFile when the audio content is classified
-// as meaningless and intentionally not stored. It is not a processing error.
-var ErrSkipped = errors.New("content classified as meaningless, skipping")
-
 // dedupKeepFirst is how many verbatim copies of a transcript are stored per
 // dedup window before the rest are treated as whisper stock hallucinations and
 // dropped. Two leaves room for a real remark that genuinely recurs.
 const dedupKeepFirst = 2
-
-// fileSource is the Source label on events from ProcessFile, distinguishing a
-// one-shot file run from the live "mic" capture source.
-const fileSource = "file"
 
 // Pipeline orchestrates the VAD→STT→Process→Store flow.
 type Pipeline struct {
@@ -89,9 +80,8 @@ func (p *Pipeline) SetObserver(o events.Observer) {
 }
 
 // emit stamps an event with the current time and hands it to the observer.
-// Every call sits alongside the log line it mirrors rather than replacing it:
-// the logs are what a human reads when the daemon misbehaves, and `make
-// e2e-test` greps them.
+// Every call sits alongside a log line rather than replacing it: the log is
+// what a human reads when the daemon misbehaves.
 func (p *Pipeline) emit(e events.Event) {
 	if p.observer == nil {
 		return
@@ -145,7 +135,6 @@ func (p *Pipeline) Run(ctx context.Context, sources []capture.AudioSource, label
 			defer sourceWg.Done()
 			if err := p.runSource(ctx, src, label, classifyCh); err != nil {
 				log.Printf("[%s] source error: %v", label, err)
-				p.emit(events.Event{Kind: events.KindError, Source: label, Reason: "source_failed", Error: err.Error()})
 			}
 		}(src, label)
 	}
@@ -180,7 +169,6 @@ func (p *Pipeline) runSource(ctx context.Context, src capture.AudioSource, label
 		}
 		if err != nil {
 			log.Printf("[%s] capture session error: %v; restarting in %v", label, err, retryDelay)
-			p.emit(events.Event{Kind: events.KindError, Source: label, Reason: "capture_session_failed", Error: err.Error()})
 		} else {
 			log.Printf("[%s] stream ended, restarting in %v", label, retryDelay)
 		}
@@ -260,7 +248,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 		sessionStart = time.Now()
 		if process.IsFiller(text) {
 			log.Printf("[%s] transcript is filler only, discarding: %s", label, process.TruncateForLog(text))
-			p.emit(events.Event{Kind: events.KindDiscarded, Source: label, Text: text, Reason: "filler"})
+			p.emit(events.Event{Kind: events.KindDiscarded, Source: label})
 			return
 		}
 		log.Printf("[%s] flushing transcript for classification (%s)", label, reason)
@@ -294,8 +282,6 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 			stall.Reset(stallTimeout)
 		case <-stall.C:
 			log.Printf("[%s] no audio for %v, assuming stream stalled; restarting", label, stallTimeout)
-			p.emit(events.Event{Kind: events.KindError, Source: label, Reason: "stalled",
-				Error: fmt.Sprintf("no audio for %v", stallTimeout)})
 			return nil
 		case <-ctx.Done():
 			return nil
@@ -364,7 +350,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 
 				if silenceFrames >= silenceLimit {
 					log.Printf("[%s] speech ended (%.1fs)", label, segBuf.Duration().Seconds())
-					p.emit(events.Event{Kind: events.KindSpeechEnded, Source: label, Seconds: segBuf.Duration().Seconds()})
+					p.emit(events.Event{Kind: events.KindSpeechEnded, Source: label})
 					seg, ok := segBuf.Finish()
 					silenceFrames = 0
 					if ok {
@@ -373,7 +359,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src capture.AudioSource, l
 						}
 					} else if len(textBuf) == 0 {
 						log.Printf("[%s] segment too short, discarding", label)
-						p.emit(events.Event{Kind: events.KindDiscarded, Source: label, Reason: "too_short"})
+						p.emit(events.Event{Kind: events.KindDiscarded, Source: label})
 					}
 					// Flush accumulated text as a single classify item.
 					flush("speech ended")
@@ -406,7 +392,7 @@ func (p *Pipeline) sttOptions() stt.Options {
 // transcribed text, or "" on error or empty result.
 func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, label string) string {
 	log.Printf("[%s] transcribing %.1fs of audio", label, seg.Duration.Seconds())
-	p.emit(events.Event{Kind: events.KindTranscribing, Source: label, Seconds: seg.Duration.Seconds()})
+	p.emit(events.Event{Kind: events.KindTranscribing, Source: label})
 
 	p.whisperMu.Lock()
 	text, err := p.whisper.Transcribe(ctx, seg.Samples, p.sttOptions())
@@ -414,7 +400,6 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, 
 
 	if err != nil {
 		log.Printf("[%s] STT error: %v", label, err)
-		p.emit(events.Event{Kind: events.KindError, Source: label, Reason: "stt_failed", Error: err.Error()})
 		return ""
 	}
 	if text == "" {
@@ -422,7 +407,7 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, 
 		// (no_speech_prob above threshold together with a low average logprob),
 		// so an empty result is a decode-level rejection rather than a failure.
 		log.Printf("[%s] STT rejected %.1fs as non-speech, nothing transcribed", label, seg.Duration.Seconds())
-		p.emit(events.Event{Kind: events.KindDiscarded, Source: label, Seconds: seg.Duration.Seconds(), Reason: "non_speech"})
+		p.emit(events.Event{Kind: events.KindDiscarded, Source: label})
 		return ""
 	}
 	log.Printf("[%s] STT: %s", label, text)
@@ -431,7 +416,7 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, 
 	switch {
 	case filtered == "":
 		log.Printf("[%s] transcript was entirely hallucinated boilerplate, discarding", label)
-		p.emit(events.Event{Kind: events.KindDiscarded, Source: label, Text: text, Reason: "hallucination"})
+		p.emit(events.Event{Kind: events.KindDiscarded, Source: label})
 		return ""
 	case filtered != text:
 		log.Printf("[%s] stripped hallucinated boilerplate, kept: %s", label, process.TruncateForLog(filtered))
@@ -442,10 +427,10 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *audio.AudioSegment, 
 	if secs := seg.Duration.Seconds(); process.TooSparse(filtered, secs, p.cfg.MinCharRate) {
 		log.Printf("[%s] transcript too sparse for %.1fs of audio (%d chars < %.2f/s), discarding likely hallucination: %s",
 			label, secs, process.NormalizedRuneCount(filtered), p.cfg.MinCharRate, process.TruncateForLog(filtered))
-		p.emit(events.Event{Kind: events.KindDiscarded, Source: label, Text: filtered, Seconds: secs, Reason: "too_sparse"})
+		p.emit(events.Event{Kind: events.KindDiscarded, Source: label})
 		return ""
 	}
-	p.emit(events.Event{Kind: events.KindTranscribed, Source: label, Text: filtered, Seconds: seg.Duration.Seconds()})
+	p.emit(events.Event{Kind: events.KindTranscribed, Source: label})
 	return filtered
 }
 
@@ -482,7 +467,7 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 				if prior, repeat := p.deduper.Seen(b.text, b.timestamp); repeat {
 					log.Printf("Discarding stock repeat (same transcript already stored %d× in the last %s): %s",
 						prior, p.cfg.DedupWindow, process.TruncateForLog(b.text))
-					p.emit(events.Event{Kind: events.KindDiscarded, Source: b.source, Text: b.text, Reason: "stock_repeat"})
+					p.emit(events.Event{Kind: events.KindDiscarded, Source: b.source})
 					continue
 				}
 				kept = append(kept, b)
@@ -497,13 +482,13 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 
 		if len(batch) == 1 {
 			log.Printf("Classifying 1 segment...")
-			p.emit(events.Event{Kind: events.KindClassifying, Source: batch[0].source, Count: 1})
+			p.emit(events.Event{Kind: events.KindClassifying, Source: batch[0].source})
 			p.classifyAndStore(ctx, batch[0], existingCategories)
 			continue
 		}
 
 		log.Printf("Batch classifying %d segments in one CLI call...", len(batch))
-		p.emit(events.Event{Kind: events.KindClassifying, Count: len(batch)})
+		p.emit(events.Event{Kind: events.KindClassifying})
 		texts := make([]string, len(batch))
 		for i, b := range batch {
 			texts[i] = b.text
@@ -540,7 +525,6 @@ func (p *Pipeline) classifyAndStore(ctx context.Context, item classifyItem, exis
 	}
 	if err != nil {
 		log.Printf("Classify failed (%v); storing unclassified: %s", err, process.TruncateForLog(item.text))
-		p.emit(events.Event{Kind: events.KindError, Source: item.source, Reason: "classify_failed", Error: err.Error()})
 		p.storeEntry(process.FallbackResult(item.text), item)
 		return
 	}
@@ -555,7 +539,7 @@ func (p *Pipeline) dispatch(item classifyItem, classified *process.ClassifyResul
 		// Log the text: a skip is the one path that intentionally throws speech
 		// away, and until now it left nothing behind to check that against.
 		log.Printf("Skipping segment the classifier called meaningless: %s", process.TruncateForLog(item.text))
-		p.emit(events.Event{Kind: events.KindSkipped, Source: item.source, Text: item.text})
+		p.emit(events.Event{Kind: events.KindSkipped, Source: item.source})
 	case !classified.Usable():
 		log.Printf("Classifier returned no content fields; storing unclassified: %s", process.TruncateForLog(item.text))
 		p.storeEntry(process.FallbackResult(item.text), item)
@@ -570,12 +554,10 @@ func (p *Pipeline) storeEntry(classified *process.ClassifyResult, item classifyI
 	filePath, err := storage.Write(p.baseDir, entry)
 	if err != nil {
 		log.Printf("Write error: %v", err)
-		p.emit(events.Event{Kind: events.KindError, Source: item.source, Reason: "write_failed", Error: err.Error()})
 		return
 	}
 	log.Printf("Knowledge entry saved: %s", filePath)
-	p.emit(events.Event{Kind: events.KindStored, Source: item.source, Path: filePath,
-		Title: entry.Title, Category: entry.Category, Text: item.text})
+	p.emit(events.Event{Kind: events.KindStored, Source: item.source})
 }
 
 // newKnowledgeEntry builds the entry to write. It runs the classification
@@ -593,85 +575,4 @@ func newKnowledgeEntry(classified *process.ClassifyResult, content string, ts ti
 		Summary:   final.Summary,
 		Content:   content,
 	}
-}
-
-// ProcessFile processes an audio file through the full pipeline:
-// decode → STT → classify → save as markdown knowledge entry.
-// Returns the path to the created knowledge file.
-func (p *Pipeline) ProcessFile(ctx context.Context, audioPath string) (string, error) {
-	log.Printf("Decoding audio file: %s", audioPath)
-	samples, err := audio.DecodeFile(audioPath)
-	if err != nil {
-		return "", fmt.Errorf("decode audio: %w", err)
-	}
-	duration := audio.DurationFromSamples(len(samples), audio.SampleRate)
-	log.Printf("Decoded %d samples (%.2f seconds)", len(samples), duration.Seconds())
-
-	if duration < p.cfg.MinSpeechDur {
-		return "", fmt.Errorf("audio too short: %v (minimum: %v)", duration, p.cfg.MinSpeechDur)
-	}
-
-	log.Printf("Running STT...")
-	p.whisperMu.Lock()
-	text, err := p.whisper.Transcribe(ctx, samples, p.sttOptions())
-	p.whisperMu.Unlock()
-	if err != nil {
-		return "", fmt.Errorf("transcribe: %w", err)
-	}
-	if text == "" {
-		return "", fmt.Errorf("STT produced empty text")
-	}
-	log.Printf("STT result: %s", text)
-
-	raw := text
-	text = process.FilterHallucinations(text, p.cfg.TranscriptDenylist)
-	if text == "" {
-		log.Printf("Transcript was entirely hallucinated boilerplate")
-		p.emit(events.Event{Kind: events.KindDiscarded, Source: fileSource, Text: raw, Reason: "hallucination"})
-		return "", ErrSkipped
-	}
-	if process.IsFiller(text) {
-		log.Printf("Transcript is filler only")
-		p.emit(events.Event{Kind: events.KindDiscarded, Source: fileSource, Text: text, Reason: "filler"})
-		return "", ErrSkipped
-	}
-	p.emit(events.Event{Kind: events.KindTranscribed, Source: fileSource, Text: text, Seconds: duration.Seconds()})
-
-	log.Printf("Classifying with LLM...")
-	p.emit(events.Event{Kind: events.KindClassifying, Source: fileSource, Count: 1})
-	classifyStart := time.Now()
-	existingCategories := storage.ListCategories(p.baseDir)
-	classified, err := p.classifier.Classify(ctx, text, existingCategories)
-	if err != nil {
-		log.Printf("Classify error (%v); retrying once", err)
-		classified, err = p.classifier.Classify(ctx, text, existingCategories)
-	}
-	switch {
-	case err != nil:
-		// Storing the transcript unclassified beats returning an error and
-		// leaving a successful transcription with nowhere to go.
-		log.Printf("Classify failed (%v); storing unclassified", err)
-		classified = process.FallbackResult(text)
-	case classified.Skip:
-		p.emit(events.Event{Kind: events.KindSkipped, Source: fileSource, Text: text})
-		return "", ErrSkipped
-	case !classified.Usable():
-		log.Printf("Classifier returned no content fields; storing unclassified")
-		classified = process.FallbackResult(text)
-	default:
-		log.Printf("Classified in %.1fs: title=%q, category=%q", time.Since(classifyStart).Seconds(), classified.Title, classified.Category)
-	}
-
-	entry := newKnowledgeEntry(classified, text, time.Now())
-
-	filePath, err := storage.Write(p.baseDir, entry)
-	if err != nil {
-		p.emit(events.Event{Kind: events.KindError, Source: fileSource, Reason: "write_failed", Error: err.Error()})
-		return "", fmt.Errorf("write knowledge entry: %w", err)
-	}
-	log.Printf("Saved knowledge entry: %s", filePath)
-	p.emit(events.Event{Kind: events.KindStored, Source: fileSource, Path: filePath,
-		Title: entry.Title, Category: entry.Category, Text: text})
-
-	return filePath, nil
 }

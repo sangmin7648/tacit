@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"github.com/sangmin7648/tacit/pkg/config"
 	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/events"
+	"github.com/sangmin7648/tacit/pkg/model"
 	"github.com/sangmin7648/tacit/pkg/pipeline"
 	"github.com/sangmin7648/tacit/pkg/search"
 	"github.com/sangmin7648/tacit/pkg/setup"
@@ -43,8 +43,6 @@ func main() {
 		// before the wizard asks its questions rather than after.
 		loadConfig()
 		cmdSetup()
-	case "process":
-		cmdProcess(loadConfig())
 	case "listen":
 		cmdListen(loadConfig())
 	case "stop":
@@ -106,7 +104,6 @@ func printUsage() {
 
 Usage:
   tacit setup                  Install Claude Code skill for knowledge base
-  tacit process <audio-file>   Process an audio file into a knowledge entry
   tacit listen                 Start the voice capture daemon (foreground)
   tacit stop                   Stop the voice capture daemon
   tacit status [--json]        Check daemon status
@@ -201,6 +198,13 @@ func cmdSetup() {
 	}
 	fmt.Printf("Updated reference config: %s\n", res.ReferencePath)
 
+	cfg := loadConfig()
+	modelFile := filepath.Base(config.ModelPath(cfg.WhisperModel))
+	if err := setup.DownloadModel(context.Background(), model.PrintProgress(modelFile)); err != nil {
+		log.Fatalf("Downloading %s failed: %v", modelFile, err)
+	}
+	fmt.Println()
+
 	fmt.Println("Setup complete.")
 }
 
@@ -285,7 +289,6 @@ func selectOption(options []string, defaultIdx int) int {
 	return cur
 }
 
-// cmdProcess handles the "process" subcommand: audio file → knowledge entry.
 // openEventLog attaches the daemon event log to p, so a front end can follow
 // this run. A failure here is reported and swallowed: the event log is an
 // observation channel, and losing it must never cost the user a transcript.
@@ -303,47 +306,6 @@ func openEventLog(p *pipeline.Pipeline) func() {
 		}
 		w.Close()
 	}
-}
-
-func cmdProcess(cfg *config.Config) {
-	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: tacit process <audio-file>\n")
-		os.Exit(1)
-	}
-
-	audioPath := os.Args[2]
-	if _, err := os.Stat(audioPath); err != nil {
-		log.Fatalf("Audio file not found: %s", audioPath)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	p, err := pipeline.New(cfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize pipeline: %v", err)
-	}
-
-	closeEvents := openEventLog(p)
-
-	filePath, err := p.ProcessFile(ctx, audioPath)
-	p.Close() // Close before printing to avoid ggml cleanup race
-	// Closed explicitly rather than deferred: every exit below is an os.Exit or
-	// log.Fatalf, and neither runs deferred functions.
-	if closeEvents != nil {
-		closeEvents()
-	}
-
-	if err != nil {
-		if errors.Is(err, pipeline.ErrSkipped) {
-			fmt.Println("Content classified as meaningless, skipping.")
-			os.Exit(0)
-		}
-		log.Fatalf("Processing failed: %v", err)
-	}
-
-	fmt.Printf("Knowledge entry created: %s\n", filePath)
-	os.Exit(0) // Exit immediately to avoid ggml Metal cleanup crash
 }
 
 // cmdListen starts the voice capture pipeline in the foreground.
@@ -404,28 +366,15 @@ func cmdListen(cfg *config.Config) {
 // cmdStop sends SIGTERM to the running daemon.
 func cmdStop() {
 	pidPath := config.PIDPath()
-
-	pid, err := daemon.ReadPID(pidPath)
-	if err != nil {
+	running, pid := daemon.Status(pidPath)
+	if !running {
+		daemon.RemovePID(pidPath)
 		fmt.Println("tacit is not running")
 		return
 	}
-
-	if !daemon.IsRunning(pid) {
-		daemon.RemovePID(pidPath)
-		fmt.Println("tacit is not running (stale PID cleaned)")
-		return
+	if err := daemon.Stop(pidPath); err != nil {
+		log.Fatalf("Failed to stop tacit (PID %d): %v", pid, err)
 	}
-
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		log.Fatalf("Failed to find process %d: %v", pid, err)
-	}
-
-	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		log.Fatalf("Failed to send SIGTERM to %d: %v", pid, err)
-	}
-
 	fmt.Printf("Sent SIGTERM to tacit (PID: %d)\n", pid)
 }
 

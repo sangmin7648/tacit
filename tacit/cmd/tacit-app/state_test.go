@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sangmin7648/tacit/pkg/daemon"
 	"github.com/sangmin7648/tacit/pkg/events"
+	"github.com/sangmin7648/tacit/pkg/storage"
 )
 
 func TestLabel_FollowsActivity(t *testing.T) {
@@ -32,38 +34,12 @@ func TestLabel_FollowsActivity(t *testing.T) {
 		{events.KindDiscarded, "●"},
 		{events.KindClassifying, "◐"},
 		{events.KindSkipped, "●"},
-		{events.KindError, "●"}, // an absorbed error does not change what it is doing
 	}
 	for i, st := range steps {
 		s.observe(events.Event{Kind: st.kind})
 		if got := s.label(); got != st.want {
 			t.Errorf("step %d (%s): label = %q, want %q", i, st.kind, got, st.want)
 		}
-	}
-}
-
-func TestRecent_NewestFirstAndCapped(t *testing.T) {
-	s := &state{}
-	var history []events.Event
-	for i := 0; i < recentLimit+3; i++ {
-		history = append(history, events.Event{Kind: events.KindStored, Title: fmt.Sprintf("e%d", i)})
-		history = append(history, events.Event{Kind: events.KindTranscribed, Text: "noise"})
-	}
-	s.seedRecent(history)
-
-	if len(s.recent) != recentLimit {
-		t.Fatalf("recent has %d entries, want %d", len(s.recent), recentLimit)
-	}
-	if s.recent[0].Title != fmt.Sprintf("e%d", recentLimit+2) {
-		t.Errorf("recent[0] = %q, want the newest", s.recent[0].Title)
-	}
-	if s.activity != "" {
-		t.Errorf("history left activity = %q; a replay says nothing about a daemon running now", s.activity)
-	}
-
-	s.observe(events.Event{Kind: events.KindStored, Title: "live"})
-	if s.recent[0].Title != "live" || len(s.recent) != recentLimit {
-		t.Errorf("after a live store: %q first, %d total", s.recent[0].Title, len(s.recent))
 	}
 }
 
@@ -83,12 +59,12 @@ func TestStatusLine_SaysWhoStartedIt(t *testing.T) {
 
 func TestEntryLabel(t *testing.T) {
 	cases := []struct {
-		e    events.Event
+		e    *storage.KnowledgeEntry
 		want string
 	}{
-		{events.Event{Title: "검색 랭킹 논의", Category: "work"}, "work · 검색 랭킹 논의"},
-		{events.Event{Path: "/x/daily/20260927-161254.md"}, "20260927-161254.md"},
-		{events.Event{Title: strings.Repeat("가", 60)}, strings.Repeat("가", 47) + "…"},
+		{&storage.KnowledgeEntry{Title: "검색 랭킹 논의", Category: "work"}, "work · 검색 랭킹 논의"},
+		{&storage.KnowledgeEntry{FilePath: "/x/daily/20260927-161254.md"}, "20260927-161254.md"},
+		{&storage.KnowledgeEntry{Title: strings.Repeat("가", 60)}, strings.Repeat("가", 47) + "…"},
 	}
 	for _, c := range cases {
 		if got := entryLabel(c.e); got != c.want {
@@ -127,7 +103,7 @@ while :; do sleep 0.05; done
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		if running, pid := daemonStatus(pidPath); running {
+		if running, pid := daemon.Status(pidPath); running {
 			if pid != cmd.Process.Pid {
 				t.Fatalf("PID file says %d, spawned %d", pid, cmd.Process.Pid)
 			}
@@ -139,7 +115,7 @@ while :; do sleep 0.05; done
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if err := stopDaemon(pidPath); err != nil {
+	if err := daemon.Stop(pidPath); err != nil {
 		t.Fatalf("stopDaemon: %v", err)
 	}
 	select {
@@ -150,10 +126,10 @@ while :; do sleep 0.05; done
 	case <-time.After(3 * time.Second):
 		t.Fatal("daemon did not exit after stopDaemon")
 	}
-	if running, _ := daemonStatus(pidPath); running {
+	if running, _ := daemon.Status(pidPath); running {
 		t.Error("still reported running after stop")
 	}
-	if err := stopDaemon(pidPath); err == nil {
+	if err := daemon.Stop(pidPath); err == nil {
 		t.Error("stopDaemon on a stopped daemon returned nil")
 	}
 
