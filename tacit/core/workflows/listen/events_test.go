@@ -6,32 +6,33 @@ import (
 	"time"
 
 	noteclassifier "github.com/sangmin7648/tacit/core/internal/components/note-classifier"
+	statusreporter "github.com/sangmin7648/tacit/core/internal/components/status-reporter"
 )
 
 // recorder collects every event the pipeline emits. The pipeline emits from
 // several goroutines, so it locks.
 type recorder struct {
 	mu  sync.Mutex
-	got []Event
+	got []statusreporter.Event
 }
 
-func (r *recorder) Observe(e Event) {
+func (r *recorder) Observe(e statusreporter.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.got = append(r.got, e)
 }
 
-func (r *recorder) kinds() []Kind {
+func (r *recorder) kinds() []statusreporter.Kind {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]Kind, len(r.got))
+	out := make([]statusreporter.Kind, len(r.got))
 	for i, e := range r.got {
 		out[i] = e.Kind
 	}
 	return out
 }
 
-func (r *recorder) first(k Kind) (Event, bool) {
+func (r *recorder) first(k statusreporter.Kind) (statusreporter.Event, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, e := range r.got {
@@ -39,10 +40,10 @@ func (r *recorder) first(k Kind) (Event, bool) {
 			return e, true
 		}
 	}
-	return Event{}, false
+	return statusreporter.Event{}, false
 }
 
-func (r *recorder) count(k Kind) int {
+func (r *recorder) count(k statusreporter.Kind) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n := 0
@@ -75,9 +76,9 @@ func TestClassifyLoop_EmitsStored(t *testing.T) {
 
 	runClassify(t, p, sourcedItems("mic", "검색 랭킹 개선 논의")...)
 
-	e, ok := rec.first(KindStored)
+	e, ok := rec.first(statusreporter.KindStored)
 	if !ok {
-		t.Fatalf("no %q event; got %v", KindStored, rec.kinds())
+		t.Fatalf("no %q event; got %v", statusreporter.KindStored, rec.kinds())
 	}
 	if e.Source != "mic" {
 		t.Errorf("Source = %q, want %q", e.Source, "mic")
@@ -85,7 +86,7 @@ func TestClassifyLoop_EmitsStored(t *testing.T) {
 	if e.Time.IsZero() {
 		t.Error("Time is zero; emit must stamp every event")
 	}
-	if got := rec.count(KindClassifying); got != 1 {
+	if got := rec.count(statusreporter.KindClassifying); got != 1 {
 		t.Errorf("classifying events = %d, want 1", got)
 	}
 }
@@ -104,14 +105,14 @@ func TestClassifyLoop_EmitsSkippedNotStored(t *testing.T) {
 
 	runClassify(t, p, sourcedItems("mic", "어 그래 응")...)
 
-	e, ok := rec.first(KindSkipped)
+	e, ok := rec.first(statusreporter.KindSkipped)
 	if !ok {
-		t.Fatalf("no %q event; got %v", KindSkipped, rec.kinds())
+		t.Fatalf("no %q event; got %v", statusreporter.KindSkipped, rec.kinds())
 	}
 	if e.Source != "mic" {
 		t.Errorf("Source = %q, want %q", e.Source, "mic")
 	}
-	if n := rec.count(KindStored); n != 0 {
+	if n := rec.count(statusreporter.KindStored); n != 0 {
 		t.Errorf("stored events = %d, want 0", n)
 	}
 }
@@ -130,10 +131,10 @@ func TestClassifyLoop_EmitsDiscardedOnStockRepeat(t *testing.T) {
 		runClassify(t, p, sourcedItems("mic", stock)...)
 	}
 
-	if _, ok := rec.first(KindDiscarded); !ok {
-		t.Fatalf("no %q event; got %v", KindDiscarded, rec.kinds())
+	if _, ok := rec.first(statusreporter.KindDiscarded); !ok {
+		t.Fatalf("no %q event; got %v", statusreporter.KindDiscarded, rec.kinds())
 	}
-	if got := rec.count(KindStored); got != dedupKeepFirst {
+	if got := rec.count(statusreporter.KindStored); got != dedupKeepFirst {
 		t.Errorf("stored events = %d, want %d", got, dedupKeepFirst)
 	}
 }
@@ -152,7 +153,7 @@ func TestClassifyLoop_ClassifyFailureStillEmitsStored(t *testing.T) {
 
 	runClassify(t, p, sourcedItems("mic", "기획전 티어 정책 논의")...)
 
-	if n := rec.count(KindStored); n != 1 {
+	if n := rec.count(statusreporter.KindStored); n != 1 {
 		t.Errorf("stored events = %d, want 1 (a classify failure must not lose the transcript)", n)
 	}
 }
@@ -161,13 +162,13 @@ func TestClassifyLoop_ClassifyFailureStillEmitsStored(t *testing.T) {
 // Pipeline is a plain struct anyone can construct that way.
 func TestEmit_NilObserverIsSafe(t *testing.T) {
 	p := &Pipeline{}
-	p.emit(Event{Kind: KindListening})
+	p.emit(statusreporter.Event{Kind: statusreporter.KindListening})
 }
 
 func TestSetObserver_NilRestoresDiscard(t *testing.T) {
 	p := &Pipeline{}
 	p.SetObserver(nil)
-	p.emit(Event{Kind: KindListening, Time: time.Now()})
+	p.emit(statusreporter.Event{Kind: statusreporter.KindListening, Time: time.Now()})
 }
 
 var errBoom = &boomError{}

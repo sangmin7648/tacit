@@ -9,12 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sangmin7648/tacit/core/workflows/control"
+
 	"github.com/sangmin7648/tacit/core/workflows/configure"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
 
-	"github.com/sangmin7648/tacit/core/workflows/listen"
 	"github.com/sangmin7648/tacit/core/workflows/onboard"
 )
 
@@ -158,7 +159,7 @@ func (s *OnboardingService) Finish(startListening bool) {
 		w.Hide()
 	}
 	if startListening {
-		if running, _ := listen.Status(listen.PIDPath()); !running {
+		if running, _ := control.Status(control.PIDPath()); !running {
 			s.tray.start()
 		}
 	}

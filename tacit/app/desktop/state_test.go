@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sangmin7648/tacit/core/workflows/browse"
+	"github.com/sangmin7648/tacit/core/workflows/control"
 
-	"github.com/sangmin7648/tacit/core/workflows/listen"
+	"github.com/sangmin7648/tacit/core/workflows/browse"
 )
 
 func TestLabel_FollowsActivity(t *testing.T) {
@@ -20,23 +20,23 @@ func TestLabel_FollowsActivity(t *testing.T) {
 	}
 	s.running = true
 	steps := []struct {
-		kind listen.Kind
+		kind control.Kind
 		want string
 	}{
-		{listen.KindListening, "●"},
-		{listen.KindSpeechStarted, "◉"},
-		{listen.KindSpeechEnded, "◐"},
-		{listen.KindTranscribing, "◐"},
-		{listen.KindTranscribed, "●"},
-		{listen.KindClassifying, "◐"},
-		{listen.KindStored, "●"},
-		{listen.KindSpeechStarted, "◉"},
-		{listen.KindDiscarded, "●"},
-		{listen.KindClassifying, "◐"},
-		{listen.KindSkipped, "●"},
+		{control.KindListening, "●"},
+		{control.KindSpeechStarted, "◉"},
+		{control.KindSpeechEnded, "◐"},
+		{control.KindTranscribing, "◐"},
+		{control.KindTranscribed, "●"},
+		{control.KindClassifying, "◐"},
+		{control.KindStored, "●"},
+		{control.KindSpeechStarted, "◉"},
+		{control.KindDiscarded, "●"},
+		{control.KindClassifying, "◐"},
+		{control.KindSkipped, "●"},
 	}
 	for i, st := range steps {
-		s.observe(listen.Event{Kind: st.kind})
+		s.observe(control.Event{Kind: st.kind})
 		if got := s.label(); got != st.want {
 			t.Errorf("step %d (%s): label = %q, want %q", i, st.kind, got, st.want)
 		}
@@ -103,7 +103,7 @@ while :; do sleep 0.05; done
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		if running, pid := listen.Status(pidPath); running {
+		if running, pid := control.Status(pidPath); running {
 			if pid != cmd.Process.Pid {
 				t.Fatalf("PID file says %d, spawned %d", pid, cmd.Process.Pid)
 			}
@@ -115,7 +115,7 @@ while :; do sleep 0.05; done
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if err := listen.Stop(pidPath); err != nil {
+	if err := control.Stop(pidPath); err != nil {
 		t.Fatalf("stopDaemon: %v", err)
 	}
 	select {
@@ -126,10 +126,10 @@ while :; do sleep 0.05; done
 	case <-time.After(3 * time.Second):
 		t.Fatal("daemon did not exit after stopDaemon")
 	}
-	if running, _ := listen.Status(pidPath); running {
+	if running, _ := control.Status(pidPath); running {
 		t.Error("still reported running after stop")
 	}
-	if err := listen.Stop(pidPath); err == nil {
+	if err := control.Stop(pidPath); err == nil {
 		t.Error("stopDaemon on a stopped daemon returned nil")
 	}
 

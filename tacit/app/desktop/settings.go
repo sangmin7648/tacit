@@ -7,12 +7,13 @@ import (
 	"os/exec"
 	"sync"
 
+	"github.com/sangmin7648/tacit/core/workflows/control"
+
 	"github.com/sangmin7648/tacit/core/workflows/configure"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
 
-	"github.com/sangmin7648/tacit/core/workflows/listen"
 	"github.com/sangmin7648/tacit/core/workflows/onboard"
 )
 
@@ -43,7 +44,7 @@ func (s *SettingsService) Load() (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	running, _ := listen.Status(listen.PIDPath())
+	running, _ := control.Status(control.PIDPath())
 	return Settings{Fields: fields, Path: configure.OverridePath(), Running: running}, nil
 }
 
@@ -105,7 +106,7 @@ func checkChoices(key string, value any) error {
 // Restart stops the running daemon and starts it again from the app, so it
 // reads the changed settings.
 func (s *SettingsService) Restart(ctx context.Context) error {
-	if err := listen.StopAndWait(ctx, listen.PIDPath(), restartTimeout); err != nil {
+	if err := control.StopAndWait(ctx, control.PIDPath(), restartTimeout); err != nil {
 		return fmt.Errorf("%w; start it from the menu once it has", err)
 	}
 	return s.tray.start()

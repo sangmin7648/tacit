@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sangmin7648/tacit/core/workflows/control"
+
 	"github.com/sangmin7648/tacit/core/workflows/browse"
 	"github.com/sangmin7648/tacit/core/workflows/configure"
 
@@ -304,14 +306,14 @@ func cmdListen(cfg *configure.Settings) {
 
 // cmdStop sends SIGTERM to the running daemon.
 func cmdStop() {
-	pidPath := listen.PIDPath()
-	running, pid := listen.Status(pidPath)
+	pidPath := control.PIDPath()
+	running, pid := control.Status(pidPath)
 	if !running {
-		listen.RemovePID(pidPath)
+		control.RemovePID(pidPath)
 		fmt.Println("tacit is not running")
 		return
 	}
-	if err := listen.Stop(pidPath); err != nil {
+	if err := control.Stop(pidPath); err != nil {
 		log.Fatalf("Failed to stop tacit (PID %d): %v", pid, err)
 	}
 	fmt.Printf("Sent SIGTERM to tacit (PID: %d)\n", pid)
@@ -735,9 +737,9 @@ func findNewline(s string) int {
 // cmdStatus checks if the daemon is running.
 func cmdStatus() {
 	_, asJSON := stripFlag(os.Args[2:], "--json")
-	pidPath := listen.PIDPath()
+	pidPath := control.PIDPath()
 
-	pid, err := listen.ReadPID(pidPath)
+	pid, err := control.ReadPID(pidPath)
 	if err != nil {
 		if asJSON {
 			printJSON(statusDoc{Version: jsonVersion})
@@ -749,7 +751,7 @@ func cmdStatus() {
 
 	if asJSON {
 		doc := statusDoc{Version: jsonVersion}
-		if listen.IsRunning(pid) {
+		if control.IsRunning(pid) {
 			doc.Running = true
 			doc.PID = pid
 			if info, err := os.Stat(pidPath); err == nil {
@@ -757,16 +759,16 @@ func cmdStatus() {
 				doc.StartedAt = &t
 			}
 		} else {
-			listen.RemovePID(pidPath)
+			control.RemovePID(pidPath)
 		}
 		printJSON(doc)
 		return
 	}
 
-	if listen.IsRunning(pid) {
+	if control.IsRunning(pid) {
 		fmt.Printf("tacit is running (PID: %d)\n", pid)
 	} else {
-		listen.RemovePID(pidPath)
+		control.RemovePID(pidPath)
 		fmt.Println("tacit is not running (stale PID cleaned)")
 	}
 }

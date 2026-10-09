@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sangmin7648/tacit/core/workflows/control"
+
 	"github.com/sangmin7648/tacit/core/workflows/browse"
 	"github.com/sangmin7648/tacit/core/workflows/configure"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
-
-	"github.com/sangmin7648/tacit/core/workflows/listen"
 )
 
 // frontend holds the built windows — onboarding, the notes browser and
@@ -79,7 +79,7 @@ func main() {
 	onboarding.tray, settings.tray = t, t
 
 	t.st.recent = recentEntries()
-	t.st.running, t.st.pid = listen.Status(listen.PIDPath())
+	t.st.running, t.st.pid = control.Status(control.PIDPath())
 	t.st.ownPID = adopt(t.st.running, t.st.pid)
 	t.st.updateFailed = lastUpdateFailed()
 	// Before Run there is no native tray yet: the tray records the label and
@@ -99,13 +99,13 @@ func main() {
 		go t.watchUpdates(ctx)
 		// Reopened by an update that stopped the daemon: listen again.
 		if slices.Contains(os.Args[1:], resumeFlag) && isConfigured() {
-			if running, _ := listen.Status(listen.PIDPath()); !running {
+			if running, _ := control.Status(control.PIDPath()); !running {
 				go t.start()
 			}
 		}
 		go func() {
-			err := listen.Follow(ctx, listen.EventLogPath(), pollInterval, func(e listen.Event) {
-				if e.Kind != listen.KindStored {
+			err := control.Follow(ctx, control.EventLogPath(), pollInterval, func(e control.Event) {
+				if e.Kind != control.KindStored {
 					t.update(func(s *state) { s.observe(e) })
 					return
 				}
@@ -142,7 +142,7 @@ func (t *trayApp) watchPID(ctx context.Context) {
 			return
 		case <-tick.C:
 		}
-		running, pid := listen.Status(listen.PIDPath())
+		running, pid := control.Status(control.PIDPath())
 		t.mu.Lock()
 		changed := running != t.st.running || pid != t.st.pid
 		if changed && t.st.running {
@@ -276,7 +276,7 @@ func (t *trayApp) reap(cmd *exec.Cmd) {
 }
 
 func (t *trayApp) stop() {
-	if err := listen.Stop(listen.PIDPath()); err != nil {
+	if err := control.Stop(control.PIDPath()); err != nil {
 		t.update(func(s *state) { s.lastErr = "Couldn't stop: " + err.Error() })
 	}
 }
@@ -289,7 +289,7 @@ func (t *trayApp) quit() {
 	pid := t.st.pid
 	t.mu.Unlock()
 	if own {
-		if err := listen.Stop(listen.PIDPath()); err != nil {
+		if err := control.Stop(control.PIDPath()); err != nil {
 			log.Printf("stopping daemon on quit: %v", err)
 		} else {
 			// The app exits before watchPID would see the daemon stop.
@@ -350,7 +350,7 @@ func (t *trayApp) upgrade() {
 		return
 	}
 	if own {
-		if err := listen.StopAndWait(context.Background(), listen.PIDPath(), restartTimeout); err != nil {
+		if err := control.StopAndWait(context.Background(), control.PIDPath(), restartTimeout); err != nil {
 			fail(fmt.Errorf("%w; start it from the menu once it has", err))
 			return
 		}

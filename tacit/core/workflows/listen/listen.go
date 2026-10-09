@@ -8,27 +8,21 @@ import (
 
 	micrecorder "github.com/sangmin7648/tacit/core/internal/components/mic-recorder"
 	settingmanager "github.com/sangmin7648/tacit/core/internal/components/setting-manager"
+	statusreporter "github.com/sangmin7648/tacit/core/internal/components/status-reporter"
 )
-
-// PIDPath is the file that records the running daemon's PID. Whoever started
-// the daemon, terminal or app, this file is how everyone else finds it.
-func PIDPath() string { return settingmanager.PIDPath() }
-
-// EventLogPath is the file the daemon reports its activity to.
-func EventLogPath() string { return settingmanager.EventLogPath() }
 
 // Run is the daemon: it listens to the microphone and turns what it hears
 // into notes until ctx is cancelled. It refuses to start while another daemon
 // holds the PID file.
 func Run(ctx context.Context, cfg *settingmanager.Config) error {
-	pidPath := PIDPath()
-	if err := CleanStalePID(pidPath); err != nil {
+	pidPath := settingmanager.PIDPath()
+	if err := statusreporter.CleanStalePID(pidPath); err != nil {
 		return err
 	}
-	if err := WritePID(pidPath); err != nil {
+	if err := statusreporter.WritePID(pidPath); err != nil {
 		return fmt.Errorf("writing PID file: %w", err)
 	}
-	defer RemovePID(pidPath)
+	defer statusreporter.RemovePID(pidPath)
 
 	p, err := New(cfg)
 	if err != nil {
@@ -58,7 +52,7 @@ func Run(ctx context.Context, cfg *settingmanager.Config) error {
 // display, and losing it must never cost the user a transcript. The returned
 // closer is nil when the log could not be opened.
 func openEventLog(p *Pipeline) func() {
-	w, err := NewWriter(EventLogPath(), 0)
+	w, err := statusreporter.NewWriter(settingmanager.EventLogPath(), 0)
 	if err != nil {
 		log.Printf("Warning: event log unavailable: %v", err)
 		return nil

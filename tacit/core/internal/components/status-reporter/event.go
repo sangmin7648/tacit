@@ -6,7 +6,7 @@
 // what was said, belong in the daemon log, which is the record a person reads
 // to diagnose a run.
 
-package listen
+package statusreporter
 
 import "time"
 

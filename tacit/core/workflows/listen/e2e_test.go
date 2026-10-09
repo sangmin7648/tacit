@@ -13,6 +13,7 @@ import (
 	micrecorder "github.com/sangmin7648/tacit/core/internal/components/mic-recorder"
 	notemanager "github.com/sangmin7648/tacit/core/internal/components/note-manager"
 	settingmanager "github.com/sangmin7648/tacit/core/internal/components/setting-manager"
+	statusreporter "github.com/sangmin7648/tacit/core/internal/components/status-reporter"
 )
 
 // TestE2E plays a recording through the same path a live microphone takes —
@@ -49,7 +50,7 @@ func TestE2E(t *testing.T) {
 		close(done)
 	}()
 
-	for rec.count(KindStored) == 0 {
+	for rec.count(statusreporter.KindStored) == 0 {
 		if ctx.Err() != nil {
 			t.Fatalf("no entry stored before timeout; events: %v", rec.kinds())
 		}

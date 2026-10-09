@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sangmin7648/tacit/core/workflows/configure"
+	"github.com/sangmin7648/tacit/core/workflows/control"
 
-	"github.com/sangmin7648/tacit/core/workflows/listen"
+	"github.com/sangmin7648/tacit/core/workflows/configure"
 )
 
 // cmdConfigSet sets one override: tacit config set <key> <value>.
@@ -52,8 +52,8 @@ func cmdConfigUnset() {
 // noteRestart tells the user a running daemon won't see the change: it reads
 // its config once, at startup.
 func noteRestart() {
-	pid, err := listen.ReadPID(listen.PIDPath())
-	if err == nil && listen.IsRunning(pid) {
+	pid, err := control.ReadPID(control.PIDPath())
+	if err == nil && control.IsRunning(pid) {
 		fmt.Printf("tacit is running (PID %d); restart it for the change to take effect: tacit stop && tacit listen\n", pid)
 	}
 }

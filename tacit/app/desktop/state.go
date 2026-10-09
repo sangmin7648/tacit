@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
-	"github.com/sangmin7648/tacit/core/workflows/browse"
+	"github.com/sangmin7648/tacit/core/workflows/control"
 
-	"github.com/sangmin7648/tacit/core/workflows/listen"
+	"github.com/sangmin7648/tacit/core/workflows/browse"
 )
 
 // recentLimit is how many stored entries the menu lists.
@@ -25,7 +25,7 @@ type state struct {
 	// it alone; the app's own stops when the app quits.
 	ownPID int
 	// activity is the latest event kind from the running daemon.
-	activity listen.Kind
+	activity control.Kind
 	// recent holds the newest stored entries, newest first.
 	recent []*browse.Note
 	// lastErr describes why a daemon this app started exited on its own.
@@ -40,15 +40,15 @@ type state struct {
 }
 
 // observe folds one event into the state.
-func (s *state) observe(e listen.Event) {
+func (s *state) observe(e control.Event) {
 	switch e.Kind {
-	case listen.KindListening, listen.KindSpeechStarted, listen.KindSpeechEnded,
-		listen.KindTranscribing, listen.KindClassifying:
+	case control.KindListening, control.KindSpeechStarted, control.KindSpeechEnded,
+		control.KindTranscribing, control.KindClassifying:
 		s.activity = e.Kind
-	case listen.KindTranscribed, listen.KindDiscarded, listen.KindSkipped, listen.KindStored:
+	case control.KindTranscribed, control.KindDiscarded, control.KindSkipped, control.KindStored:
 		// The segment is done with; classification may still follow, but a
 		// transcribed segment waits in a queue until then, so show idle.
-		s.activity = listen.KindListening
+		s.activity = control.KindListening
 	}
 }
 
@@ -58,9 +58,9 @@ func (s *state) label() string {
 		return "○"
 	}
 	switch s.activity {
-	case listen.KindSpeechStarted:
+	case control.KindSpeechStarted:
 		return "◉" // hearing speech
-	case listen.KindSpeechEnded, listen.KindTranscribing, listen.KindClassifying:
+	case control.KindSpeechEnded, control.KindTranscribing, control.KindClassifying:
 		return "◐" // working on what it heard
 	default:
 		return "●" // listening

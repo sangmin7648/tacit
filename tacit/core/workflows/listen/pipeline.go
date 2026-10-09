@@ -10,10 +10,12 @@ import (
 	"strings"
 
 	micrecorder "github.com/sangmin7648/tacit/core/internal/components/mic-recorder"
+	modeldownloader "github.com/sangmin7648/tacit/core/internal/components/model-downloader"
 	noteclassifier "github.com/sangmin7648/tacit/core/internal/components/note-classifier"
 	notemanager "github.com/sangmin7648/tacit/core/internal/components/note-manager"
 	settingmanager "github.com/sangmin7648/tacit/core/internal/components/setting-manager"
 	speechdetector "github.com/sangmin7648/tacit/core/internal/components/speech-detector"
+	statusreporter "github.com/sangmin7648/tacit/core/internal/components/status-reporter"
 	"github.com/sangmin7648/tacit/core/internal/components/transcriber"
 )
 
@@ -30,7 +32,7 @@ type Pipeline struct {
 	classifier noteclassifier.Classifier
 	deduper    *transcriber.TranscriptDeduper
 	baseDir    string
-	observer   Observer
+	observer   statusreporter.Observer
 }
 
 // New creates a new pipeline with the given configuration.
@@ -38,7 +40,7 @@ func New(cfg *settingmanager.Config) (*Pipeline, error) {
 	baseDir := settingmanager.BaseDir()
 
 	modelPath := settingmanager.ModelPath(cfg.WhisperModel)
-	if err := transcriber.EnsureModel(modelPath); err != nil {
+	if err := modeldownloader.EnsureModel(modelPath); err != nil {
 		return nil, fmt.Errorf("ensure whisper model: %w", err)
 	}
 
@@ -61,16 +63,16 @@ func New(cfg *settingmanager.Config) (*Pipeline, error) {
 		classifier: classifier,
 		deduper:    transcriber.NewTranscriptDeduper(cfg.DedupWindow, dedupKeepFirst),
 		baseDir:    baseDir,
-		observer:   Discard,
+		observer:   statusreporter.Discard,
 	}, nil
 }
 
 // SetObserver directs the pipeline's events at o, replacing any previous
 // observer. Passing nil restores the default of dropping them. It is not safe
 // to call once Run is in flight.
-func (p *Pipeline) SetObserver(o Observer) {
+func (p *Pipeline) SetObserver(o statusreporter.Observer) {
 	if o == nil {
-		o = Discard
+		o = statusreporter.Discard
 	}
 	p.observer = o
 }
@@ -78,7 +80,7 @@ func (p *Pipeline) SetObserver(o Observer) {
 // emit stamps an event with the current time and hands it to the observer.
 // Every call sits alongside a log line rather than replacing it: the log is
 // what a human reads when the daemon misbehaves.
-func (p *Pipeline) emit(e Event) {
+func (p *Pipeline) emit(e statusreporter.Event) {
 	if p.observer == nil {
 		return
 	}
@@ -233,7 +235,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 		sessionStart = time.Now()
 		if transcriber.IsFiller(text) {
 			log.Printf("[%s] transcript is filler only, discarding: %s", label, TruncateForLog(text))
-			p.emit(Event{Kind: KindDiscarded, Source: label})
+			p.emit(statusreporter.Event{Kind: statusreporter.KindDiscarded, Source: label})
 			return
 		}
 		log.Printf("[%s] flushing transcript for classification (%s)", label, reason)
@@ -249,7 +251,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 	}
 
 	log.Printf("[%s] listening (silence=%v, minSpeech=%v)", label, p.cfg.SilenceDuration, p.cfg.MinSpeechDur)
-	p.emit(Event{Kind: KindListening, Source: label})
+	p.emit(statusreporter.Event{Kind: statusreporter.KindListening, Source: label})
 
 	// Inactivity watchdog: a live capture stream delivers PCM
 	// chunks continuously, even during silence, so a prolonged absence of chunks
@@ -287,7 +289,7 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 					sessionStart = time.Now()
 				}
 				log.Printf("[%s] speech started", label)
-				p.emit(Event{Kind: KindSpeechStarted, Source: label})
+				p.emit(statusreporter.Event{Kind: statusreporter.KindSpeechStarted, Source: label})
 
 			case speechdetector.SegmentSplit:
 				log.Printf("[%s] segment capped at %.1fs, splitting", label, ev.Duration.Seconds())
@@ -298,10 +300,10 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 
 			case speechdetector.SpeechEnded:
 				log.Printf("[%s] speech ended (%.1fs)", label, ev.Duration.Seconds())
-				p.emit(Event{Kind: KindSpeechEnded, Source: label})
+				p.emit(statusreporter.Event{Kind: statusreporter.KindSpeechEnded, Source: label})
 				if ev.Segment == nil && len(textBuf) == 0 {
 					log.Printf("[%s] segment too short, discarding", label)
-					p.emit(Event{Kind: KindDiscarded, Source: label})
+					p.emit(statusreporter.Event{Kind: statusreporter.KindDiscarded, Source: label})
 				}
 				transcribe(ev.Segment)
 				flush("speech ended")
@@ -323,7 +325,7 @@ func (p *Pipeline) sttOptions() transcriber.Options {
 // transcribed text, or "" on error or empty result.
 func (p *Pipeline) transcribeSync(ctx context.Context, seg *speechdetector.AudioSegment, label string) string {
 	log.Printf("[%s] transcribing %.1fs of audio", label, seg.Duration.Seconds())
-	p.emit(Event{Kind: KindTranscribing, Source: label})
+	p.emit(statusreporter.Event{Kind: statusreporter.KindTranscribing, Source: label})
 
 	p.whisperMu.Lock()
 	text, err := p.whisper.Transcribe(ctx, seg.Samples, p.sttOptions())
@@ -338,7 +340,7 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *speechdetector.Audio
 		// (no_speech_prob above threshold together with a low average logprob),
 		// so an empty result is a decode-level rejection rather than a failure.
 		log.Printf("[%s] STT rejected %.1fs as non-speech, nothing transcribed", label, seg.Duration.Seconds())
-		p.emit(Event{Kind: KindDiscarded, Source: label})
+		p.emit(statusreporter.Event{Kind: statusreporter.KindDiscarded, Source: label})
 		return ""
 	}
 	log.Printf("[%s] STT: %s", label, text)
@@ -347,7 +349,7 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *speechdetector.Audio
 	switch {
 	case filtered == "":
 		log.Printf("[%s] transcript was entirely hallucinated boilerplate, discarding", label)
-		p.emit(Event{Kind: KindDiscarded, Source: label})
+		p.emit(statusreporter.Event{Kind: statusreporter.KindDiscarded, Source: label})
 		return ""
 	case filtered != text:
 		log.Printf("[%s] stripped hallucinated boilerplate, kept: %s", label, TruncateForLog(filtered))
@@ -358,10 +360,10 @@ func (p *Pipeline) transcribeSync(ctx context.Context, seg *speechdetector.Audio
 	if secs := seg.Duration.Seconds(); transcriber.TooSparse(filtered, secs, p.cfg.MinCharRate) {
 		log.Printf("[%s] transcript too sparse for %.1fs of audio (%d chars < %.2f/s), discarding likely hallucination: %s",
 			label, secs, transcriber.NormalizedRuneCount(filtered), p.cfg.MinCharRate, TruncateForLog(filtered))
-		p.emit(Event{Kind: KindDiscarded, Source: label})
+		p.emit(statusreporter.Event{Kind: statusreporter.KindDiscarded, Source: label})
 		return ""
 	}
-	p.emit(Event{Kind: KindTranscribed, Source: label})
+	p.emit(statusreporter.Event{Kind: statusreporter.KindTranscribed, Source: label})
 	return filtered
 }
 
@@ -398,7 +400,7 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 				if prior, repeat := p.deduper.Seen(b.text, b.timestamp); repeat {
 					log.Printf("Discarding stock repeat (same transcript already stored %d× in the last %s): %s",
 						prior, p.cfg.DedupWindow, TruncateForLog(b.text))
-					p.emit(Event{Kind: KindDiscarded, Source: b.source})
+					p.emit(statusreporter.Event{Kind: statusreporter.KindDiscarded, Source: b.source})
 					continue
 				}
 				kept = append(kept, b)
@@ -413,13 +415,13 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 
 		if len(batch) == 1 {
 			log.Printf("Classifying 1 segment...")
-			p.emit(Event{Kind: KindClassifying, Source: batch[0].source})
+			p.emit(statusreporter.Event{Kind: statusreporter.KindClassifying, Source: batch[0].source})
 			p.classifyAndStore(ctx, batch[0], existingCategories)
 			continue
 		}
 
 		log.Printf("Batch classifying %d segments in one CLI call...", len(batch))
-		p.emit(Event{Kind: KindClassifying})
+		p.emit(statusreporter.Event{Kind: statusreporter.KindClassifying})
 		texts := make([]string, len(batch))
 		for i, b := range batch {
 			texts[i] = b.text
@@ -470,7 +472,7 @@ func (p *Pipeline) dispatch(item classifyItem, classified *noteclassifier.Classi
 		// Log the text: a skip is the one path that intentionally throws speech
 		// away, and until now it left nothing behind to check that against.
 		log.Printf("Skipping segment the classifier called meaningless: %s", TruncateForLog(item.text))
-		p.emit(Event{Kind: KindSkipped, Source: item.source})
+		p.emit(statusreporter.Event{Kind: statusreporter.KindSkipped, Source: item.source})
 	case !classified.Usable():
 		log.Printf("Classifier returned no content fields; storing unclassified: %s", TruncateForLog(item.text))
 		p.storeEntry(noteclassifier.FallbackResult(item.text), item)
@@ -488,7 +490,7 @@ func (p *Pipeline) storeEntry(classified *noteclassifier.ClassifyResult, item cl
 		return
 	}
 	log.Printf("Knowledge entry saved: %s", filePath)
-	p.emit(Event{Kind: KindStored, Source: item.source})
+	p.emit(statusreporter.Event{Kind: statusreporter.KindStored, Source: item.source})
 }
 
 // newKnowledgeEntry builds the entry to write. It runs the classification

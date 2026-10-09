@@ -1,4 +1,4 @@
-package transcriber
+package modeldownloader
 
 import (
 	"bytes"

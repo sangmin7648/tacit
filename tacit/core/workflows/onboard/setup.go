@@ -14,10 +14,10 @@ import (
 	"slices"
 	"strings"
 
+	modeldownloader "github.com/sangmin7648/tacit/core/internal/components/model-downloader"
 	noteclassifier "github.com/sangmin7648/tacit/core/internal/components/note-classifier"
 	settingmanager "github.com/sangmin7648/tacit/core/internal/components/setting-manager"
 	skillinstaller "github.com/sangmin7648/tacit/core/internal/components/skill-installer"
-	"github.com/sangmin7648/tacit/core/internal/components/transcriber"
 )
 
 // The options a front end offers. The first entry of each is the one the
@@ -181,11 +181,11 @@ func Configured() bool {
 func ModelPath(cfg *settingmanager.Config) string { return settingmanager.ModelPath(cfg.WhisperModel) }
 
 // Progress reports a model download's progress.
-type Progress = transcriber.Progress
+type Progress = modeldownloader.Progress
 
 // PrintProgress is the terminal's Progress for downloading file: one line,
 // redrawn in place.
-func PrintProgress(file string) Progress { return transcriber.PrintProgress(file) }
+func PrintProgress(file string) Progress { return modeldownloader.PrintProgress(file) }
 
 // InstallSkills installs tacit's skills for agent and returns where they went.
 func InstallSkills(agent string) ([]string, error) { return skillinstaller.Install(agent) }
@@ -193,12 +193,12 @@ func InstallSkills(agent string) ([]string, error) { return skillinstaller.Insta
 // DownloadModel fetches the whisper model the saved settings name, unless it
 // is already there. Setup ends with it, in the terminal and in the app alike,
 // so the first listen does not stall on a download of a gigabyte or more.
-func DownloadModel(ctx context.Context, progress transcriber.Progress) error {
+func DownloadModel(ctx context.Context, progress modeldownloader.Progress) error {
 	cfg, err := settingmanager.LoadWithOverride(settingmanager.ConfigPath(), settingmanager.OverridePath())
 	if err != nil {
 		return err
 	}
-	return transcriber.Download(ctx, settingmanager.ModelPath(cfg.WhisperModel), progress)
+	return modeldownloader.Download(ctx, settingmanager.ModelPath(cfg.WhisperModel), progress)
 }
 
 // backupLegacyReference copies config.yaml aside when it looks hand-edited and
