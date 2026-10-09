@@ -1,6 +1,6 @@
 ---
 source: [tacit/cmd/tacit-app]
-verified: 9825e8e
+verified: f0db000
 ---
 
 # cmd/tacit-app: the Mac app
@@ -8,7 +8,7 @@ verified: 9825e8e
 Menu-bar app with a web-technology front end for its windows. Backend responsibilities:
 
 - **Daemon control:** start, stop, restart, adopt. See [daemon-and-app](../concepts/daemon-and-app.md).
-- **State:** the menu is a pure function of the PID file and the event log.
+- **State:** the menu is a pure function of the PID file, the event log, and the newest notes in the knowledge base.
 - **Windows:** onboarding, settings, knowledge browser. Each is a thin service over `pkg/` logic.
 - **Updates:** check for a release, hand off to a detached updater. See [distribution](../concepts/distribution.md).
 - **Permissions:** reads and requests the microphone permission without nagging.
