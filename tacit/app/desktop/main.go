@@ -33,6 +33,12 @@ import (
 //go:embed all:frontend/dist
 var frontend embed.FS
 
+// trayIcons holds the menu-bar images state.icon names. They are template
+// images: macOS tints them for light and dark menu bars.
+//
+//go:embed icons/*.png
+var trayIcons embed.FS
+
 // version is set at build time by the Makefile (-X main.version).
 var version = "dev"
 
@@ -82,7 +88,7 @@ func main() {
 	t.st.running, t.st.pid = control.Status(control.PIDPath())
 	t.st.ownPID = adopt(t.st.running, t.st.pid)
 	t.st.updateFailed = lastUpdateFailed()
-	// Before Run there is no native tray yet: the tray records the label and
+	// Before Run there is no native tray yet: the tray records the icon and
 	// menu and applies them at startup, and there is no main thread loop to
 	// dispatch to, so draw directly rather than through render.
 	t.draw()
@@ -236,7 +242,12 @@ func (t *trayApp) draw() {
 	}
 	menu.Add(quit).OnClick(func(*application.Context) { t.quit() })
 
-	t.tray.SetLabel(s.label())
+	icon, err := trayIcons.ReadFile("icons/" + s.icon() + ".png")
+	if err != nil {
+		log.Printf("tray icon: %v", err)
+	} else {
+		t.tray.SetTemplateIcon(icon)
+	}
 	t.tray.SetMenu(menu)
 }
 

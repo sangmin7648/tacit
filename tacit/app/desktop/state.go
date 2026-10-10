@@ -54,18 +54,23 @@ func (s *state) observe(e control.Event) {
 	}
 }
 
-// label is the menu-bar text: one glyph for what the daemon is doing.
-func (s *state) label() string {
-	if !s.running {
-		return "○"
+// icon names the menu-bar image (icons/<name>.png), one per thing the user
+// needs to tell apart. The shapes differ, not only the colour: a template
+// image has no colour, and the states must read for everyone.
+func (s *state) icon() string {
+	switch {
+	case s.lastErr != "":
+		return "error"
+	case !s.running:
+		return "off"
 	}
 	switch s.activity {
 	case control.KindSpeechStarted:
-		return "◉" // hearing speech
+		return "hearing"
 	case control.KindSpeechEnded, control.KindTranscribing, control.KindClassifying:
-		return "◐" // working on what it heard
+		return "working"
 	default:
-		return "●" // listening
+		return "listening"
 	}
 }
 

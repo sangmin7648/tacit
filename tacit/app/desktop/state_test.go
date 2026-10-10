@@ -13,32 +13,57 @@ import (
 	"github.com/sangmin7648/tacit/core/workflows/browse"
 )
 
-func TestLabel_FollowsActivity(t *testing.T) {
+func TestIcon_FollowsActivity(t *testing.T) {
 	s := &state{}
-	if got := s.label(); got != "○" {
-		t.Errorf("stopped label = %q", got)
+	if got := s.icon(); got != "off" {
+		t.Errorf("stopped icon = %q", got)
 	}
 	s.running = true
 	steps := []struct {
 		kind control.Kind
 		want string
 	}{
-		{control.KindListening, "●"},
-		{control.KindSpeechStarted, "◉"},
-		{control.KindSpeechEnded, "◐"},
-		{control.KindTranscribing, "◐"},
-		{control.KindTranscribed, "●"},
-		{control.KindClassifying, "◐"},
-		{control.KindStored, "●"},
-		{control.KindSpeechStarted, "◉"},
-		{control.KindDiscarded, "●"},
-		{control.KindClassifying, "◐"},
-		{control.KindSkipped, "●"},
+		{control.KindListening, "listening"},
+		{control.KindSpeechStarted, "hearing"},
+		{control.KindSpeechEnded, "working"},
+		{control.KindTranscribing, "working"},
+		{control.KindTranscribed, "listening"},
+		{control.KindClassifying, "working"},
+		{control.KindStored, "listening"},
+		{control.KindSpeechStarted, "hearing"},
+		{control.KindDiscarded, "listening"},
+		{control.KindClassifying, "working"},
+		{control.KindSkipped, "listening"},
 	}
 	for i, st := range steps {
 		s.observe(control.Event{Kind: st.kind})
-		if got := s.label(); got != st.want {
-			t.Errorf("step %d (%s): label = %q, want %q", i, st.kind, got, st.want)
+		if got := s.icon(); got != st.want {
+			t.Errorf("step %d (%s): icon = %q, want %q", i, st.kind, got, st.want)
+		}
+	}
+}
+
+// An error outranks activity, running or not: it is the one state the user has
+// to act on.
+func TestIcon_ErrorOutranksActivity(t *testing.T) {
+	for _, running := range []bool{false, true} {
+		s := &state{running: running, lastErr: "Couldn't start: boom", activity: control.KindSpeechStarted}
+		if got := s.icon(); got != "error" {
+			t.Errorf("running=%v: icon = %q, want error", running, got)
+		}
+	}
+}
+
+// Every icon a state can name must ship, as a PNG the tray can load.
+func TestTrayIcons_AllShip(t *testing.T) {
+	for _, name := range []string{"off", "listening", "hearing", "working", "error"} {
+		data, err := trayIcons.ReadFile("icons/" + name + ".png")
+		if err != nil {
+			t.Errorf("icon %q: %v", name, err)
+			continue
+		}
+		if !strings.HasPrefix(string(data), "\x89PNG") {
+			t.Errorf("icon %q is not a PNG", name)
 		}
 	}
 }
