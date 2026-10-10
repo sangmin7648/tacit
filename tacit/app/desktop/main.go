@@ -204,7 +204,7 @@ func (t *trayApp) draw() {
 		menu.Add("Recent").SetEnabled(false)
 		for _, e := range s.recent {
 			path := e.FilePath
-			menu.Add(entryLabel(e)).OnClick(func(*application.Context) { openPath(path) })
+			menu.Add(entryLabel(e)).OnClick(func(*application.Context) { go t.knowledge.showNote(path) })
 		}
 	}
 
@@ -314,24 +314,46 @@ func (t *trayApp) watchUpdates(ctx context.Context) {
 	}
 }
 
-// checkForUpdate looks for a release newer than this build. A failed check
-// is shown only when the user asked for it.
+// checkForUpdate looks for a release newer than this build. The result is
+// shown in a dialog only when the user asked: a menu click closes the menu,
+// so the menu alone would answer nothing until it was opened again.
 func (t *trayApp) checkForUpdate(ctx context.Context, asked bool) {
-	tag, err := latestRelease(ctx)
-	if err != nil {
-		log.Printf("checking for updates: %v", err)
-		if asked {
-			t.update(func(s *state) { s.lastErr = "Couldn't check for updates: " + err.Error() })
-		}
-		return
+	if asked {
+		t.update(func(s *state) { s.checking = true })
 	}
+	tag, err := latestRelease(ctx)
 	t.update(func(s *state) {
+		s.checking = false
+		if err != nil {
+			return
+		}
 		if newer(tag, version) {
 			s.latest, s.upToDate = tag, false
 		} else {
 			s.latest, s.upToDate = "", true
 		}
 	})
+	if err != nil {
+		log.Printf("checking for updates: %v", err)
+	}
+	if !asked {
+		return
+	}
+	switch {
+	case err != nil:
+		t.app.Dialog.Error().SetTitle("Check for Updates").
+			SetMessage("Couldn't check for updates: " + err.Error()).Show()
+	case newer(tag, version):
+		d := t.app.Dialog.Question().SetTitle("Update Available").
+			SetMessage(fmt.Sprintf("Tacit %s is available (you have %s). Update now? Tacit will restart.", tag, version))
+		update := d.AddButton("Update")
+		update.OnClick(func() { go t.upgrade() })
+		later := d.AddButton("Later")
+		d.SetDefaultButton(update).SetCancelButton(later).Show()
+	default:
+		t.app.Dialog.Info().SetTitle("Check for Updates").
+			SetMessage("Tacit " + version + " is the latest version.").Show()
+	}
 }
 
 // upgrade installs the newest release. install.sh refuses to replace a

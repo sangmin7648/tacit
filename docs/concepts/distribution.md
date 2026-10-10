@@ -1,6 +1,6 @@
 ---
 source: [install.sh, tacit/Makefile, .github/workflows, tacit/app/desktop/upgrade.go]
-verified: a6db5d7
+verified: 5396114
 ---
 
 # Distribution, install and update
@@ -15,7 +15,7 @@ Builds are Apple Silicon only, ad-hoc signed and not notarized. The installer fe
 
 `tacit update` and the app's own "Update" menu item both rerun `install.sh`. The latest version is read from the GitHub `releases/latest` redirect rather than the REST API, which is rate-limited and breaks behind shared IPs.
 
-The installer refuses to run while the app or a daemon is running, because replacing a running daemon's binary loses its macOS permissions. For the app, a detached helper waits for the app to quit, downloads and runs the installer (a failed download is a failure, never an empty script that "succeeds"), records the result, and reopens the app, which resumes listening if it was listening.
+The installer refuses to run while the app or a daemon is running, because replacing a running daemon's binary loses its macOS permissions. For the app, a detached helper waits for the app to quit, downloads and runs the installer (a failed download is a failure, never an empty script that "succeeds"), records the result, and reopens the app, which resumes listening if it was listening. Reopening is verified and retried: right after the old process exits, `open` can report success without starting anything, and an update that leaves no app running looks like a crash.
 
 Development builds (anything not a clean release tag) never offer updates.
 

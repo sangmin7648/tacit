@@ -57,6 +57,9 @@ func TestKnowledgeJS_MatchesService(t *testing.T) {
 	if !strings.Contains(js, `STORED = '`+storedEvent+`'`) {
 		t.Errorf("knowledge.js does not subscribe to %q", storedEvent)
 	}
+	if !strings.Contains(js, `SELECT = '`+selectEvent+`'`) {
+		t.Errorf("knowledge.js does not subscribe to %q", selectEvent)
+	}
 }
 
 // Before setup has run the form starts from the defaults; after, from what the

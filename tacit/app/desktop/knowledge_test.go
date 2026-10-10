@@ -156,3 +156,22 @@ func writeNote(t *testing.T, n *browse.Note) string {
 	}
 	return path
 }
+
+func TestShowNote_RefusesPathsOutsideTheKnowledgeBase(t *testing.T) {
+	seedNotes(t)
+	k := &KnowledgeService{}
+	k.showNote("/etc/hosts")
+	if p := k.TakePending(); p != "" {
+		t.Errorf("a path outside the knowledge base became pending: %q", p)
+	}
+}
+
+func TestTakePending_ReturnsOnce(t *testing.T) {
+	k := &KnowledgeService{pending: "/a.md"}
+	if p := k.TakePending(); p != "/a.md" {
+		t.Errorf("first TakePending = %q", p)
+	}
+	if p := k.TakePending(); p != "" {
+		t.Errorf("second TakePending = %q, want empty", p)
+	}
+}

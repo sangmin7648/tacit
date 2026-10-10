@@ -66,9 +66,15 @@
   }
 
   onMount(() => {
-    load()
+    // Opened from the menu's Recent list: show that note, not the newest.
+    knowledge.takePending().then((path) => path && select(path)).finally(load)
     // A note stored while the window is open shows up without a refresh.
-    return knowledge.onStored(() => load())
+    const offStored = knowledge.onStored(() => load())
+    const offSelect = knowledge.onSelect((path) => select(path))
+    return () => {
+      offStored()
+      offSelect()
+    }
   })
 
   const fmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })

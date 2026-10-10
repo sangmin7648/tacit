@@ -9,14 +9,17 @@ import { Call, Events } from '@wailsio/runtime'
 
 const svc = 'main.KnowledgeService.'
 export const STORED = 'knowledge:stored'
+export const SELECT = 'knowledge:select'
 
 const real = {
   list: (days) => Call.ByName(svc + 'List', days),
   search: (pattern, days) => Call.ByName(svc + 'Search', pattern, days),
   get: (path) => Call.ByName(svc + 'Get', path),
+  takePending: () => Call.ByName(svc + 'TakePending'),
   open: (path) => Call.ByName(svc + 'Open', path),
   reveal: (path) => Call.ByName(svc + 'Reveal', path),
   onStored: (fn) => Events.On(STORED, (e) => fn(e.data)),
+  onSelect: (fn) => Events.On(SELECT, (e) => fn(e.data)),
 }
 
 function makeFake() {
@@ -53,6 +56,8 @@ function makeFake() {
       const e = entries.find((x) => x.path === path)
       return { ...e, content: `${e.summary}\n\n(원문 전사 내용이 여기에 표시됩니다.)`, path }
     },
+    async takePending() { return '' },
+    onSelect() { return () => {} },
     async open(path) { console.log('open', path) },
     async reveal(path) { console.log('reveal', path) },
     onStored(fn) {

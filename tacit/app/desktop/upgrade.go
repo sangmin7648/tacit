@@ -92,6 +92,10 @@ func updateStatusPath() string { return filepath.Join(configure.Dir(), "update-s
 // (may be empty). It downloads install.sh before running it, so a failed
 // download is a failure rather than an empty script that "succeeds", and
 // records install.sh's exit status for the reopened app to report.
+//
+// Reopening checks that the app is running afterwards and tries again: right
+// after the old process exits, LaunchServices can still count it as running,
+// and then `open` returns success without starting anything.
 const updaterScript = `
 while kill -0 "$1" 2>/dev/null; do sleep 0.2; done
 script=$(mktemp)
@@ -105,7 +109,15 @@ rm -f "$script"
 echo "$status" > "$TACIT_UPDATE_STATUS"
 app="$2"
 [ -d "$app" ] || app="$3"
-if [ -n "$4" ]; then open "$app" --args "$4"; else open "$app"; fi
+for attempt in 1 2 3 4 5 6; do
+  if [ -n "$4" ]; then open "$app" --args "$4"; else open "$app"; fi
+  for wait in 1 2 3 4 5 6 7 8 9 10; do
+    pgrep -xq Tacit && exit 0
+    sleep "${TACIT_OPEN_POLL:-0.5}"
+  done
+  echo "Tacit did not start (attempt $attempt)"
+done
+exit 1
 `
 
 // spawnUpdater starts the detached updater for the app with PID appPID,

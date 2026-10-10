@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -20,12 +21,19 @@ import (
 // refresh. frontend/src/knowledge.js subscribes to it by this exact name.
 const storedEvent = "knowledge:stored"
 
+// selectEvent tells an open browser window to show one entry. The name is
+// matched in frontend/src/knowledge.js.
+const selectEvent = "knowledge:select"
+
 // KnowledgeService is what the knowledge browser window calls. Listing and
 // search are the browse workflow's — the same code behind `tacit list` and
 // `tacit search` — so the window and the CLI find the same notes.
 type KnowledgeService struct {
 	mu     sync.Mutex
 	window *application.WebviewWindow
+	// pending is the entry a window being created should show: the event
+	// would be sent before its page has loaded and lost.
+	pending string
 }
 
 // EntrySummary is an entry as the list shows it: everything but the
@@ -115,6 +123,15 @@ func (k *KnowledgeService) Open(path string) error {
 	return exec.Command("open", p).Start()
 }
 
+// TakePending returns, once, the entry the window was opened for ("" if none).
+func (k *KnowledgeService) TakePending() string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	p := k.pending
+	k.pending = ""
+	return p
+}
+
 // Reveal shows an entry in Finder.
 func (k *KnowledgeService) Reveal(path string) error {
 	p, err := inKnowledgeBase(path)
@@ -153,6 +170,26 @@ func (k *KnowledgeService) notifyStored() {
 	k.mu.Unlock()
 	if open {
 		application.Get().Event.Emit(storedEvent)
+	}
+}
+
+// showNote opens the browser window on one entry, so the menu never hands
+// notes to whatever app macOS has for Markdown.
+func (k *KnowledgeService) showNote(path string) {
+	p, err := inKnowledgeBase(path)
+	if err != nil {
+		log.Printf("showing note: %v", err)
+		return
+	}
+	k.mu.Lock()
+	loaded := k.window != nil
+	if !loaded {
+		k.pending = p
+	}
+	k.mu.Unlock()
+	k.show()
+	if loaded {
+		application.Get().Event.Emit(selectEvent, p)
 	}
 }
 

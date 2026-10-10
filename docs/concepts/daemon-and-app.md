@@ -1,6 +1,6 @@
 ---
 source: [tacit/app/cli, tacit/app/desktop, tacit/core/internal/components/status-reporter, tacit/core/workflows/control]
-verified: a6db5d7
+verified: 5396114
 ---
 
 # Daemon and the Mac app
