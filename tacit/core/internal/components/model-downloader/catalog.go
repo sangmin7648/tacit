@@ -10,14 +10,14 @@ type WhisperModel struct {
 	RAMMB      int    `json:"ram_mb"`
 }
 
-// WhisperModels lists the models offered, smallest first.
+// WhisperModels lists the models offered, smallest first. tiny transcribes too
+// poorly to be worth recommending to anyone, medium costs what large-v3-turbo
+// does for a worse result, and large-v3 is slower than turbo for little gain in
+// live speech. A model set by hand in the settings file still works.
 var WhisperModels = []WhisperModel{
-	{Name: "tiny", DownloadMB: 75, RAMMB: 273},
 	{Name: "base", DownloadMB: 142, RAMMB: 388},
 	{Name: "small", DownloadMB: 466, RAMMB: 852},
-	{Name: "medium", DownloadMB: 1500, RAMMB: 2100},
 	{Name: "large-v3-turbo", DownloadMB: 1600, RAMMB: 2100},
-	{Name: "large-v3", DownloadMB: 2900, RAMMB: 3900},
 }
 
 const gib = 1 << 30
