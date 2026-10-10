@@ -289,7 +289,15 @@ func (t *trayApp) animate(ctx context.Context) {
 }
 
 // start starts the daemon. A failure is shown in the menu and returned.
+//
+// The daemon loads its speech model, about ten seconds, before it first opens
+// the microphone, and macOS asks for permission only at that moment. So when
+// the answer is still open, ask first: the prompt appears at once and the
+// model loads while the user answers.
 func (t *trayApp) start() error {
+	if microphoneStatus() == permUndetermined {
+		requestMicrophone()
+	}
 	cli, err := cliPath()
 	if err == nil {
 		var cmd *exec.Cmd
