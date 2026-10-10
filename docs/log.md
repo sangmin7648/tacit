@@ -9,3 +9,4 @@ Append-only. One line per change: date, what, why.
 - 2026-10-10: Speech that continues the previous note is appended to it instead of starting a new one (decision 0012). Updated classification, knowledge-entry, segmentation, listen and note-classifier pages; checked against 4b3ae33.
 - 2026-10-10: Menu-bar usability: Check for Updates answers in a dialog, Recent opens the notes window, the updater verifies and retries reopening the app. Updated desktop, distribution and daemon-and-app; checked against 5396114.
 - 2026-10-10: Starting to listen requests the microphone first when the answer is open, so the prompt no longer waits for the model to load. Updated desktop and daemon-and-app; checked against 56b7886.
+- 2026-10-10: Menu-bar glyphs replaced by template icons (not listening, listening, hearing, working, error), the waveform and spinner animated. Updated desktop and daemon-and-app; checked against 56b7886.

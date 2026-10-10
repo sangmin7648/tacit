@@ -54,19 +54,37 @@ func (s *state) observe(e control.Event) {
 	}
 }
 
-// label is the menu-bar text: one glyph for what the daemon is doing.
-func (s *state) label() string {
-	if !s.running {
-		return "○"
+// icon names the menu-bar image (icons/<name>.png), one per thing the user
+// needs to tell apart. The shapes differ, not only the colour: a template
+// image has no colour, and the states must read for everyone.
+func (s *state) icon() string {
+	switch {
+	case s.lastErr != "":
+		return "error"
+	case !s.running:
+		return "off"
 	}
 	switch s.activity {
 	case control.KindSpeechStarted:
-		return "◉" // hearing speech
+		return "hearing"
 	case control.KindSpeechEnded, control.KindTranscribing, control.KindClassifying:
-		return "◐" // working on what it heard
+		return "working"
 	default:
-		return "●" // listening
+		return "listening"
 	}
+}
+
+// iconFrames counts the images of an animated icon (icons/<name>-<n>.png).
+// Two move: the waveform says the app hears you, as a recorder's does, and
+// the spinner says it is working on what it heard.
+var iconFrames = map[string]int{"hearing": 6, "working": 8}
+
+// iconFile is the image for icon name at animation step tick.
+func iconFile(name string, tick int) string {
+	if n := iconFrames[name]; n > 0 {
+		return fmt.Sprintf("icons/%s-%d.png", name, tick%n)
+	}
+	return "icons/" + name + ".png"
 }
 
 // statusLine is the menu's first, disabled item.
