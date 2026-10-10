@@ -16,7 +16,7 @@ Start with [overview](overview.md); look words up in the [glossary](glossary.md)
 | [search](concepts/search.md) | List, search, get; why lexical | a6db5d7 |
 | [events](concepts/events.md) | Pipeline events as data, transport, rules | a6db5d7 |
 | [configuration](concepts/configuration.md) | Reference/override layering, shared setup | a6db5d7 |
-| [daemon-and-app](concepts/daemon-and-app.md) | One daemon, terminal and app front ends, ownership | 5396114 |
+| [daemon-and-app](concepts/daemon-and-app.md) | One daemon, terminal and app front ends, ownership | 56b7886 |
 | [distribution](concepts/distribution.md) | Install, update, release | 5396114 |
 | [skills](concepts/skills.md) | Agent skills and why they are not a server | a6db5d7 |
 
