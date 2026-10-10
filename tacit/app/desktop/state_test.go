@@ -211,3 +211,76 @@ func TestAdopt(t *testing.T) {
 		t.Errorf("an unreadable record adopted PID %d", got)
 	}
 }
+
+func TestExplainExit_NamesTheCauseAndTheFix(t *testing.T) {
+	for _, c := range []struct {
+		failure  string
+		contains string
+		fix      fix
+	}{
+		{"2026/10/10 tacit listen: initializing pipeline: ensure whisper model: no such file", "Speech model", fixNone},
+		{"2026/10/10 tacit listen: init whisper: failed to load whisper model from /x", "Speech model", fixNone},
+		{"2026/10/10 tacit listen: initializing microphone: init audio context: boom", "microphone", fixMicrophone},
+		{"2026/10/10 tacit listen: start stream: start capture: denied", "microphone", fixMicrophone},
+		{"2026/10/10 tacit listen: init speech detector: x", "stopped", fixNone},
+		{"", "stopped", fixNone},
+	} {
+		msg, f := explainExit(c.failure)
+		if !strings.Contains(msg, c.contains) || f != c.fix {
+			t.Errorf("explainExit(%q) = %q, %v; want %q, %v", c.failure, msg, f, c.contains, c.fix)
+		}
+	}
+}
+
+func TestLastFailure_FindsTheExitReason(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "daemon.log")
+	os.WriteFile(path, []byte("whisper_model_load: type = 5\n2026/10/10 19:08:39 tacit listen: init whisper: failed\n"), 0o644)
+	if got := lastFailure(path); !strings.Contains(got, "init whisper: failed") {
+		t.Errorf("lastFailure = %q", got)
+	}
+	os.WriteFile(path, []byte("tacit daemon started\n"), 0o644)
+	if got := lastFailure(path); got != "" {
+		t.Errorf("a log with no failure gave %q", got)
+	}
+	if got := lastFailure(filepath.Join(t.TempDir(), "missing.log")); got != "" {
+		t.Errorf("a missing log gave %q", got)
+	}
+}
+
+func TestFail_ClearsOnSuccess(t *testing.T) {
+	s := &state{}
+	s.fail("x", fixMicrophone)
+	if s.icon() != "error" {
+		t.Error("a failure did not show the error icon")
+	}
+	s.clearFailure()
+	if s.lastErr != "" || s.lastFix != fixNone || s.icon() == "error" {
+		t.Errorf("failure not cleared: %+v", s)
+	}
+}
+
+func TestMustStopForMicrophone(t *testing.T) {
+	status := func(v string) func() string { return func() string { return v } }
+	own := &state{running: true, pid: 7, ownPID: 7}
+	if !mustStopForMicrophone(own, status(permDenied)) {
+		t.Error("an own daemon running with the microphone denied was not stopped")
+	}
+	if mustStopForMicrophone(own, status(permGranted)) || mustStopForMicrophone(own, status(permUndetermined)) {
+		t.Error("stopped although the microphone is not denied")
+	}
+	if mustStopForMicrophone(&state{running: true, pid: 7}, status(permDenied)) {
+		t.Error("stopped a terminal's daemon over the app's permission")
+	}
+	if mustStopForMicrophone(&state{ownPID: 7, pid: 7}, status(permDenied)) {
+		t.Error("acted with no daemon running")
+	}
+	shown := &state{running: true, pid: 7, ownPID: 7, lastFix: fixMicrophone}
+	if mustStopForMicrophone(shown, status(permDenied)) {
+		t.Error("repeated an error already shown")
+	}
+	asked := false
+	mustStopForMicrophone(&state{}, func() string { asked = true; return permGranted })
+	if asked {
+		t.Error("asked the system for the permission with no daemon of the app's running")
+	}
+}

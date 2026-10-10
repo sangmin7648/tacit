@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -161,10 +162,24 @@ func (t *trayApp) watchPID(ctx context.Context) {
 				t.st.activity = ""
 			}
 		}
+		stop := mustStopForMicrophone(&t.st, microphoneStatus)
 		t.mu.Unlock()
 		if changed {
 			t.render()
 		}
+		if stop {
+			t.refuseDeniedMicrophone()
+		}
+	}
+}
+
+// refuseDeniedMicrophone stops the daemon this app started and says why. The
+// answer to the first prompt arrives after the daemon is already running, so
+// the check before starting cannot catch a "Don't Allow".
+func (t *trayApp) refuseDeniedMicrophone() {
+	t.update(func(s *state) { s.fail("Microphone access is off", fixMicrophone) })
+	if err := control.Stop(control.PIDPath()); err != nil {
+		log.Printf("stopping daemon without microphone access: %v", err)
 	}
 }
 
@@ -197,6 +212,9 @@ func (t *trayApp) draw() {
 	menu.Add(s.statusLine()).SetEnabled(false)
 	if s.lastErr != "" {
 		menu.Add(s.lastErr).SetEnabled(false)
+		if s.lastFix == fixMicrophone {
+			menu.Add("Open Microphone Settings…").OnClick(func(*application.Context) { t.onboarding.OpenPrivacySettings("Microphone") })
+		}
 	}
 	if s.running {
 		menu.Add("Stop Listening").OnClick(func(*application.Context) { t.stop() })
@@ -223,13 +241,13 @@ func (t *trayApp) draw() {
 	menu.Add("Open Daemon Log").OnClick(func(*application.Context) { openPath(daemonLogPath()) })
 	menu.AddSeparator()
 	if s.upToDate {
-		menu.Add("Tacit " + version + " — up to date").SetEnabled(false)
+		menu.Add("Tacit " + version + " (up to date)").SetEnabled(false)
 	} else {
 		menu.Add("Tacit " + version).SetEnabled(false)
 	}
 	if isRelease(version) { // development builds don't update
 		if s.updateFailed {
-			menu.Add("Update failed — Open Update Log").OnClick(func(*application.Context) { openPath(updateLogPath()) })
+			menu.Add("Update failed (open log)").OnClick(func(*application.Context) { openPath(updateLogPath()) })
 		}
 		if s.latest != "" {
 			menu.Add("Update to " + s.latest + "…").OnClick(func(*application.Context) { go t.upgrade() })
@@ -295,8 +313,17 @@ func (t *trayApp) animate(ctx context.Context) {
 // the answer is still open, ask first: the prompt appears at once and the
 // model loads while the user answers.
 func (t *trayApp) start() error {
-	if microphoneStatus() == permUndetermined {
+	switch microphoneStatus() {
+	case permUndetermined:
 		requestMicrophone()
+	case permDenied:
+		// macOS delivers silence rather than an error, so the daemon would
+		// start, load its model, and hear nothing.
+		t.update(func(s *state) { s.fail("Microphone access is off", fixMicrophone) })
+		return errors.New("microphone access denied")
+	case permRestricted:
+		t.update(func(s *state) { s.fail("Microphone is restricted on this Mac", fixNone) })
+		return errors.New("microphone access restricted")
 	}
 	cli, err := cliPath()
 	if err == nil {
@@ -305,12 +332,12 @@ func (t *trayApp) start() error {
 			if err := recordOwned(cmd.Process.Pid); err != nil {
 				log.Printf("recording the daemon as the app's: %v", err)
 			}
-			t.update(func(s *state) { s.ownPID, s.lastErr = cmd.Process.Pid, "" })
+			t.update(func(s *state) { s.ownPID = cmd.Process.Pid; s.clearFailure() })
 			go t.reap(cmd)
 			return nil
 		}
 	}
-	t.update(func(s *state) { s.lastErr = "Couldn't start: " + err.Error() })
+	t.update(func(s *state) { s.fail("Couldn't start: "+err.Error(), fixNone) })
 	return err
 }
 
@@ -326,14 +353,14 @@ func (t *trayApp) reap(cmd *exec.Cmd) {
 		}
 		s.ownPID = 0
 		if err != nil {
-			s.lastErr = fmt.Sprintf("Stopped unexpectedly (%v) — see the daemon log", err)
+			s.fail(explainExit(lastFailure(daemonLogPath())))
 		}
 	})
 }
 
 func (t *trayApp) stop() {
 	if err := control.Stop(control.PIDPath()); err != nil {
-		t.update(func(s *state) { s.lastErr = "Couldn't stop: " + err.Error() })
+		t.update(func(s *state) { s.fail("Couldn't stop: "+err.Error(), fixNone) })
 	}
 }
 
@@ -421,7 +448,7 @@ func (t *trayApp) upgrade() {
 	running, pid := t.st.running, t.st.pid
 	own := running && t.st.ownPID != 0 && t.st.ownPID == pid
 	t.mu.Unlock()
-	fail := func(err error) { t.update(func(s *state) { s.lastErr = "Couldn't update: " + err.Error() }) }
+	fail := func(err error) { t.update(func(s *state) { s.fail("Couldn't update: "+err.Error(), fixNone) }) }
 
 	if running && !own {
 		fail(errTerminalDaemon)
