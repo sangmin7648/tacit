@@ -33,11 +33,12 @@ func TestDefaults_AreValid(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	cases := map[string]func(*Choices){
-		"unknown provider": func(c *Choices) { c.LLMProvider = "openai" },
-		"empty model":      func(c *Choices) { c.LLMModel = "  " },
-		"bad claude model": func(c *Choices) { c.LLMProvider, c.LLMModel = "claude", "qwen3.5" },
-		"unknown agent":    func(c *Choices) { c.SkillAgent = "cursor" },
-		"empty language":   func(c *Choices) { c.Language = "" },
+		"unknown provider":   func(c *Choices) { c.LLMProvider = "openai" },
+		"empty model":        func(c *Choices) { c.LLMModel = "  " },
+		"bad claude model":   func(c *Choices) { c.LLMProvider, c.LLMModel = "claude", "qwen3.5" },
+		"unknown agent":      func(c *Choices) { c.SkillAgent = "cursor" },
+		"empty language":     func(c *Choices) { c.Language = "" },
+		"empty speech model": func(c *Choices) { c.WhisperModel = "" },
 	}
 	for name, mutate := range cases {
 		c := Defaults()
@@ -71,7 +72,7 @@ func TestApply_WritesEverything(t *testing.T) {
 	home := isolate(t)
 	c := Choices{
 		LLMProvider: "claude", LLMModel: "sonnet", SkillAgent: "claude",
-		Language: "ko", Experimental: true,
+		Language: "ko", WhisperModel: "small", Experimental: true,
 	}
 
 	res, err := Apply(c)
@@ -84,7 +85,7 @@ func TestApply_WritesEverything(t *testing.T) {
 		t.Fatalf("loading what Apply wrote: %v", err)
 	}
 	if cfg.LLMProvider != "claude" || cfg.LLMModel != "sonnet" || cfg.Language != "ko" ||
-		!cfg.Experimental {
+		cfg.WhisperModel != "small" || !cfg.Experimental {
 		t.Errorf("loaded config does not reflect the choices: %+v", cfg)
 	}
 
@@ -107,6 +108,54 @@ func TestApply_WritesEverything(t *testing.T) {
 	}
 	if res.BackupPath != "" {
 		t.Errorf("BackupPath = %q on a fresh install", res.BackupPath)
+	}
+	if Needed() {
+		t.Error("onboarding still needed right after Apply")
+	}
+}
+
+func TestNeeded(t *testing.T) {
+	isolate(t)
+	if !Needed() {
+		t.Error("a first run does not need onboarding")
+	}
+
+	if _, err := Apply(Defaults()); err != nil {
+		t.Fatal(err)
+	}
+	if Needed() {
+		t.Error("needed right after setup")
+	}
+
+	// A user set up before revisions existed has settings but no marker.
+	if err := os.Remove(settingmanager.OnboardedPath()); err != nil {
+		t.Fatal(err)
+	}
+	if !Needed() {
+		t.Error("a user from before revisions is not asked once")
+	}
+	if err := MarkSeen(); err != nil {
+		t.Fatal(err)
+	}
+	if Needed() {
+		t.Error("still needed after the window was shown")
+	}
+
+	if err := settingmanager.MarkOnboarded(CurrentRevision - 1); err != nil {
+		t.Fatal(err)
+	}
+	if !Needed() {
+		t.Error("an older revision is not asked again")
+	}
+}
+
+func TestMarkSeen_DoesNotMakeAFirstRunConfigured(t *testing.T) {
+	isolate(t)
+	if err := MarkSeen(); err != nil {
+		t.Fatal(err)
+	}
+	if !Needed() {
+		t.Error("a user who never finished setup must be asked until they do")
 	}
 }
 
@@ -196,7 +245,7 @@ func TestFromConfig_RoundTrips(t *testing.T) {
 	isolate(t)
 	want := Choices{
 		LLMProvider: "claude", LLMModel: "opus", SkillAgent: "claude",
-		Language: "ko", Experimental: true,
+		Language: "ko", WhisperModel: "small", Experimental: true,
 	}
 	res, err := Apply(want)
 	if err != nil {

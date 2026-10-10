@@ -22,6 +22,7 @@ import (
 
 	"github.com/sangmin7648/tacit/core/workflows/browse"
 	"github.com/sangmin7648/tacit/core/workflows/configure"
+	"github.com/sangmin7648/tacit/core/workflows/onboard"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsevents "github.com/wailsapp/wails/v3/pkg/events"
@@ -98,8 +99,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	app.Event.OnApplicationEvent(wailsevents.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-		// Open onboarding on a first run: nothing is set up, so Start would fail.
-		if !isConfigured() {
+		// Open onboarding on a first run (nothing is set up, so Start would
+		// fail) and once per revision for users already set up. Those are marked
+		// at once: closing the window must not bring it back at every launch.
+		if onboard.Needed() {
+			if isConfigured() {
+				onboard.MarkSeen()
+			}
 			go onboarding.show()
 		}
 		go t.watchPID(ctx)

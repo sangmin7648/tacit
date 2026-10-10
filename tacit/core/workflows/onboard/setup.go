@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -25,7 +24,7 @@ import (
 var (
 	Providers    = []string{"ollama", "claude"}
 	ClaudeModels = []string{"haiku", "sonnet", "opus"}
-	Agents       = []string{"claude"}
+	Agents       = skillinstaller.AgentNames()
 	Languages    = []Language{
 		{Code: "auto", Label: "auto (detect)"},
 		{Code: "en", Label: "english"},
@@ -33,9 +32,30 @@ var (
 	}
 )
 
-// DefaultOllamaModel is pre-filled when the provider is ollama. The model is
-// free text there, since any locally pulled model works.
+// DefaultOllamaModel is the model recommended when the provider is ollama,
+// chosen by trying several against real transcripts. Any locally pulled model
+// works, so the window offers the ones installed beside it.
 var DefaultOllamaModel = settingmanager.DefaultConfig().LLMModel
+
+// CurrentRevision numbers the onboarding a user has to go through. Bump it
+// when a change leaves existing users better off re-choosing — new options,
+// new recommendations, a changed default — and they are shown the window once
+// more. Leave it alone for everything else: it is not the app's version, and a
+// window on every update would be noise.
+const CurrentRevision = 1
+
+// Needed reports whether the user should be shown onboarding: setup has never
+// run, or it ran before the current revision.
+func Needed() bool {
+	return !Configured() || settingmanager.OnboardedRevision() < CurrentRevision
+}
+
+// MarkSeen records the current revision as shown, without a setup having run.
+// The app calls it when it opens the window for a user who is already set up,
+// so closing the window instead of finishing it does not bring it back at every
+// launch. A user who has never been set up is not marked: they are asked until
+// they finish.
+func MarkSeen() error { return settingmanager.MarkOnboarded(CurrentRevision) }
 
 // Language is a transcription language a front end offers.
 type Language struct {
@@ -49,6 +69,7 @@ type Choices struct {
 	LLMModel     string `json:"llm_model"`
 	SkillAgent   string `json:"skill_agent"`
 	Language     string `json:"language"`
+	WhisperModel string `json:"whisper_model"`
 	Experimental bool   `json:"experimental"`
 }
 
@@ -60,6 +81,7 @@ func Defaults() Choices {
 		LLMModel:     d.LLMModel,
 		SkillAgent:   d.SkillAgent,
 		Language:     d.Language,
+		WhisperModel: d.WhisperModel,
 		Experimental: d.Experimental,
 	}
 }
@@ -73,6 +95,7 @@ func FromConfig(cfg *settingmanager.Config) Choices {
 		LLMModel:     cfg.LLMModel,
 		SkillAgent:   cfg.SkillAgent,
 		Language:     cfg.Language,
+		WhisperModel: cfg.WhisperModel,
 		Experimental: cfg.Experimental,
 	}
 }
@@ -86,7 +109,7 @@ func CheckProvider(ctx context.Context, c Choices) error {
 		return err
 	}
 	if c.LLMProvider == "claude" {
-		if _, err := exec.LookPath("claude"); err != nil {
+		if !noteclassifier.ClaudeAvailable() {
 			return errors.New("Claude Code CLI not found on PATH\n  → Install it: https://docs.anthropic.com/en/docs/claude-code")
 		}
 		return nil
@@ -112,6 +135,8 @@ func (c Choices) Validate() error {
 		return fmt.Errorf("unknown skill agent %q (want one of %s)", c.SkillAgent, strings.Join(Agents, ", "))
 	case strings.TrimSpace(c.Language) == "":
 		return errors.New("a transcription language is required")
+	case strings.TrimSpace(c.WhisperModel) == "":
+		return errors.New("a speech model is required")
 	}
 	return nil
 }
@@ -127,7 +152,8 @@ type Result struct {
 }
 
 // Apply records c: it writes the override file, installs the skills for the
-// chosen agent, and regenerates the reference config.yaml. It stops at the
+// chosen agent, regenerates the reference config.yaml and marks the current
+// onboarding revision done. It stops at the
 // first failure; the returned Result lists what was written up to that point.
 func Apply(c Choices) (*Result, error) {
 	if err := c.Validate(); err != nil {
@@ -154,7 +180,7 @@ func Apply(c Choices) (*Result, error) {
 	res.BackupPath = backup
 
 	if err := settingmanager.WriteSetupOverride(res.OverridePath, c.LLMProvider, c.LLMModel, c.SkillAgent,
-		c.Language, c.Experimental); err != nil {
+		c.Language, c.WhisperModel, c.Experimental); err != nil {
 		return res, fmt.Errorf("writing config override: %w", err)
 	}
 
@@ -166,6 +192,9 @@ func Apply(c Choices) (*Result, error) {
 
 	if err := settingmanager.WriteDefault(res.ReferencePath); err != nil {
 		return res, fmt.Errorf("writing reference config: %w", err)
+	}
+	if err := MarkSeen(); err != nil {
+		return res, fmt.Errorf("recording onboarding: %w", err)
 	}
 	return res, nil
 }

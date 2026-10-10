@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/internal/components/setting-manager, tacit/core/workflows/onboard, tacit/app/cli]
-verified: a6db5d7
+verified: f938cbf
 ---
 
 # Configuration
@@ -22,7 +22,7 @@ Setting or clearing a field edits the override file in place, keeping comments a
 
 ## Setup shares one code path
 
-`tacit setup` (terminal) and the app's onboarding window both go through the same setup logic: validate choices, check the classifier is reachable, write the files. The window and the wizard cannot drift apart. The app's settings window uses the same field editing as `tacit config set`.
+`tacit setup` (terminal) and the app's onboarding window both go through the same setup logic: validate choices, check the classifier is reachable, write the files. The window and the wizard cannot drift apart, and both start from the same recommendations for this Mac ([0013](../decisions/0013-onboarding-recommends-from-the-environment.md)). The app's settings window uses the same field editing as `tacit config set`.
 
 ## Groups
 

@@ -50,6 +50,9 @@ func TestBackendJS_MatchesService(t *testing.T) {
 	if !strings.Contains(js, `MODEL_PROGRESS = '`+modelProgressEvent+`'`) {
 		t.Errorf("backend.js does not subscribe to %q", modelProgressEvent)
 	}
+	if !strings.Contains(js, `PULL_PROGRESS = '`+pullProgressEvent+`'`) {
+		t.Errorf("backend.js does not subscribe to %q", pullProgressEvent)
+	}
 }
 
 func TestKnowledgeJS_MatchesService(t *testing.T) {
