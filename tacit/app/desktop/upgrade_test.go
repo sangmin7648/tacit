@@ -70,7 +70,10 @@ func runUpdater(t *testing.T, install string, installedExists bool) (status, ope
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
 	os.MkdirAll(bin, 0o755)
-	os.WriteFile(filepath.Join(bin, "open"), []byte("#!/bin/sh\necho \"$@\" > \""+dir+"/opened\"\n"), 0o755)
+	// The app "starts" on the second open, as when LaunchServices ignores the first.
+	os.WriteFile(filepath.Join(bin, "open"), []byte("#!/bin/sh\necho \"$@\" > \""+dir+"/opened\"\n"+
+		"[ -e \""+dir+"/tried\" ] && touch \""+dir+"/running\"\ntouch \""+dir+"/tried\"\n"), 0o755)
+	os.WriteFile(filepath.Join(bin, "pgrep"), []byte("#!/bin/sh\n[ -e \""+dir+"/running\" ]\n"), 0o755)
 
 	url := "file://" + filepath.Join(dir, "missing.sh")
 	if install != "" {
@@ -90,7 +93,7 @@ func runUpdater(t *testing.T, install string, installedExists bool) (status, ope
 	cmd := exec.Command("/bin/sh", "-c", updaterScript, "tacit-updater",
 		strconv.Itoa(exited.Process.Pid), installed, "/build/Tacit.app", resumeFlag)
 	cmd.Env = append(os.Environ(), "PATH="+bin+":/usr/bin:/bin",
-		"TACIT_INSTALL_URL="+url, "TACIT_UPDATE_STATUS="+statusPath)
+		"TACIT_INSTALL_URL="+url, "TACIT_OPEN_POLL=0.01", "TACIT_UPDATE_STATUS="+statusPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("updater: %v\n%s", err, out)
 	}

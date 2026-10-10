@@ -35,6 +35,8 @@ type state struct {
 	// upToDate says the last check found none.
 	latest   string
 	upToDate bool
+	// checking says a check the user asked for is in flight.
+	checking bool
 	// updateFailed says the update that reopened the app failed.
 	updateFailed bool
 }
