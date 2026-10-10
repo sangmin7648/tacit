@@ -162,10 +162,24 @@ func (t *trayApp) watchPID(ctx context.Context) {
 				t.st.activity = ""
 			}
 		}
+		stop := mustStopForMicrophone(&t.st, microphoneStatus)
 		t.mu.Unlock()
 		if changed {
 			t.render()
 		}
+		if stop {
+			t.refuseDeniedMicrophone()
+		}
+	}
+}
+
+// refuseDeniedMicrophone stops the daemon this app started and says why. The
+// answer to the first prompt arrives after the daemon is already running, so
+// the check before starting cannot catch a "Don't Allow".
+func (t *trayApp) refuseDeniedMicrophone() {
+	t.update(func(s *state) { s.fail("Microphone access is off", fixMicrophone) })
+	if err := control.Stop(control.PIDPath()); err != nil {
+		log.Printf("stopping daemon without microphone access: %v", err)
 	}
 }
 

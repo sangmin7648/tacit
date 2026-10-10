@@ -1,6 +1,6 @@
 ---
 source: [tacit/app/desktop]
-verified: 46bea8a
+verified: dee8583
 ---
 
 # app/desktop: the menu-bar app
@@ -9,7 +9,7 @@ Menu-bar app with a web-technology front end for its windows. Backend responsibi
 
 - **Daemon control:** start (by launching the bundled CLI's `listen`), stop, restart, adopt. See [daemon-and-app](../concepts/daemon-and-app.md).
 - **Icon:** one image per state the user must tell apart: not listening (dimmed), listening, hearing speech (animated waveform), working on a note (spinner) and error. The shapes differ, not just the tint, because a menu-bar template image has no colour; an error outranks every other state.
-- **Errors:** shown at the top of the menu in words the user can act on, with the error icon. A daemon that exits on its own is explained from the reason it logged (microphone, speech model, or unknown), and a microphone problem offers a button to the right Settings pane. Listening is refused up front when the microphone is denied: macOS then delivers silence rather than an error, so the daemon would run and hear nothing. An error clears when listening starts again.
+- **Errors:** shown at the top of the menu in words the user can act on, with the error icon. A daemon that exits on its own is explained from the reason it logged (microphone, speech model, or unknown), and a microphone problem offers a button to the right Settings pane. Listening is refused up front when the microphone is denied: macOS then delivers silence rather than an error, so the daemon would run and hear nothing. The same check runs while listening, because the answer to the first prompt arrives after the daemon is already up: a "Don't Allow" then stops the daemon and shows the error. An error clears when listening starts again.
 - **State:** the menu is a pure function of the PID file and the event log ([control](../workflows/control.md)) and the newest notes ([browse](../workflows/browse.md)).
 - **Windows:** onboarding, settings, knowledge browser (also where a Recent item opens, instead of the system Markdown app), over [onboard](../workflows/onboard.md), [configure](../workflows/configure.md) and [browse](../workflows/browse.md).
 - **Updates:** check for a release and, when the user asks, answer in a dialog (a menu click closes the menu, so a menu-only answer is invisible); hand off to a detached updater. See [distribution](../concepts/distribution.md).

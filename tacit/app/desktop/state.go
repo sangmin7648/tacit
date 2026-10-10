@@ -57,6 +57,16 @@ const (
 func (s *state) fail(msg string, f fix) { s.lastErr, s.lastFix = msg, f }
 func (s *state) clearFailure()          { s.lastErr, s.lastFix = "", fixNone }
 
+// mustStopForMicrophone reports whether the daemon this app started is running
+// with the microphone denied. It hears only silence then, and nothing else
+// would say so. A terminal's daemon has the terminal's permission, not the
+// app's, and an error already shown is not shown twice. The status is asked
+// for only when it matters.
+func mustStopForMicrophone(s *state, status func() string) bool {
+	own := s.running && s.ownPID != 0 && s.ownPID == s.pid
+	return own && s.lastFix != fixMicrophone && status() == permDenied
+}
+
 // explainExit turns a daemon that exited on its own into an error the user can
 // act on. failure is the daemon's last "tacit listen: ..." log line: the one
 // that says why.

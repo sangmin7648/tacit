@@ -258,3 +258,29 @@ func TestFail_ClearsOnSuccess(t *testing.T) {
 		t.Errorf("failure not cleared: %+v", s)
 	}
 }
+
+func TestMustStopForMicrophone(t *testing.T) {
+	status := func(v string) func() string { return func() string { return v } }
+	own := &state{running: true, pid: 7, ownPID: 7}
+	if !mustStopForMicrophone(own, status(permDenied)) {
+		t.Error("an own daemon running with the microphone denied was not stopped")
+	}
+	if mustStopForMicrophone(own, status(permGranted)) || mustStopForMicrophone(own, status(permUndetermined)) {
+		t.Error("stopped although the microphone is not denied")
+	}
+	if mustStopForMicrophone(&state{running: true, pid: 7}, status(permDenied)) {
+		t.Error("stopped a terminal's daemon over the app's permission")
+	}
+	if mustStopForMicrophone(&state{ownPID: 7, pid: 7}, status(permDenied)) {
+		t.Error("acted with no daemon running")
+	}
+	shown := &state{running: true, pid: 7, ownPID: 7, lastFix: fixMicrophone}
+	if mustStopForMicrophone(shown, status(permDenied)) {
+		t.Error("repeated an error already shown")
+	}
+	asked := false
+	mustStopForMicrophone(&state{}, func() string { asked = true; return permGranted })
+	if asked {
+		t.Error("asked the system for the permission with no daemon of the app's running")
+	}
+}
