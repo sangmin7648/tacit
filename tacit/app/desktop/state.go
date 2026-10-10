@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/sangmin7648/tacit/core/workflows/control"
@@ -28,8 +30,10 @@ type state struct {
 	activity control.Kind
 	// recent holds the newest stored entries, newest first.
 	recent []*browse.Note
-	// lastErr describes why a daemon this app started exited on its own.
+	// lastErr describes what went wrong, in words the user can act on; lastFix
+	// is the action the menu offers beside it.
 	lastErr string
+	lastFix fix
 
 	// latest is a release newer than this build, once a check has found one;
 	// upToDate says the last check found none.
@@ -39,6 +43,49 @@ type state struct {
 	checking bool
 	// updateFailed says the update that reopened the app failed.
 	updateFailed bool
+}
+
+// fix is an action the menu offers beside an error. Errors whose answer is a
+// menu item that is always there (Set Up Tacit…, Open Daemon Log) just name it.
+type fix int
+
+const (
+	fixNone fix = iota
+	fixMicrophone
+)
+
+func (s *state) fail(msg string, f fix) { s.lastErr, s.lastFix = msg, f }
+func (s *state) clearFailure()          { s.lastErr, s.lastFix = "", fixNone }
+
+// explainExit turns a daemon that exited on its own into an error the user can
+// act on. failure is the daemon's last "tacit listen: ..." log line: the one
+// that says why.
+func explainExit(failure string) (string, fix) {
+	f := strings.ToLower(failure)
+	switch {
+	case strings.Contains(f, "microphone") || strings.Contains(f, "capture") || strings.Contains(f, "start stream"):
+		return "Couldn't use the microphone — allow Tacit in Settings", fixMicrophone
+	case strings.Contains(f, "whisper") || strings.Contains(f, "model"):
+		return "Speech model missing or unreadable — choose Set Up Tacit…", fixNone
+	default:
+		return "Stopped unexpectedly — see Open Daemon Log", fixNone
+	}
+}
+
+// lastFailure returns the last line of the daemon log that reports why it
+// exited, or "".
+func lastFailure(logPath string) string {
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(data), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "tacit listen: ") {
+			return lines[i]
+		}
+	}
+	return ""
 }
 
 // observe folds one event into the state.
