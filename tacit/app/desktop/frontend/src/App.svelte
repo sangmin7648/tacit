@@ -242,7 +242,7 @@
         <div class="perm">
           <span><strong>Microphone</strong></span>
           {#if perms.microphone === 'granted'}
-            <span class="ok">✓ Allowed</span>
+            <span class="pill ok">✓ Allowed</span>
           {:else if perms.microphone === 'undetermined'}
             <button onclick={() => backend.requestMicrophone()}>Allow…</button>
           {:else}
@@ -256,12 +256,14 @@
       </footer>
     </section>
   {:else}
-    <section>
+    <section class="done">
+      <div class="badge" aria-hidden="true">✓</div>
       <h2>You're set up</h2>
-      <p>
-        Tacit lives in the menu bar. Notes land in <code>~/.tacit</code>, and <code>/tacit.knowledge</code> finds them from
-        inside Claude.
-      </p>
+      <ul class="tips">
+        <li><strong>Menu bar</strong><small>Tacit lives there. The icon shows when it is listening, hearing you, or working.</small></li>
+        <li><strong>Notes</strong><small>Everything you say lands in <code>~/.tacit</code> as Markdown. Open Notes from the menu to search it.</small></li>
+        <li><strong>In Claude</strong><small><code>/tacit.knowledge</code> finds your notes from inside Claude.</small></li>
+      </ul>
       {#if !opts.model.present}
         <p class="muted">The speech model isn't downloaded yet; Tacit will fetch it the first time it starts listening.</p>
       {/if}
@@ -272,3 +274,22 @@
     </section>
   {/if}
 </main>
+
+<style>
+  .done { align-items: flex-start; }
+  .badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    font-weight: 700;
+    background: var(--ok);
+    color: var(--panel);
+    margin-bottom: 12px;
+  }
+  .tips { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 14px; }
+  .tips li { display: grid; gap: 1px; }
+  .pill { padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); font-size: 12px; }
+</style>

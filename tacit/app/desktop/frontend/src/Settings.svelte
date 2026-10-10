@@ -13,9 +13,10 @@
       setUp: true,
       help: 'Changed in Set Up Tacit, which checks the new classifier can be reached before saving it.',
     },
-    { title: 'Filtering', keys: ['transcript_denylist', 'dedup_window', 'min_char_rate'] },
+    { title: 'Filtering', advanced: true, keys: ['transcript_denylist', 'dedup_window', 'min_char_rate'] },
     {
       title: 'Speech detection',
+      advanced: true,
       keys: ['speech_threshold', 'energy_threshold', 'min_speech_duration', 'silence_duration', 'max_segment_duration', 'max_session_duration'],
     },
   ]
@@ -150,9 +151,8 @@
   <header class="top">
     <div>
       <h1>Settings</h1>
-      {#if data}<p class="muted path">Saved to <code>{data.path}</code></p>{/if}
+      <p class="muted lede">Changes save as you make them.</p>
     </div>
-    <button onclick={() => settings.editFile()}>Edit File…</button>
   </header>
 
   {#if stale}
@@ -173,7 +173,7 @@
     </section>
   {/if}
 
-  {#each groups as g (g.title)}
+  {#each groups.filter((g) => !g.advanced) as g (g.title)}
     <section>
       <div class="group-head">
         <h2>{g.title}</h2>
@@ -231,10 +231,79 @@
       {/each}
     </section>
   {/each}
+
+  <details class="advanced">
+    <summary>Advanced</summary>
+    <p class="muted help">Tuning for filtering and speech detection. The defaults suit most voices and rooms.</p>
+    {#each groups.filter((g) => g.advanced) as g (g.title)}
+      <section>
+        <div class="group-head">
+          <h2>{g.title}</h2>
+          {#if g.setUp}<button onclick={() => settings.setUp()}>Change…</button>{/if}
+        </div>
+        {#if g.help}<p class="muted help">{g.help}</p>{/if}
+        {#each g.fields as f (f.key)}
+          {@const [label, help] = LABELS[f.key] ?? [f.key, '']}
+          <div class="row" class:overridden={f.overridden}>
+            <div class="label">
+              <label for={f.key}>{label}</label>
+              {#if help}<small>{help}</small>{/if}
+              {#if f.overridden}
+                <small>
+                  Default: {shown(f.default, f.kind)} ·
+                  <button class="link" onclick={() => reset(f)} disabled={saving[f.key]}>Reset</button>
+                </small>
+              {/if}
+            </div>
+            <div class="control">
+              {#if g.setUp}
+                <span id={f.key} class="readonly">{shown(f.value, f.kind)}</span>
+              {:else if f.kind === 'bool'}
+                <input
+                  id={f.key}
+                  type="checkbox"
+                  checked={f.value}
+                  disabled={saving[f.key]}
+                  onchange={(e) => commit(f, e.currentTarget)}
+                />
+              {:else if f.kind === 'list'}
+                <textarea
+                  id={f.key}
+                  rows="3"
+                  spellcheck="false"
+                  value={f.value.join('\n')}
+                  disabled={saving[f.key]}
+                  onchange={(e) => commit(f, e.currentTarget)}
+                ></textarea>
+              {:else}
+                <input
+                  id={f.key}
+                  type={f.kind === 'number' ? 'number' : 'text'}
+                  step="any"
+                  spellcheck="false"
+                  value={f.value}
+                  placeholder={f.kind === 'duration' ? 'e.g. 30s, 5m' : ''}
+                  disabled={saving[f.key]}
+                  onchange={(e) => commit(f, e.currentTarget)}
+                />
+              {/if}
+            </div>
+            {#if errors[f.key]}<pre class="error field-error">{errors[f.key]}</pre>{/if}
+          </div>
+        {/each}
+      </section>
+    {/each}
+  </details>
+
+
+  <footer class="file">
+    {#if data}<span class="muted path">Saved to <code>{data.path}</code></span>{/if}
+    <button onclick={() => settings.editFile()}>Edit File…</button>
+  </footer>
 </div>
 
 <style>
-  .settings { padding: 20px 24px 28px; max-width: 680px; margin: 0 auto; display: grid; gap: 14px; }
+  .settings { padding: 24px 24px 28px; max-width: 680px; margin: 0 auto; display: grid; gap: 14px; }
   .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .path { margin: 0; font-size: 12px; -webkit-user-select: text; user-select: text; }
   .banner {
@@ -255,7 +324,7 @@
     display: grid;
     grid-template-columns: 1fr minmax(160px, 40%);
     gap: 4px 16px;
-    align-items: start;
+    align-items: center;
     padding: 10px 0;
     border-top: 1px solid var(--line);
   }
@@ -274,6 +343,42 @@
     color: var(--text);
   }
   textarea { resize: vertical; }
+  input[type='checkbox'] {
+    appearance: none;
+    width: 34px;
+    height: 20px;
+    margin: 0;
+    border-radius: 999px;
+    background: var(--sunken);
+    border: 1px solid var(--line);
+    position: relative;
+    transition: background 0.15s;
+  }
+  input[type='checkbox']::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s;
+  }
+  input[type='checkbox']:checked { background: var(--accent); border-color: var(--accent); }
+  input[type='checkbox']:checked::after { transform: translateX(14px); }
+  .advanced { display: grid; gap: 14px; }
+  .advanced > summary {
+    cursor: default;
+    font-weight: 600;
+    padding: 4px 2px;
+    color: var(--muted);
+  }
+  .advanced[open] > summary { margin-bottom: 8px; }
+  .advanced section { margin-bottom: 14px; }
+  .file { justify-content: space-between; align-items: center; margin-top: 4px; }
+  .file .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .readonly { padding: 5px 0; -webkit-user-select: text; user-select: text; }
   .field-error { grid-column: 1 / -1; margin: 0; }
   button.link {
