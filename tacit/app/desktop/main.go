@@ -34,6 +34,12 @@ import (
 //go:embed all:frontend/dist
 var frontend embed.FS
 
+// trayIcons holds the menu-bar images state.icon names. They are template
+// images: macOS tints them for light and dark menu bars.
+//
+//go:embed icons/*.png
+var trayIcons embed.FS
+
 // version is set at build time by the Makefile (-X main.version).
 var version = "dev"
 
@@ -83,7 +89,7 @@ func main() {
 	t.st.running, t.st.pid = control.Status(control.PIDPath())
 	t.st.ownPID = adopt(t.st.running, t.st.pid)
 	t.st.updateFailed = lastUpdateFailed()
-	// Before Run there is no native tray yet: the tray records the label and
+	// Before Run there is no native tray yet: the tray records the icon and
 	// menu and applies them at startup, and there is no main thread loop to
 	// dispatch to, so draw directly rather than through render.
 	t.draw()
@@ -98,6 +104,7 @@ func main() {
 		}
 		go t.watchPID(ctx)
 		go t.watchUpdates(ctx)
+		go t.animate(ctx)
 		// Reopened by an update that stopped the daemon: listen again.
 		if slices.Contains(os.Args[1:], resumeFlag) && isConfigured() {
 			if running, _ := control.Status(control.PIDPath()); !running {
@@ -240,8 +247,49 @@ func (t *trayApp) draw() {
 	}
 	menu.Add(quit).OnClick(func(*application.Context) { t.quit() })
 
-	t.tray.SetLabel(s.label())
+	t.setIcon(iconFile(s.icon(), 0))
 	t.tray.SetMenu(menu)
+}
+
+func (t *trayApp) setIcon(file string) {
+	icon, err := trayIcons.ReadFile(file)
+	if err != nil {
+		log.Printf("tray icon: %v", err)
+		return
+	}
+	t.tray.SetTemplateIcon(icon)
+}
+
+// animationInterval is the time between frames of an animated icon.
+const animationInterval = 180 * time.Millisecond
+
+// animate steps the icon through its frames while the state has an animated
+// one. Only the image changes: redrawing the menu at this rate would be wasteful.
+func (t *trayApp) animate(ctx context.Context) {
+	tick := time.NewTicker(animationInterval)
+	defer tick.Stop()
+	for n := 1; ; n++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		t.mu.Lock()
+		name := t.st.icon()
+		t.mu.Unlock()
+		if iconFrames[name] == 0 {
+			continue
+		}
+		t.setIcon(iconFile(name, n))
+		// The state may have changed, and been drawn, while this frame was
+		// being set; draw again so a stale frame does not stay.
+		t.mu.Lock()
+		stale := t.st.icon() != name
+		t.mu.Unlock()
+		if stale {
+			t.render()
+		}
+	}
 }
 
 // start starts the daemon. A failure is shown in the menu and returned.
