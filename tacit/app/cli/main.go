@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -119,55 +120,118 @@ Usage:
 
 // cmdSetup runs the interactive setup wizard. It only asks and reports: the
 // decisions live in the onboard workflow, which the Mac app's onboarding calls too.
+// Every question shows what was recommended for this Mac and why, and starts on
+// the user's current answer once setup has run, otherwise on the recommendation.
 func cmdSetup() {
 	fmt.Println("=== tacit setup ===")
 	fmt.Println()
 
-	c := onboard.Defaults()
+	fmt.Println("Looking at this Mac...")
+	rec := onboard.Recommend(context.Background())
+	printFindings(rec)
+	fmt.Println()
+
+	c := rec.Choices
+	if onboard.Configured() {
+		c = onboard.FromConfig(loadConfig())
+	}
+	ask := func(step, title, reasonKey string, labels []string, recommended, current int) int {
+		fmt.Printf("%s: %s\n", step, title)
+		if reason := rec.Reasons[reasonKey]; reason != "" {
+			fmt.Printf("  Recommended: %s\n", reason)
+		}
+		withMark := slices.Clone(labels)
+		if recommended >= 0 {
+			withMark[recommended] += " (recommended)"
+		}
+		i := selectOption(withMark, max(current, 0))
+		fmt.Println()
+		return i
+	}
 
 	// Step 1: LLM provider
-	fmt.Println("Step 1/5: Select LLM provider for summarization")
-	c.LLMProvider = onboard.Providers[selectOption(onboard.Providers, 0)]
-	fmt.Println()
+	c.LLMProvider = onboard.Providers[ask("Step 1/6", "Select LLM provider for summarization", onboard.ReasonProvider,
+		[]string{"ollama - a local model; nothing leaves this Mac", "claude - transcript text is sent to Anthropic"},
+		slices.Index(onboard.Providers, rec.Choices.LLMProvider), slices.Index(onboard.Providers, c.LLMProvider))]
 
 	switch c.LLMProvider {
 	case "claude":
-		// Step 2: Claude model
-		fmt.Println("Step 2/5: Select Claude model")
-		c.LLMModel = onboard.ClaudeModels[selectOption(onboard.ClaudeModels, 0)]
+		fmt.Println("  Note: each transcript's text (never your audio) is sent to Anthropic to be titled and filed.")
+		fmt.Println("  Choose ollama to keep everything on this Mac.")
 		fmt.Println()
+		if !slices.Contains(onboard.ClaudeModels, c.LLMModel) {
+			c.LLMModel = onboard.ClaudeModels[0]
+		}
+		c.LLMModel = onboard.ClaudeModels[ask("Step 2/6", "Select Claude model", onboard.ReasonModel, onboard.ClaudeModels,
+			slices.Index(onboard.ClaudeModels, rec.Choices.LLMModel), slices.Index(onboard.ClaudeModels, c.LLMModel))]
 
 	default:
-		// Step 2: Ollama model (text input)
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Println("Step 2/5: Enter Ollama model name")
-		fmt.Printf("  Model name [%s]: ", onboard.DefaultOllamaModel)
-		input := strings.TrimSpace(readLine(reader))
-		fmt.Println()
-		c.LLMModel = onboard.DefaultOllamaModel
-		if input != "" {
-			c.LLMModel = input
+		if rec.MemoryWarning != "" {
+			fmt.Printf("  Note: %s\n\n", rec.MemoryWarning)
 		}
+		c.LLMModel = askOllamaModel(rec, c.LLMModel, ask)
 	}
 
-	// Step 3: AI agent for skill installation (only claude supported)
-	fmt.Println("Step 3/5: Select AI agent for skill installation")
-	c.SkillAgent = onboard.Agents[selectOption(onboard.Agents, 0)]
-	fmt.Println()
+	// Step 3: AI agent for skill installation
+	agents := make([]string, len(rec.Agents))
+	recAgent, curAgent := 0, 0
+	for i, a := range rec.Agents {
+		agents[i] = a.Label
+		if !a.Installed {
+			agents[i] += " (not found on this Mac)"
+		}
+		if a.Recommended {
+			recAgent = i
+		}
+		if a.Name == c.SkillAgent {
+			curAgent = i
+		}
+	}
+	c.SkillAgent = rec.Agents[ask("Step 3/6", "Select AI agent for skill installation", onboard.ReasonAgent, agents, recAgent, curAgent)].Name
 
 	// Step 4: transcription language. Fixing the language (instead of "auto")
 	// meaningfully reduces wrong-language / hallucinated transcriptions.
-	fmt.Println("Step 4/5: Select transcription language")
-	labels := make([]string, len(onboard.Languages))
+	langs := make([]string, len(onboard.Languages))
+	recLang, curLang := 0, 0
 	for i, l := range onboard.Languages {
-		labels[i] = l.Label
+		langs[i] = l.Label
+		if l.Code == rec.Choices.Language {
+			recLang = i
+		}
+		if l.Code == c.Language {
+			curLang = i
+		}
 	}
-	c.Language = onboard.Languages[selectOption(labels, 0)].Code
-	fmt.Println()
+	c.Language = onboard.Languages[ask("Step 4/6", "Select transcription language", onboard.ReasonLanguage, langs, recLang, curLang)].Code
 
-	// Step 5: experimental beta channel.
-	fmt.Println("Step 5/5: Enable experimental transcription? (non-speech token suppression + VAD pre-roll padding)")
-	c.Experimental = selectOption([]string{"no", "yes"}, 0) == 1
+	// Step 5: speech model
+	models := make([]string, len(rec.WhisperModels))
+	recModel, curModel := 0, -1
+	for i, m := range rec.WhisperModels {
+		models[i] = fmt.Sprintf("%s - about %s RAM, %s download", m.Name, mbText(m.RAMMB), mbText(m.DownloadMB))
+		if m.Installed {
+			models[i] += ", on this Mac"
+		}
+		if m.Recommended {
+			recModel = i
+		}
+		if m.Name == c.WhisperModel {
+			curModel = i
+		}
+	}
+	if curModel < 0 {
+		// Set by hand to something the list does not offer: keep it as the
+		// starting point rather than silently replacing it.
+		models = append(models, c.WhisperModel+" - set in your settings file")
+		curModel = len(models) - 1
+	}
+	if i := ask("Step 5/6", "Select speech model", onboard.ReasonWhisper, models, recModel, curModel); i < len(rec.WhisperModels) {
+		c.WhisperModel = rec.WhisperModels[i].Name
+	}
+
+	// Step 6: experimental beta channel.
+	fmt.Println("Step 6/6: Enable experimental transcription? (non-speech token suppression + VAD pre-roll padding)")
+	c.Experimental = selectOption([]string{"no", "yes"}, map[bool]int{false: 0, true: 1}[c.Experimental]) == 1
 	fmt.Println()
 
 	fmt.Println()
@@ -175,6 +239,7 @@ func cmdSetup() {
 	fmt.Printf("  LLM model      : %s\n", c.LLMModel)
 	fmt.Printf("  Skill agent    : %s\n", c.SkillAgent)
 	fmt.Printf("  Language       : %s\n", c.Language)
+	fmt.Printf("  Speech model   : %s\n", c.WhisperModel)
 	fmt.Printf("  Experimental   : %v\n", c.Experimental)
 	fmt.Println()
 
@@ -204,6 +269,73 @@ func cmdSetup() {
 	fmt.Println()
 
 	fmt.Println("Setup complete.")
+}
+
+// askOllamaModel asks which Ollama model to use: the ones installed beside the
+// recommended one, or any name typed in. A model that is not installed is
+// offered for download, since `tacit listen` refuses to start without it.
+func askOllamaModel(rec *onboard.Recommendation, current string, ask func(step, title, reasonKey string, labels []string, recommended, current int) int) string {
+	var names, labels []string
+	add := func(name, label string) {
+		if !slices.Contains(names, name) {
+			names, labels = append(names, name), append(labels, label)
+		}
+	}
+	add(onboard.DefaultOllamaModel, onboard.DefaultOllamaModel)
+	if !onboard.HasOllamaModel(rec.Ollama.Models, onboard.DefaultOllamaModel) {
+		labels[0] += " - not installed, can be downloaded now"
+	}
+	for _, m := range rec.Ollama.Models {
+		add(strings.TrimSuffix(m, ":latest"), m)
+	}
+	if current != "" && !slices.Contains(names, current) {
+		add(current, current+" - from your settings")
+	}
+	names, labels = append(names, ""), append(labels, "other (type a name)")
+
+	model := names[ask("Step 2/6", "Select Ollama model", onboard.ReasonModel, labels, 0, slices.Index(names, current))]
+	if model == "" {
+		fmt.Printf("  Model name [%s]: ", onboard.DefaultOllamaModel)
+		model = strings.TrimSpace(readLine(bufio.NewReader(os.Stdin)))
+		fmt.Println()
+		if model == "" {
+			model = onboard.DefaultOllamaModel
+		}
+	}
+
+	if rec.Ollama.Running && !onboard.HasOllamaModel(rec.Ollama.Models, model) {
+		fmt.Printf("%s is not installed in Ollama. Download it now?\n", model)
+		if selectOption([]string{"yes", "no"}, 0) == 0 {
+			if err := onboard.PullOllamaModel(context.Background(), model, onboard.PrintProgress(model)); err != nil {
+				fmt.Printf("\n  Download failed: %v\n  Pull it later with: ollama pull %s\n", err, model)
+			}
+			fmt.Println()
+		}
+	}
+	return model
+}
+
+// printFindings says what the recommendations were based on.
+func printFindings(rec *onboard.Recommendation) {
+	switch {
+	case rec.Ollama.Running:
+		fmt.Printf("  Ollama         : running, %d model(s)\n", len(rec.Ollama.Models))
+	case rec.Ollama.Installed:
+		fmt.Println("  Ollama         : installed, not running")
+	default:
+		fmt.Println("  Ollama         : not found")
+	}
+	fmt.Printf("  Claude Code    : %s\n", map[bool]string{true: "found", false: "not found"}[rec.ClaudeAvailable])
+	if rec.MemoryGB > 0 {
+		fmt.Printf("  Memory         : %d GB\n", rec.MemoryGB)
+	}
+}
+
+func mbText(mb int) string {
+	if mb >= 1000 {
+		return fmt.Sprintf("%.1f GB", float64(mb)/1000)
+	}
+	return fmt.Sprintf("%d MB", mb)
 }
 
 // readLine reads a single line from r, trimming the trailing newline.

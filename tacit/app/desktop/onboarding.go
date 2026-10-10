@@ -23,6 +23,10 @@ import (
 // window. frontend/src/backend.js subscribes to it by this exact name.
 const modelProgressEvent = "onboarding:model-progress"
 
+// pullProgressEvent carries an Ollama model pull's progress, as
+// modelProgressEvent does for the speech model.
+const pullProgressEvent = "onboarding:pull-progress"
+
 // OnboardingService is what the onboarding window calls. Every decision it
 // makes is the onboard workflow's — the same code `tacit setup` runs — so the window and
 // the terminal wizard cannot drift apart.
@@ -97,6 +101,39 @@ func (s *OnboardingService) Options() (OnboardingOptions, error) {
 	}, nil
 }
 
+// Recommend inspects this Mac and recommends an answer to each question. It
+// talks to Ollama, so the window asks for it separately from Options and shows
+// the form meanwhile; it is also what "check again" calls after the user
+// starts Ollama or installs the CLI.
+func (s *OnboardingService) Recommend(ctx context.Context) *onboard.Recommendation {
+	return onboard.Recommend(ctx)
+}
+
+// PullOllamaModel downloads an Ollama model, reporting progress through
+// pullProgressEvent. Cancelling the call cancels ctx and stops the pull.
+func (s *OnboardingService) PullOllamaModel(ctx context.Context, model string) error {
+	app := application.Get()
+	err := onboard.PullOllamaModel(ctx, model, throttled(func(done, total int64) {
+		app.Event.Emit(pullProgressEvent, ModelProgress{Done: done, Total: total})
+	}))
+	if errors.Is(err, context.Canceled) {
+		return errors.New("download cancelled")
+	}
+	return err
+}
+
+// throttled limits a progress callback to ten calls a second, always letting
+// the last one through. The callbacks fire per network read.
+func throttled(fn func(done, total int64)) func(done, total int64) {
+	var last time.Time
+	return func(done, total int64) {
+		if now := time.Now(); now.Sub(last) >= 100*time.Millisecond || done == total {
+			last = now
+			fn(done, total)
+		}
+	}
+}
+
 // CheckProvider checks the chosen classifier is reachable before saving.
 func (s *OnboardingService) CheckProvider(ctx context.Context, c onboard.Choices) error {
 	return onboard.CheckProvider(ctx, c)
@@ -112,14 +149,9 @@ func (s *OnboardingService) Apply(c onboard.Choices) (*onboard.Result, error) {
 // cancelling the call, which cancels ctx; the partial file is removed.
 func (s *OnboardingService) DownloadModel(ctx context.Context) error {
 	app := application.Get()
-	var last time.Time
-	progress := func(done, total int64) {
-		// The callback fires per network read; ten redraws a second is plenty.
-		if now := time.Now(); now.Sub(last) >= 100*time.Millisecond || done == total {
-			last = now
-			app.Event.Emit(modelProgressEvent, ModelProgress{Done: done, Total: total})
-		}
-	}
+	progress := throttled(func(done, total int64) {
+		app.Event.Emit(modelProgressEvent, ModelProgress{Done: done, Total: total})
+	})
 	if err := onboard.DownloadModel(ctx, progress); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return errors.New("download cancelled")

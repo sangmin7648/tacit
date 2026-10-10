@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/internal/components/note-manager, tacit/core/internal/components/setting-manager]
-verified: 4b3ae33
+verified: f938cbf
 ---
 
 # Knowledge entry and the knowledge base
@@ -23,7 +23,7 @@ These rules are why classification output passes one normalising step before it 
 
 ## What else lives beside the entries
 
-Under the same base: the settings files ([configuration](configuration.md)), downloaded Whisper models, the daemon's PID file and event log ([daemon-and-app](daemon-and-app.md), [events](events.md)).
+Under the same base: the settings files ([configuration](configuration.md)), downloaded Whisper models, the onboarding revision marker, the daemon's PID file and event log ([daemon-and-app](daemon-and-app.md), [events](events.md)).
 
 ## Why plain files
 

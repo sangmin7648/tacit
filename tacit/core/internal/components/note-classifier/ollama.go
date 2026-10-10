@@ -38,14 +38,25 @@ func NewOllamaClassifier(baseURL, model string) *OllamaClassifier {
 
 // Ping checks that the Ollama server is reachable and the configured model exists.
 func (o *OllamaClassifier) Ping(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, o.baseURL+"/api/tags", nil)
+	models, err := ollamaModels(ctx, o.client, o.baseURL)
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return err
 	}
+	if !HasOllamaModel(models, o.model) {
+		return fmt.Errorf("Ollama model %q not found\n  → Pull it with: ollama pull %s", o.model, o.model)
+	}
+	return nil
+}
 
-	resp, err := o.client.Do(req)
+// ollamaModels lists the models the server at baseURL has pulled.
+func ollamaModels(ctx context.Context, client *http.Client, baseURL string) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/tags", nil)
 	if err != nil {
-		return fmt.Errorf("Ollama server not reachable at %s\n  → Is Ollama running? Try: ollama serve", o.baseURL)
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Ollama server not reachable at %s\n  → Is Ollama running? Try: ollama serve", baseURL)
 	}
 	defer resp.Body.Close()
 
@@ -55,17 +66,24 @@ func (o *OllamaClassifier) Ping(ctx context.Context) error {
 		} `json:"models"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return fmt.Errorf("decode tags response: %w", err)
+		return nil, fmt.Errorf("decode tags response: %w", err)
 	}
+	names := make([]string, len(body.Models))
+	for i, m := range body.Models {
+		names[i] = m.Name
+	}
+	return names, nil
+}
 
-	for _, m := range body.Models {
-		// model names can be "llama3.2" or "llama3.2:latest"
-		name := strings.TrimSuffix(m.Name, ":latest")
-		if name == o.model || m.Name == o.model {
-			return nil
+// HasOllamaModel reports whether models, as Ollama lists them, includes model.
+// Ollama names a model "llama3.2" or "llama3.2:latest" interchangeably.
+func HasOllamaModel(models []string, model string) bool {
+	for _, m := range models {
+		if m == model || strings.TrimSuffix(m, ":latest") == model {
+			return true
 		}
 	}
-	return fmt.Errorf("Ollama model %q not found\n  → Pull it with: ollama pull %s", o.model, o.model)
+	return false
 }
 
 func (o *OllamaClassifier) Classify(ctx context.Context, sttText string, existingCategories []string, previous *PreviousNote) (*ClassifyResult, error) {

@@ -12,10 +12,10 @@ Start with [overview](overview.md); look words up in the [glossary](glossary.md)
 | [segmentation](concepts/segmentation.md) | Segments vs sessions, the two caps, pre-roll | 4b3ae33 |
 | [hallucination-filtering](concepts/hallucination-filtering.md) | The signals that remove Whisper's invented text | a6db5d7 |
 | [classification](concepts/classification.md) | LLM titling, skip, repair, batching | 4b3ae33 |
-| [knowledge-entry](concepts/knowledge-entry.md) | Entry format, storage rules, what lives in `~/.tacit/` | 4b3ae33 |
+| [knowledge-entry](concepts/knowledge-entry.md) | Entry format, storage rules, what lives in `~/.tacit/` | f938cbf |
 | [search](concepts/search.md) | List, search, get; why lexical | a6db5d7 |
 | [events](concepts/events.md) | Pipeline events as data, transport, rules | a6db5d7 |
-| [configuration](concepts/configuration.md) | Reference/override layering, shared setup | a6db5d7 |
+| [configuration](concepts/configuration.md) | Reference/override layering, shared setup | f938cbf |
 | [daemon-and-app](concepts/daemon-and-app.md) | One daemon, terminal and app front ends, ownership | 56b7886 |
 | [distribution](concepts/distribution.md) | Install, update, release | 5396114 |
 | [skills](concepts/skills.md) | Agent skills and why they are not a server | a6db5d7 |
@@ -44,3 +44,4 @@ The folders mirror `tacit/`. See [0011](decisions/0011-app-workflows-components.
 | [0010](decisions/0010-live-audio-only.md) | Process live audio only | accepted |
 | [0011](decisions/0011-app-workflows-components.md) | Arrange the code as apps, workflows and components | accepted |
 | [0012](decisions/0012-continuation-decided-by-the-classifier.md) | Continuation is decided by the classifier | accepted |
+| [0013](decisions/0013-onboarding-recommends-from-the-environment.md) | Onboarding recommends from the environment | accepted |

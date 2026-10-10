@@ -338,7 +338,7 @@ func EventLogPath() string {
 // Every other line — settings setup never asks about, and the user's own
 // comments — is left exactly as it was: the answers are applied one key at a
 // time through SetOverride and ClearOverride.
-func WriteSetupOverride(path string, provider, model, agent, language string, experimental bool) error {
+func WriteSetupOverride(path string, provider, model, agent, language, whisperModel string, experimental bool) error {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		if err := WriteOverrideTemplate(path, DefaultConfig()); err != nil {
 			return err
@@ -351,6 +351,7 @@ func WriteSetupOverride(path string, provider, model, agent, language string, ex
 		chosen, dflt any
 	}{
 		{"language", language, d.Language},
+		{"whisper_model", whisperModel, d.WhisperModel},
 		{"experimental", experimental, d.Experimental},
 		{"llm_provider", provider, d.LLMProvider},
 		{"llm_model", model, d.LLMModel},
