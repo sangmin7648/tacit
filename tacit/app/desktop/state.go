@@ -64,11 +64,11 @@ func explainExit(failure string) (string, fix) {
 	f := strings.ToLower(failure)
 	switch {
 	case strings.Contains(f, "microphone") || strings.Contains(f, "capture") || strings.Contains(f, "start stream"):
-		return "Couldn't use the microphone — allow Tacit in Settings", fixMicrophone
+		return "Can't use the microphone", fixMicrophone
 	case strings.Contains(f, "whisper") || strings.Contains(f, "model"):
-		return "Speech model missing or unreadable — choose Set Up Tacit…", fixNone
+		return "Speech model not found", fixNone
 	default:
-		return "Stopped unexpectedly — see Open Daemon Log", fixNone
+		return "Tacit stopped unexpectedly", fixNone
 	}
 }
 
@@ -142,7 +142,7 @@ func (s *state) statusLine() string {
 	case s.ownPID != 0 && s.ownPID == s.pid:
 		return fmt.Sprintf("Listening (PID %d)", s.pid)
 	default:
-		return fmt.Sprintf("Listening — started from a terminal (PID %d)", s.pid)
+		return fmt.Sprintf("Listening (from a terminal, PID %d)", s.pid)
 	}
 }
 

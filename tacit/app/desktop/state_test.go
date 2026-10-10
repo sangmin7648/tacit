@@ -218,12 +218,12 @@ func TestExplainExit_NamesTheCauseAndTheFix(t *testing.T) {
 		contains string
 		fix      fix
 	}{
-		{"2026/10/10 tacit listen: initializing pipeline: ensure whisper model: no such file", "Set Up Tacit", fixNone},
-		{"2026/10/10 tacit listen: init whisper: failed to load whisper model from /x", "Set Up Tacit", fixNone},
+		{"2026/10/10 tacit listen: initializing pipeline: ensure whisper model: no such file", "Speech model", fixNone},
+		{"2026/10/10 tacit listen: init whisper: failed to load whisper model from /x", "Speech model", fixNone},
 		{"2026/10/10 tacit listen: initializing microphone: init audio context: boom", "microphone", fixMicrophone},
 		{"2026/10/10 tacit listen: start stream: start capture: denied", "microphone", fixMicrophone},
-		{"2026/10/10 tacit listen: init speech detector: x", "Open Daemon Log", fixNone},
-		{"", "Open Daemon Log", fixNone},
+		{"2026/10/10 tacit listen: init speech detector: x", "stopped", fixNone},
+		{"", "stopped", fixNone},
 	} {
 		msg, f := explainExit(c.failure)
 		if !strings.Contains(msg, c.contains) || f != c.fix {

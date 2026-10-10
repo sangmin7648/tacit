@@ -227,13 +227,13 @@ func (t *trayApp) draw() {
 	menu.Add("Open Daemon Log").OnClick(func(*application.Context) { openPath(daemonLogPath()) })
 	menu.AddSeparator()
 	if s.upToDate {
-		menu.Add("Tacit " + version + " — up to date").SetEnabled(false)
+		menu.Add("Tacit " + version + " (up to date)").SetEnabled(false)
 	} else {
 		menu.Add("Tacit " + version).SetEnabled(false)
 	}
 	if isRelease(version) { // development builds don't update
 		if s.updateFailed {
-			menu.Add("Update failed — Open Update Log").OnClick(func(*application.Context) { openPath(updateLogPath()) })
+			menu.Add("Update failed (open log)").OnClick(func(*application.Context) { openPath(updateLogPath()) })
 		}
 		if s.latest != "" {
 			menu.Add("Update to " + s.latest + "…").OnClick(func(*application.Context) { go t.upgrade() })
@@ -305,10 +305,10 @@ func (t *trayApp) start() error {
 	case permDenied:
 		// macOS delivers silence rather than an error, so the daemon would
 		// start, load its model, and hear nothing.
-		t.update(func(s *state) { s.fail("Microphone access is off — Tacit can't listen", fixMicrophone) })
+		t.update(func(s *state) { s.fail("Microphone access is off", fixMicrophone) })
 		return errors.New("microphone access denied")
 	case permRestricted:
-		t.update(func(s *state) { s.fail("Microphone access is restricted on this Mac", fixNone) })
+		t.update(func(s *state) { s.fail("Microphone is restricted on this Mac", fixNone) })
 		return errors.New("microphone access restricted")
 	}
 	cli, err := cliPath()
