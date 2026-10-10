@@ -94,12 +94,9 @@ function makeFake() {
         ollama: { installed: true, running: true, models: ollamaHasModel ? ['qwen3.5:latest', 'llama3.2:latest'] : ['llama3.2:latest'] },
         agents: [{ name: 'claude', label: 'Claude Code', installed: true, recommended: true }],
         whisper_models: [
-          { name: 'tiny', download_mb: 75, ram_mb: 273 },
           { name: 'base', download_mb: 142, ram_mb: 388 },
           { name: 'small', download_mb: 466, ram_mb: 852 },
-          { name: 'medium', download_mb: 1500, ram_mb: 2100 },
           { name: 'large-v3-turbo', download_mb: 1600, ram_mb: 2100, recommended: true, installed: modelPresent },
-          { name: 'large-v3', download_mb: 2900, ram_mb: 3900 },
         ].map((m) => ({ installed: false, recommended: false, ...m })),
         memory_gb: 32,
       }
@@ -121,7 +118,7 @@ function makeFake() {
       return fakeTransfer(1_620_000_000, (p) => progressFn(p), () => { modelPresent = true })
     },
     async permissions() { return { ...perms } },
-    async requestMicrophone() { await wait(300); perms.microphone = 'granted' },
+    async requestMicrophone() { await wait(2500); perms.microphone = 'granted' },
     async openPrivacySettings() { await wait(300); perms.microphone = 'granted' },
     async finish(startListening) { console.log('finish', { startListening }) },
     onModelProgress(fn) { progressFn = fn; return () => { progressFn = () => {} } },

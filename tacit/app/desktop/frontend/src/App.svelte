@@ -34,6 +34,7 @@
 
   // Permissions
   let perms = $state(null)
+  let requestingMic = $state(false) // the system prompt is up and unanswered
 
   const percent = $derived(progress.total > 0 ? Math.floor((progress.done / progress.total) * 100) : 0)
   const pullPercent = $derived(pullProgress.total > 0 ? Math.floor((pullProgress.done / pullProgress.total) * 100) : 0)
@@ -145,7 +146,9 @@
     try {
       await backend.apply($state.snapshot(choices))
       opts = await backend.options() // the speech model step needs the new model
-      step = SPEECH
+      // That step only downloads: with the model already here there is nothing to do.
+      if (opts.model.present) await goToPermissions()
+      else step = SPEECH
     } catch (e) {
       saveError = errorText(e)
     } finally {
@@ -168,7 +171,17 @@
   }
 
   async function refreshPerms() {
-    if (step === SPEECH + 1) perms = await backend.permissions()
+    if (step !== SPEECH + 1) return
+    perms = await backend.permissions()
+    if (perms.microphone !== 'undetermined') requestingMic = false
+  }
+
+  // The prompt is answered outside this window, so show that something is
+  // pending until the answer shows up in the next poll.
+  function requestMic() {
+    requestingMic = true
+    backend.requestMicrophone()
+    refreshPerms()
   }
 
   async function goToPermissions() {
@@ -431,15 +444,17 @@
           <span><strong>Microphone</strong></span>
           {#if perms.microphone === 'granted'}
             <span class="pill ok">✓ Allowed</span>
+          {:else if perms.microphone === 'undetermined' && requestingMic}
+            <span class="waiting"><span class="spinner" aria-hidden="true"></span>Waiting for your answer…</span>
           {:else if perms.microphone === 'undetermined'}
-            <button onclick={() => backend.requestMicrophone()}>Allow…</button>
+            <button onclick={requestMic}>Allow…</button>
           {:else}
             <button onclick={() => backend.openPrivacySettings('Microphone')}>Open Settings</button>
           {/if}
         </div>
       {/if}
       <footer>
-        <button onclick={() => (step = SPEECH)}>Back</button>
+        <button onclick={() => (step = opts.model.present ? 2 : SPEECH)}>Back</button>
         <button class="primary" onclick={() => (step = SPEECH + 2)}>Next</button>
       </footer>
     </section>
@@ -479,6 +494,16 @@
   }
   .tips { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 14px; }
   .tips li { display: grid; gap: 1px; }
+  .waiting { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .tag {
     display: inline-block;
     margin-right: 4px;
