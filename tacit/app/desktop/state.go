@@ -74,6 +74,19 @@ func (s *state) icon() string {
 	}
 }
 
+// iconFrames counts the images of an animated icon (icons/<name>-<n>.png).
+// Two move: the waveform says the app hears you, as a recorder's does, and
+// the spinner says it is working on what it heard.
+var iconFrames = map[string]int{"hearing": 6, "working": 8}
+
+// iconFile is the image for icon name at animation step tick.
+func iconFile(name string, tick int) string {
+	if n := iconFrames[name]; n > 0 {
+		return fmt.Sprintf("icons/%s-%d.png", name, tick%n)
+	}
+	return "icons/" + name + ".png"
+}
+
 // statusLine is the menu's first, disabled item.
 func (s *state) statusLine() string {
 	switch {

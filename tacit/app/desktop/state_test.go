@@ -57,14 +57,23 @@ func TestIcon_ErrorOutranksActivity(t *testing.T) {
 // Every icon a state can name must ship, as a PNG the tray can load.
 func TestTrayIcons_AllShip(t *testing.T) {
 	for _, name := range []string{"off", "listening", "hearing", "working", "error"} {
-		data, err := trayIcons.ReadFile("icons/" + name + ".png")
-		if err != nil {
-			t.Errorf("icon %q: %v", name, err)
-			continue
+		for tick := range max(iconFrames[name], 1) {
+			file := iconFile(name, tick)
+			data, err := trayIcons.ReadFile(file)
+			if err != nil {
+				t.Errorf("%s: %v", file, err)
+				continue
+			}
+			if !strings.HasPrefix(string(data), "\x89PNG") {
+				t.Errorf("%s is not a PNG", file)
+			}
 		}
-		if !strings.HasPrefix(string(data), "\x89PNG") {
-			t.Errorf("icon %q is not a PNG", name)
-		}
+	}
+	if a, b := iconFile("hearing", 0), iconFile("hearing", iconFrames["hearing"]); a != b {
+		t.Errorf("hearing does not loop: %s then %s", a, b)
+	}
+	if iconFile("listening", 0) != iconFile("listening", 9) {
+		t.Error("a still icon changed between ticks")
 	}
 }
 

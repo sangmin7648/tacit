@@ -1,6 +1,6 @@
 ---
 source: [tacit/app/cli, tacit/app/desktop, tacit/core/internal/components/status-reporter, tacit/core/workflows/control]
-verified: 5396114
+verified: 56b7886
 ---
 
 # Daemon and the Mac app
@@ -14,7 +14,7 @@ The app does not run the pipeline itself. It launches the CLI bundled inside the
 ## How the app knows what is happening
 
 - **Is a daemon running?** Read the PID file, the way `tacit status` does.
-- **What is it doing?** Read the event log: the latest event gives the menu-bar glyph.
+- **What is it doing?** Read the event log: the latest event picks the menu-bar icon.
 - **What did it store?** Read the notes folder, as `tacit list` does, and fill the Recent list; a stored event triggers a reload. Building the list from stored events kept deleted notes listed and lost them all when the log rotated.
 
 ## Ownership

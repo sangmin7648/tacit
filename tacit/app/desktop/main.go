@@ -103,6 +103,7 @@ func main() {
 		}
 		go t.watchPID(ctx)
 		go t.watchUpdates(ctx)
+		go t.animate(ctx)
 		// Reopened by an update that stopped the daemon: listen again.
 		if slices.Contains(os.Args[1:], resumeFlag) && isConfigured() {
 			if running, _ := control.Status(control.PIDPath()); !running {
@@ -242,13 +243,49 @@ func (t *trayApp) draw() {
 	}
 	menu.Add(quit).OnClick(func(*application.Context) { t.quit() })
 
-	icon, err := trayIcons.ReadFile("icons/" + s.icon() + ".png")
+	t.setIcon(iconFile(s.icon(), 0))
+	t.tray.SetMenu(menu)
+}
+
+func (t *trayApp) setIcon(file string) {
+	icon, err := trayIcons.ReadFile(file)
 	if err != nil {
 		log.Printf("tray icon: %v", err)
-	} else {
-		t.tray.SetTemplateIcon(icon)
+		return
 	}
-	t.tray.SetMenu(menu)
+	t.tray.SetTemplateIcon(icon)
+}
+
+// animationInterval is the time between frames of an animated icon.
+const animationInterval = 180 * time.Millisecond
+
+// animate steps the icon through its frames while the state has an animated
+// one. Only the image changes: redrawing the menu at this rate would be wasteful.
+func (t *trayApp) animate(ctx context.Context) {
+	tick := time.NewTicker(animationInterval)
+	defer tick.Stop()
+	for n := 1; ; n++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		t.mu.Lock()
+		name := t.st.icon()
+		t.mu.Unlock()
+		if iconFrames[name] == 0 {
+			continue
+		}
+		t.setIcon(iconFile(name, n))
+		// The state may have changed, and been drawn, while this frame was
+		// being set; draw again so a stale frame does not stay.
+		t.mu.Lock()
+		stale := t.st.icon() != name
+		t.mu.Unlock()
+		if stale {
+			t.render()
+		}
+	}
 }
 
 // start starts the daemon. A failure is shown in the menu and returned.

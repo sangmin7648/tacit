@@ -8,3 +8,4 @@ Append-only. One line per change: date, what, why.
 - 2026-10-09: Code reorganised into app/, core/workflows/, core/internal/components/ (decision 0011). Replaced docs/packages/ with docs/apps/, docs/workflows/, docs/components/; re-pointed every `source`; all pages checked against a6db5d7.
 - 2026-10-10: Speech that continues the previous note is appended to it instead of starting a new one (decision 0012). Updated classification, knowledge-entry, segmentation, listen and note-classifier pages; checked against 4b3ae33.
 - 2026-10-10: Menu-bar usability: Check for Updates answers in a dialog, Recent opens the notes window, the updater verifies and retries reopening the app. Updated desktop, distribution and daemon-and-app; checked against 5396114.
+- 2026-10-10: Menu-bar glyphs replaced by template icons (not listening, listening, hearing, working, error), the waveform and spinner animated. Updated desktop and daemon-and-app; checked against 56b7886.
