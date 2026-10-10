@@ -1,6 +1,6 @@
 ---
 source: [tacit/app/cli, tacit/app/desktop, tacit/core/internal/components/status-reporter, tacit/core/workflows/control]
-verified: 5396114
+verified: 56b7886
 ---
 
 # Daemon and the Mac app
@@ -30,3 +30,5 @@ Onboarding (first run: classifier choice, model download, microphone permission)
 ## Permissions
 
 macOS ties the microphone grant to the signed identity of the binary. Replacing a running daemon's binary loses the grant, which is why updates refuse to run while anything is listening. See [distribution](distribution.md).
+
+The prompt appears when something first opens the microphone, and the daemon does that only after loading its speech model, about ten seconds in. Without help, the first prompt after an update would arrive that late, so the app asks as it starts the daemon whenever the answer is still open.
