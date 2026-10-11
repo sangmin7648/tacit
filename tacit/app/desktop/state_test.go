@@ -25,14 +25,14 @@ func TestIcon_FollowsActivity(t *testing.T) {
 	}{
 		{control.KindListening, "listening"},
 		{control.KindSpeechStarted, "hearing"},
-		{control.KindSpeechEnded, "working"},
-		{control.KindTranscribing, "working"},
+		{control.KindSpeechEnded, "listening"},
+		{control.KindTranscribing, "listening"},
 		{control.KindTranscribed, "listening"},
-		{control.KindClassifying, "working"},
+		{control.KindClassifying, "listening"},
 		{control.KindStored, "listening"},
 		{control.KindSpeechStarted, "hearing"},
 		{control.KindDiscarded, "listening"},
-		{control.KindClassifying, "working"},
+		{control.KindClassifying, "listening"},
 		{control.KindSkipped, "listening"},
 	}
 	for i, st := range steps {
@@ -56,7 +56,7 @@ func TestIcon_ErrorOutranksActivity(t *testing.T) {
 
 // Every icon a state can name must ship, as a PNG the tray can load.
 func TestTrayIcons_AllShip(t *testing.T) {
-	for _, name := range []string{"off", "listening", "hearing", "working", "error"} {
+	for _, name := range []string{"off", "listening", "hearing", "error"} {
 		for tick := range max(iconFrames[name], 1) {
 			file := iconFile(name, tick)
 			data, err := trayIcons.ReadFile(file)

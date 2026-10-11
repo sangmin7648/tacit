@@ -463,7 +463,7 @@
       <div class="badge" aria-hidden="true">✓</div>
       <h2>You're set up</h2>
       <ul class="tips">
-        <li><strong>Menu bar</strong><small>Tacit lives there. The icon shows when it is listening, hearing you, or working.</small></li>
+        <li><strong>Menu bar</strong><small>Tacit lives there. The icon shows when it is listening or hearing you.</small></li>
         <li><strong>Notes</strong><small>Everything you say lands in <code>~/.tacit</code> as Markdown. Open Notes from the menu to search it.</small></li>
         <li><strong>In Claude</strong><small><code>/tacit.knowledge</code> finds your notes from inside Claude.</small></li>
       </ul>

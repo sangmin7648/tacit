@@ -98,15 +98,15 @@ func lastFailure(logPath string) string {
 	return ""
 }
 
-// observe folds one event into the state.
+// observe folds one event into the state. Only hearing speech is shown:
+// what happens to a segment afterwards (transcribing, classifying, a queue of
+// both) is not something the user can act on, so the icon returns to listening.
 func (s *state) observe(e control.Event) {
 	switch e.Kind {
-	case control.KindListening, control.KindSpeechStarted, control.KindSpeechEnded,
-		control.KindTranscribing, control.KindClassifying:
+	case control.KindSpeechStarted:
 		s.activity = e.Kind
-	case control.KindTranscribed, control.KindDiscarded, control.KindSkipped, control.KindStored:
-		// The segment is done with; classification may still follow, but a
-		// transcribed segment waits in a queue until then, so show idle.
+	case control.KindListening, control.KindSpeechEnded, control.KindTranscribing, control.KindClassifying,
+		control.KindTranscribed, control.KindDiscarded, control.KindSkipped, control.KindStored:
 		s.activity = control.KindListening
 	}
 }
@@ -121,20 +121,15 @@ func (s *state) icon() string {
 	case !s.running:
 		return "off"
 	}
-	switch s.activity {
-	case control.KindSpeechStarted:
+	if s.activity == control.KindSpeechStarted {
 		return "hearing"
-	case control.KindSpeechEnded, control.KindTranscribing, control.KindClassifying:
-		return "working"
-	default:
-		return "listening"
 	}
+	return "listening"
 }
 
 // iconFrames counts the images of an animated icon (icons/<name>-<n>.png).
-// Two move: the waveform says the app hears you, as a recorder's does, and
-// the spinner says it is working on what it heard.
-var iconFrames = map[string]int{"hearing": 6, "working": 8}
+// Only the waveform moves: it says the app hears you, as a recorder's does.
+var iconFrames = map[string]int{"hearing": 6}
 
 // iconFile is the image for icon name at animation step tick.
 func iconFile(name string, tick int) string {
