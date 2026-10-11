@@ -63,7 +63,7 @@ function makeFake() {
         configured: false,
         choices: {
           llm_provider: 'ollama', llm_model: 'qwen3.5', skill_agent: 'claude',
-          language: 'auto', whisper_model: 'large-v3-turbo', experimental: false,
+          language: 'auto', whisper_model: 'large-v3-turbo',
         },
         providers: ['ollama', 'claude'],
         claude_models: ['haiku', 'sonnet', 'opus'],
@@ -81,7 +81,7 @@ function makeFake() {
       return {
         choices: {
           llm_provider: 'ollama', llm_model: 'qwen3.5', skill_agent: 'claude',
-          language: 'auto', whisper_model: 'large-v3-turbo', experimental: false,
+          language: 'auto', whisper_model: 'large-v3-turbo',
         },
         reasons: {
           llm_provider: 'Ollama is running here, so summaries stay on this Mac.',

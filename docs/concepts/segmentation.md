@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/workflows/listen, tacit/core/internal/components/speech-detector, tacit/core/internal/components/setting-manager]
-verified: 4b3ae33
+verified: 831cd18
 ---
 
 # Segmentation
@@ -26,7 +26,7 @@ A session boundary does not always mean a new note: the classifier can fold a se
 
 ## Pre-roll
 
-VAD tends to fire a frame or two after speech actually begins, clipping the first word and causing mistranscription. Under the experimental setting a short window of recent audio is kept and prepended when speech starts.
+VAD tends to fire a frame or two after speech actually begins, clipping the first word and causing mistranscription. A short window of recent audio (about 192 ms) is always kept and prepended when speech starts.
 
 ## Short segments
 

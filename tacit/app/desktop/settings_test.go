@@ -65,7 +65,6 @@ func TestSettings_SetAndClear(t *testing.T) {
 	for key, js := range map[string]string{
 		"speech_threshold":    `0.6`,
 		"energy_threshold":    `300`,
-		"experimental":        `true`,
 		"silence_duration":    `"8s"`,
 		"transcript_denylist": `["thanks for watching", "subscribe"]`,
 		"initial_prompt":      `"tacit: whisper"`,

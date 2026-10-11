@@ -72,7 +72,7 @@ func TestApply_WritesEverything(t *testing.T) {
 	home := isolate(t)
 	c := Choices{
 		LLMProvider: "claude", LLMModel: "sonnet", SkillAgent: "claude",
-		Language: "ko", WhisperModel: "small", Experimental: true,
+		Language: "ko", WhisperModel: "small",
 	}
 
 	res, err := Apply(c)
@@ -85,7 +85,7 @@ func TestApply_WritesEverything(t *testing.T) {
 		t.Fatalf("loading what Apply wrote: %v", err)
 	}
 	if cfg.LLMProvider != "claude" || cfg.LLMModel != "sonnet" || cfg.Language != "ko" ||
-		cfg.WhisperModel != "small" || !cfg.Experimental {
+		cfg.WhisperModel != "small" {
 		t.Errorf("loaded config does not reflect the choices: %+v", cfg)
 	}
 
@@ -245,7 +245,7 @@ func TestFromConfig_RoundTrips(t *testing.T) {
 	isolate(t)
 	want := Choices{
 		LLMProvider: "claude", LLMModel: "opus", SkillAgent: "claude",
-		Language: "ko", WhisperModel: "small", Experimental: true,
+		Language: "ko", WhisperModel: "small",
 	}
 	res, err := Apply(want)
 	if err != nil {

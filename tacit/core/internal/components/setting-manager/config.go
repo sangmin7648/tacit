@@ -20,14 +20,8 @@ type Config struct {
 	// Language is the whisper transcription language code: "auto" (detect),
 	// "en", "ko", etc. Fixing this to the spoken language (instead of "auto")
 	// significantly reduces hallucinated / wrong-language transcriptions.
-	Language      string `yaml:"language"`
-	InitialPrompt string `yaml:"initial_prompt"`
-	// Experimental opts into the beta transcription channel: non-speech-token
-	// suppression during decoding plus VAD pre-roll padding. The other decode
-	// settings this used to claim (no cross-segment context, the confidence
-	// thresholds, temperature fallback) are whisper.cpp defaults already, so
-	// they applied whether or not this was set. Off by default.
-	Experimental    bool          `yaml:"experimental"`
+	Language        string        `yaml:"language"`
+	InitialPrompt   string        `yaml:"initial_prompt"`
 	MinSpeechDur    time.Duration `yaml:"min_speech_duration"`
 	SilenceDuration time.Duration `yaml:"silence_duration"`
 	SpeechThreshold float64       `yaml:"speech_threshold"`
@@ -70,7 +64,6 @@ func DefaultConfig() *Config {
 	return &Config{
 		WhisperModel:    "large-v3-turbo",
 		Language:        "auto",
-		Experimental:    false,
 		MinSpeechDur:    2 * time.Second,
 		SilenceDuration: 10 * time.Second,
 		SpeechThreshold: 0.5,
@@ -195,7 +188,6 @@ func WriteDefault(path string) error {
 			"# To override values, edit config-override.yaml in the same directory.\n\n"+
 			"whisper_model: %s\n"+
 			"language: %s\n"+
-			"experimental: %v\n"+
 			"initial_prompt: \"\"\n"+
 			"min_speech_duration: %s\n"+
 			"silence_duration: %s\n"+
@@ -211,7 +203,6 @@ func WriteDefault(path string) error {
 			"min_char_rate: %.2f\n",
 		cfg.WhisperModel,
 		cfg.Language,
-		cfg.Experimental,
 		formatDuration(cfg.MinSpeechDur),
 		formatDuration(cfg.SilenceDuration),
 		cfg.SpeechThreshold,
@@ -245,7 +236,6 @@ func overrideTemplate(defaults *Config) string {
 	fields := []string{
 		fmt.Sprintf("whisper_model: %s", defaults.WhisperModel),
 		fmt.Sprintf("language: %s", defaults.Language),
-		fmt.Sprintf("experimental: %v", defaults.Experimental),
 		fmt.Sprintf("initial_prompt: \"\""),
 		fmt.Sprintf("min_speech_duration: %s", formatDuration(defaults.MinSpeechDur)),
 		fmt.Sprintf("silence_duration: %s", formatDuration(defaults.SilenceDuration)),
@@ -338,7 +328,7 @@ func EventLogPath() string {
 // Every other line — settings setup never asks about, and the user's own
 // comments — is left exactly as it was: the answers are applied one key at a
 // time through SetOverride and ClearOverride.
-func WriteSetupOverride(path string, provider, model, agent, language, whisperModel string, experimental bool) error {
+func WriteSetupOverride(path string, provider, model, agent, language, whisperModel string) error {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		if err := WriteOverrideTemplate(path, DefaultConfig()); err != nil {
 			return err
@@ -352,7 +342,6 @@ func WriteSetupOverride(path string, provider, model, agent, language, whisperMo
 	}{
 		{"language", language, d.Language},
 		{"whisper_model", whisperModel, d.WhisperModel},
-		{"experimental", experimental, d.Experimental},
 		{"llm_provider", provider, d.LLMProvider},
 		{"llm_model", model, d.LLMModel},
 		{"skill_agent", agent, d.SkillAgent},
