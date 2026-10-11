@@ -9,7 +9,7 @@ Start with [overview](overview.md); look words up in the [glossary](glossary.md)
 | Page | Covers | Verified |
 |---|---|---|
 | [pipeline](concepts/pipeline.md) | Audio to entry, stage by stage; restart and batching | a6db5d7 |
-| [segmentation](concepts/segmentation.md) | Segments vs sessions, the two caps, pre-roll | 4b3ae33 |
+| [segmentation](concepts/segmentation.md) | Segments vs sessions, the two caps, pre-roll | 831cd18 |
 | [hallucination-filtering](concepts/hallucination-filtering.md) | The signals that remove Whisper's invented text | a6db5d7 |
 | [classification](concepts/classification.md) | LLM titling, skip, repair, batching | 4b3ae33 |
 | [knowledge-entry](concepts/knowledge-entry.md) | Entry format, storage rules, what lives in `~/.tacit/` | f938cbf |

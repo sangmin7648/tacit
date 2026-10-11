@@ -22,7 +22,7 @@ function makeFake() {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms))
   const defaults = {
     whisper_model: ['large-v3-turbo', 'string'], language: ['auto', 'string'], initial_prompt: ['', 'string'],
-    experimental: [false, 'bool'], min_speech_duration: ['2s', 'duration'], silence_duration: ['10s', 'duration'],
+    min_speech_duration: ['2s', 'duration'], silence_duration: ['10s', 'duration'],
     speech_threshold: [0.5, 'number'], energy_threshold: [200, 'number'], llm_provider: ['ollama', 'string'],
     llm_model: ['qwen3.5', 'string'], skill_agent: ['claude', 'string'],
     max_segment_duration: ['30s', 'duration'], max_session_duration: ['5m0s', 'duration'],

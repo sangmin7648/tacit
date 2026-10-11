@@ -150,7 +150,7 @@ func cmdSetup() {
 	}
 
 	// Step 1: LLM provider
-	c.LLMProvider = onboard.Providers[ask("Step 1/6", "Select LLM provider for summarization", onboard.ReasonProvider,
+	c.LLMProvider = onboard.Providers[ask("Step 1/5", "Select LLM provider for summarization", onboard.ReasonProvider,
 		[]string{"ollama - a local model; nothing leaves this Mac", "claude - transcript text is sent to Anthropic"},
 		slices.Index(onboard.Providers, rec.Choices.LLMProvider), slices.Index(onboard.Providers, c.LLMProvider))]
 
@@ -162,7 +162,7 @@ func cmdSetup() {
 		if !slices.Contains(onboard.ClaudeModels, c.LLMModel) {
 			c.LLMModel = onboard.ClaudeModels[0]
 		}
-		c.LLMModel = onboard.ClaudeModels[ask("Step 2/6", "Select Claude model", onboard.ReasonModel, onboard.ClaudeModels,
+		c.LLMModel = onboard.ClaudeModels[ask("Step 2/5", "Select Claude model", onboard.ReasonModel, onboard.ClaudeModels,
 			slices.Index(onboard.ClaudeModels, rec.Choices.LLMModel), slices.Index(onboard.ClaudeModels, c.LLMModel))]
 
 	default:
@@ -187,7 +187,7 @@ func cmdSetup() {
 			curAgent = i
 		}
 	}
-	c.SkillAgent = rec.Agents[ask("Step 3/6", "Select AI agent for skill installation", onboard.ReasonAgent, agents, recAgent, curAgent)].Name
+	c.SkillAgent = rec.Agents[ask("Step 3/5", "Select AI agent for skill installation", onboard.ReasonAgent, agents, recAgent, curAgent)].Name
 
 	// Step 4: transcription language. Fixing the language (instead of "auto")
 	// meaningfully reduces wrong-language / hallucinated transcriptions.
@@ -202,7 +202,7 @@ func cmdSetup() {
 			curLang = i
 		}
 	}
-	c.Language = onboard.Languages[ask("Step 4/6", "Select transcription language", onboard.ReasonLanguage, langs, recLang, curLang)].Code
+	c.Language = onboard.Languages[ask("Step 4/5", "Select transcription language", onboard.ReasonLanguage, langs, recLang, curLang)].Code
 
 	// Step 5: speech model
 	models := make([]string, len(rec.WhisperModels))
@@ -225,14 +225,9 @@ func cmdSetup() {
 		models = append(models, c.WhisperModel+" - set in your settings file")
 		curModel = len(models) - 1
 	}
-	if i := ask("Step 5/6", "Select speech model", onboard.ReasonWhisper, models, recModel, curModel); i < len(rec.WhisperModels) {
+	if i := ask("Step 5/5", "Select speech model", onboard.ReasonWhisper, models, recModel, curModel); i < len(rec.WhisperModels) {
 		c.WhisperModel = rec.WhisperModels[i].Name
 	}
-
-	// Step 6: experimental beta channel.
-	fmt.Println("Step 6/6: Enable experimental transcription? (non-speech token suppression + VAD pre-roll padding)")
-	c.Experimental = selectOption([]string{"no", "yes"}, map[bool]int{false: 0, true: 1}[c.Experimental]) == 1
-	fmt.Println()
 
 	fmt.Println()
 	fmt.Printf("  LLM provider   : %s\n", c.LLMProvider)
@@ -240,7 +235,6 @@ func cmdSetup() {
 	fmt.Printf("  Skill agent    : %s\n", c.SkillAgent)
 	fmt.Printf("  Language       : %s\n", c.Language)
 	fmt.Printf("  Speech model   : %s\n", c.WhisperModel)
-	fmt.Printf("  Experimental   : %v\n", c.Experimental)
 	fmt.Println()
 
 	res, err := onboard.Apply(c)
@@ -293,7 +287,7 @@ func askOllamaModel(rec *onboard.Recommendation, current string, ask func(step, 
 	}
 	names, labels = append(names, ""), append(labels, "other (type a name)")
 
-	model := names[ask("Step 2/6", "Select Ollama model", onboard.ReasonModel, labels, 0, slices.Index(names, current))]
+	model := names[ask("Step 2/5", "Select Ollama model", onboard.ReasonModel, labels, 0, slices.Index(names, current))]
 	if model == "" {
 		fmt.Printf("  Model name [%s]: ", onboard.DefaultOllamaModel)
 		model = strings.TrimSpace(readLine(bufio.NewReader(os.Stdin)))
@@ -485,7 +479,6 @@ func cmdConfigView(cfg *configure.Settings) {
 
 	fmt.Printf("%-30s %-20s %s\n", "whisper_model:", cfg.WhisperModel, tag("whisper_model"))
 	fmt.Printf("%-30s %-20s %s\n", "language:", cfg.Language, tag("language"))
-	fmt.Printf("%-30s %-20v %s\n", "experimental:", cfg.Experimental, tag("experimental"))
 	if cfg.InitialPrompt != "" {
 		fmt.Printf("%-30s %-20s %s\n", "initial_prompt:", cfg.InitialPrompt, tag("initial_prompt"))
 	}

@@ -6,7 +6,7 @@
   // How the window lays settings out. A key missing here — one added to Config
   // later — still shows, under Other, with its key as its label.
   const GROUPS = [
-    { title: 'Transcription', keys: ['whisper_model', 'language', 'initial_prompt', 'experimental'] },
+    { title: 'Transcription', keys: ['whisper_model', 'language', 'initial_prompt'] },
     {
       title: 'Classifier',
       keys: ['llm_provider', 'llm_model', 'skill_agent'],
@@ -25,7 +25,6 @@
     whisper_model: ['Whisper model', 'The speech-to-text model.'],
     language: ['Language', 'A language code such as en or ko, or auto to detect. Fixing it cuts wrong-language transcripts.'],
     initial_prompt: ['Initial prompt', 'Words to prime transcription with — names, jargon.'],
-    experimental: ['Experimental decoding', 'Suppress non-speech tokens and pad speech a little.'],
     llm_provider: ['Provider', ''],
     llm_model: ['Model', ''],
     skill_agent: ['Skill agent', ''],

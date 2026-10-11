@@ -213,7 +213,6 @@ func (p *Pipeline) runSourceOnce(ctx context.Context, src micrecorder.AudioSourc
 		MinSpeech:       p.cfg.MinSpeechDur,
 		Silence:         p.cfg.SilenceDuration,
 		Split:           splitDur,
-		PreRoll:         p.cfg.Experimental,
 	})
 	if err != nil {
 		return fmt.Errorf("init speech detector: %w", err)
@@ -332,7 +331,6 @@ func (p *Pipeline) sttOptions() transcriber.Options {
 	return transcriber.Options{
 		Language:      p.cfg.Language,
 		InitialPrompt: p.cfg.InitialPrompt,
-		Experimental:  p.cfg.Experimental,
 	}
 }
 

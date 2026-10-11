@@ -29,8 +29,6 @@ type Options struct {
 	Silence time.Duration
 	// Split, when positive, cuts ongoing speech into segments of this length.
 	Split time.Duration
-	// PreRoll prepends the audio from just before onset to each segment.
-	PreRoll bool
 }
 
 // Kind names what Feed observed.
@@ -113,7 +111,7 @@ func (d *Detector) frame(frame []int16, events []Event) []Event {
 		d.silenceFrames = 0
 		if !d.segment.IsActive() {
 			d.segment.Start()
-			if d.opts.PreRoll && len(d.preRoll) > 0 {
+			if len(d.preRoll) > 0 {
 				d.segment.Append(d.preRoll)
 				d.preRoll = d.preRoll[:0]
 			}
@@ -137,7 +135,7 @@ func (d *Detector) frame(frame []int16, events []Event) []Event {
 			events = append(events, Event{Kind: SpeechEnded, Segment: seg, Duration: dur})
 		}
 
-	case d.opts.PreRoll:
+	default:
 		d.preRoll = append(d.preRoll, samples...)
 		if over := len(d.preRoll) - preRollFrames*hopSize; over > 0 {
 			d.preRoll = d.preRoll[:copy(d.preRoll, d.preRoll[over:])]

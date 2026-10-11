@@ -48,10 +48,6 @@ type Options struct {
 	Language string
 	// InitialPrompt biases decoding toward the given vocabulary ("" = no hint).
 	InitialPrompt string
-	// Experimental enables non-speech token suppression, which masks symbol
-	// tokens such as "(" and "♪". The other decode settings it used to set are
-	// whisper.cpp defaults already. Off preserves legacy behavior.
-	Experimental bool
 }
 
 // Transcribe converts float32 PCM samples (16kHz mono) to text using opts.
@@ -89,18 +85,13 @@ func (w *Whisper) Transcribe(ctx context.Context, samples []float32, opts Option
 	params.print_timestamps = C.bool(false)
 	params.n_threads = 4
 
-	// Experimental beta channel.
-	//
-	// The rest of whisper.cpp's anti-hallucination set — no_context, the
-	// no_speech / logprob / entropy thresholds, and temperature fallback — is
-	// already on in whisper_full_default_params, so re-assigning those values
-	// here changed nothing. suppress_nst is the only decode setting this flag
-	// actually flips, and it masks symbol tokens ("(", "♪") rather than whole
-	// sentences; stock hallucinated phrases made of ordinary words are stripped
-	// after transcription instead, in FilterHallucinations.
-	if opts.Experimental {
-		params.suppress_nst = C.bool(true)
-	}
+	// whisper.cpp's other anti-hallucination settings (no_context, the
+	// no_speech / logprob / entropy thresholds, temperature fallback) are
+	// already on in whisper_full_default_params. suppress_nst is the one that
+	// is not; it masks symbol tokens ("(", "♪") rather than whole sentences.
+	// Stock hallucinated phrases made of ordinary words are stripped after
+	// transcription instead, in FilterHallucinations.
+	params.suppress_nst = C.bool(true)
 
 	// Set initial prompt if provided
 	var cPrompt *C.char

@@ -17,9 +17,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Language != "auto" {
 		t.Errorf("Language: got %q, want %q", cfg.Language, "auto")
 	}
-	if cfg.Experimental != false {
-		t.Errorf("Experimental: got %v, want %v", cfg.Experimental, false)
-	}
 	if cfg.MinSpeechDur != 2*time.Second {
 		t.Errorf("MinSpeechDur: got %v, want %v", cfg.MinSpeechDur, 2*time.Second)
 	}
@@ -364,7 +361,7 @@ func TestWriteSetupOverride_AcceptingDefaultsWritesNoActiveOverrides(t *testing.
 	defaults := DefaultConfig()
 
 	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
-		defaults.Language, defaults.WhisperModel, defaults.Experimental); err != nil {
+		defaults.Language, defaults.WhisperModel); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -381,7 +378,7 @@ func TestWriteSetupOverride_NonDefaultChoicesAreActive(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config-override.yaml")
 
-	if err := WriteSetupOverride(path, "claude", "opus", "claude", "ko", "small", true); err != nil {
+	if err := WriteSetupOverride(path, "claude", "opus", "claude", "ko", "small"); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -391,10 +388,6 @@ func TestWriteSetupOverride_NonDefaultChoicesAreActive(t *testing.T) {
 	}
 	if cfg.LLMProvider != "claude" || cfg.LLMModel != "opus" || cfg.Language != "ko" {
 		t.Errorf("expected non-default wizard choices to be active, got %+v", cfg)
-	}
-
-	if !cfg.Experimental {
-		t.Errorf("expected experimental: true to be active, got %+v", cfg)
 	}
 }
 
@@ -416,7 +409,7 @@ func TestWriteSetupOverride_UpgradeClearsStaleDefaultPin(t *testing.T) {
 	}
 
 	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
-		defaults.Language, defaults.WhisperModel, defaults.Experimental); err != nil {
+		defaults.Language, defaults.WhisperModel); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -441,7 +434,7 @@ func TestWriteSetupOverride_WhisperModelIsPinnedOnlyWhenNotDefault(t *testing.T)
 	path := filepath.Join(t.TempDir(), "config-override.yaml")
 	d := DefaultConfig()
 
-	if err := WriteSetupOverride(path, d.LLMProvider, d.LLMModel, d.SkillAgent, d.Language, "small", d.Experimental); err != nil {
+	if err := WriteSetupOverride(path, d.LLMProvider, d.LLMModel, d.SkillAgent, d.Language, "small"); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &Config{}
@@ -449,7 +442,7 @@ func TestWriteSetupOverride_WhisperModelIsPinnedOnlyWhenNotDefault(t *testing.T)
 		t.Fatalf("after choosing small: model %q, err %v", cfg.WhisperModel, err)
 	}
 
-	if err := WriteSetupOverride(path, d.LLMProvider, d.LLMModel, d.SkillAgent, d.Language, d.WhisperModel, d.Experimental); err != nil {
+	if err := WriteSetupOverride(path, d.LLMProvider, d.LLMModel, d.SkillAgent, d.Language, d.WhisperModel); err != nil {
 		t.Fatal(err)
 	}
 	cfg = &Config{}
@@ -474,7 +467,7 @@ func TestWriteSetupOverride_PreservesNonWizardValues(t *testing.T) {
 	}
 
 	if err := WriteSetupOverride(path, defaults.LLMProvider, defaults.LLMModel, defaults.SkillAgent,
-		defaults.Language, defaults.WhisperModel, defaults.Experimental); err != nil {
+		defaults.Language, defaults.WhisperModel); err != nil {
 		t.Fatalf("WriteSetupOverride returned error: %v", err)
 	}
 
@@ -534,12 +527,12 @@ func containsRaw(s, substr string) bool {
 // missing from that list is silently wiped. transcript_denylist was.
 func TestWriteSetupOverride_PreservesDenylist(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config-override.yaml")
-	original := "experimental: true\ntranscript_denylist:\n  - \"내 커스텀 환각 문구\"\n  - \"another phrase\"\n"
+	original := "min_char_rate: 0.3\ntranscript_denylist:\n  - \"내 커스텀 환각 문구\"\n  - \"another phrase\"\n"
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", "large-v3-turbo", true); err != nil {
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", "large-v3-turbo"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -562,7 +555,7 @@ func TestWriteSetupOverride_PreservesDenylist(t *testing.T) {
 // it is discoverable without reading the docs.
 func TestWriteSetupOverride_MentionsDenylistWhenUnset(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config-override.yaml")
-	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", "large-v3-turbo", false); err != nil {
+	if err := WriteSetupOverride(path, "ollama", "qwen3.5", "claude", "ko", "large-v3-turbo"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)

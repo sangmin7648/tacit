@@ -391,11 +391,6 @@
       </div>
       {@render advice(['whisper_model'], 'whisper_model')}
 
-      <label class="check">
-        <input type="checkbox" bind:checked={choices.experimental} />
-        <span><strong>Experimental transcription</strong><small>Suppresses non-speech tokens and pads speech onsets.</small></span>
-      </label>
-
       {#if saveError}<pre class="error">{saveError}</pre>{/if}
       <footer>
         <button onclick={() => (step = 1)}>Back</button>

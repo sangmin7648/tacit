@@ -70,7 +70,6 @@ type Choices struct {
 	SkillAgent   string `json:"skill_agent"`
 	Language     string `json:"language"`
 	WhisperModel string `json:"whisper_model"`
-	Experimental bool   `json:"experimental"`
 }
 
 // Defaults returns the answers a user gets by accepting every suggestion.
@@ -82,7 +81,6 @@ func Defaults() Choices {
 		SkillAgent:   d.SkillAgent,
 		Language:     d.Language,
 		WhisperModel: d.WhisperModel,
-		Experimental: d.Experimental,
 	}
 }
 
@@ -96,7 +94,6 @@ func FromConfig(cfg *settingmanager.Config) Choices {
 		SkillAgent:   cfg.SkillAgent,
 		Language:     cfg.Language,
 		WhisperModel: cfg.WhisperModel,
-		Experimental: cfg.Experimental,
 	}
 }
 
@@ -180,7 +177,7 @@ func Apply(c Choices) (*Result, error) {
 	res.BackupPath = backup
 
 	if err := settingmanager.WriteSetupOverride(res.OverridePath, c.LLMProvider, c.LLMModel, c.SkillAgent,
-		c.Language, c.WhisperModel, c.Experimental); err != nil {
+		c.Language, c.WhisperModel); err != nil {
 		return res, fmt.Errorf("writing config override: %w", err)
 	}
 
