@@ -65,6 +65,12 @@ Open **Settings** from the menu-bar icon. The ones most people change:
 
 Issues and pull requests are welcome. Open an issue first for significant changes. See [CONTRIBUTING.md](CONTRIBUTING.md) to build from source, and [docs/](docs/index.md) for how the system fits together.
 
+## AI Disclosure
+
+> [!NOTE]
+> 🤖 **tacit is built with the help of AI coding agents.**
+> I take code quality and stability seriously, and I do my best to review, test, and maintain it carefully. If you find a bug or something that looks off, please [open an issue](https://github.com/sangmin7648/tacit/issues).
+
 ## License
 
 [MIT](LICENSE)
