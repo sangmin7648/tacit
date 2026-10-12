@@ -236,7 +236,7 @@
 
     $("veil").style.opacity = clamp(1 - seg(t, 0, .3) + seg(t, DURATION - .45, DURATION));
   }
-  const INTRO = 2.6;
+  const INTRO = 3;
   function render(T) {
     renderScene(Math.max(0, T - INTRO));
     const text = seg(T, .2, .8) * (1 - seg(T, INTRO - .45, INTRO));
