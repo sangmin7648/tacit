@@ -18,3 +18,4 @@ Append-only. One line per change: date, what, why.
 - 2026-10-11: Removed the `experimental` setting: non-speech token suppression and the 192 ms pre-roll are always on, and setup no longer asks. Updated segmentation and onboard; checked against 831cd18.
 - 2026-10-12: Removed categories: the classifier no longer assigns one, notes are stored flat in the knowledge base, same-second notes get a numeric suffix, and `--json` output drops `category` (version 2). Added 0014; updated glossary, classification, knowledge-entry, search, note-manager and note-classifier; checked against 9a2b7a0.
 - 2026-10-13: Added the app icon (AppIcon.icns) to Tacit.app. Updated packaging-mac; checked against 9fc340b.
+- 2026-10-13: Replaced the app icon artwork (AppIcon.icns); no structural change, so packaging-mac is unchanged.
