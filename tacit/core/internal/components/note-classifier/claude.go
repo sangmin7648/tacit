@@ -14,7 +14,7 @@ SKIP DECISION: Always fill in every field, then set skip accordingly — never a
 Set skip=true ONLY when the transcript contains no statement at all — filler sounds (음, 어, 그, 아, um, uh), bare acknowledgements on their own ("네 알겠습니다", "아 그렇군요"), counting, call-connection chatter ("여보세요, 들리세요"), or a lone stock phrase standing entirely on its own with nothing else around it — a broadcast sign-off ("이 시각 세계였습니다", "OOO 뉴스 OOO입니다"), a video outro ("시청해 주셔서 감사합니다"), or a bare courtesy line ("감사합니다", "수고하셨습니다").
 Set skip=false for everything else. Any complete sentence that states something is kept, however mundane, brief or self-evident — judging a transcript unimportant is not your call to make, and dropping one is unrecoverable.
 
-CONTINUATION: Always set continues. When the input includes a "Previous note" block, set continues=true only if the transcript carries on that same topic or conversation (picked up after a pause, same thing still being discussed); then title and summary must describe the whole note — previous note plus this transcript — not just the new text. Otherwise continues=false and title/summary describe the transcript alone. With no "Previous note" block, continues is always false.
+CONTINUATION: Always set continues. When the input includes a "Previous note" block, set continues=true only if the transcript carries on the same specific subject or conversation as the note's latest speech (the same thing, event or exchange still being talked about, picked up after a pause). Sharing a category, a mood, or a loose theme is not enough — unrelated sounds picked up from a video, a game or background chatter are separate notes. When in doubt, continues=false. When continues=true, title and summary must describe the whole note — previous note plus this transcript — not just the new text. Otherwise continues=false and title/summary describe the transcript alone. With no "Previous note" block, continues is always false.
 
 NORMAL CLASSIFICATION:
 - title: specific topic of what was discussed — write in the same language as the input
@@ -217,8 +217,8 @@ func buildPrompt(sttText string, existingCategories []string, previous *Previous
 	var sb strings.Builder
 	writeCategories(&sb, existingCategories)
 	if previous != nil {
-		fmt.Fprintf(&sb, "\nPrevious note (last updated %d minutes ago):\ntitle: %s\nsummary: %s\n",
-			int(previous.Ago.Minutes()), previous.Title, previous.Summary)
+		fmt.Fprintf(&sb, "\nPrevious note (last updated %d minutes ago):\ntitle: %s\nsummary: %s\nlatest speech: %s\n",
+			int(previous.Ago.Minutes()), previous.Title, previous.Summary, previous.Tail)
 	}
 	sb.WriteString("\nSTT text:\n")
 	sb.WriteString(sttText)

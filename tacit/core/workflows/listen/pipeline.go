@@ -35,6 +35,7 @@ type lastNote struct {
 	path    string
 	title   string
 	summary string
+	tail    string // end of the latest speech in the note
 	updated time.Time
 }
 
@@ -485,6 +486,9 @@ func (p *Pipeline) classifyAndStore(ctx context.Context, item classifyItem, exis
 	}
 	if previous == nil {
 		classified.Continues = false
+		log.Printf("Continuation: no previous note to continue")
+	} else {
+		log.Printf("Continuation: previous note %q (%s ago), classifier says continues=%v", previous.Title, previous.Ago.Round(time.Second), classified.Continues)
 	}
 	p.dispatch(item, classified)
 }
@@ -517,7 +521,7 @@ func (p *Pipeline) previousNote() *noteclassifier.PreviousNote {
 		p.last = nil
 		return nil
 	}
-	return &noteclassifier.PreviousNote{Title: p.last.title, Summary: p.last.summary, Ago: ago}
+	return &noteclassifier.PreviousNote{Title: p.last.title, Summary: p.last.summary, Tail: p.last.tail, Ago: ago}
 }
 
 // storeUnclassified stores a transcript the classifier could not handle. It is
@@ -541,7 +545,7 @@ func (p *Pipeline) storeEntry(classified *noteclassifier.ClassifyResult, item cl
 		return
 	}
 	log.Printf("Knowledge entry saved: %s", filePath)
-	p.last = &lastNote{path: filePath, title: entry.Title, summary: entry.Summary, updated: time.Now()}
+	p.last = &lastNote{path: filePath, title: entry.Title, summary: entry.Summary, tail: speechTail(item.text), updated: time.Now()}
 	p.emit(statusreporter.Event{Kind: statusreporter.KindStored, Source: item.source})
 }
 
@@ -568,7 +572,7 @@ func (p *Pipeline) appendToLast(classified *noteclassifier.ClassifyResult, item 
 		return false
 	}
 	log.Printf("Knowledge entry extended: %s", filePath)
-	p.last = &lastNote{path: filePath, title: note.Title, summary: note.Summary, updated: time.Now()}
+	p.last = &lastNote{path: filePath, title: note.Title, summary: note.Summary, tail: speechTail(item.text), updated: time.Now()}
 	return true
 }
 
@@ -587,4 +591,17 @@ func newKnowledgeEntry(classified *noteclassifier.ClassifyResult, content string
 		Summary:   final.Summary,
 		Content:   content,
 	}
+}
+
+const speechTailRunes = 300
+
+// speechTail is the end of text, what the classifier compares new speech
+// against. A running summary cannot serve: it is rewritten on every
+// continuation and drifts until it matches anything.
+func speechTail(text string) string {
+	r := []rune(strings.TrimSpace(text))
+	if len(r) > speechTailRunes {
+		r = r[len(r)-speechTailRunes:]
+	}
+	return string(r)
 }
