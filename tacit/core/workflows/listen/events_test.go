@@ -67,7 +67,7 @@ func sourcedItems(source string, texts ...string) []classifyItem {
 func TestClassifyLoop_EmitsStored(t *testing.T) {
 	fake := &fakeClassifier{
 		singleFn: func(call int, text string) (*noteclassifier.ClassifyResult, error) {
-			return &noteclassifier.ClassifyResult{Title: "검색 랭킹 논의", Summary: "s", Category: "work"}, nil
+			return &noteclassifier.ClassifyResult{Title: "검색 랭킹 논의", Summary: "s"}, nil
 		},
 	}
 	p := newTestPipeline(t, fake)

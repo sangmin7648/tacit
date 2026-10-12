@@ -22,7 +22,7 @@ Install with the command above rather than a browser download: Tacit.app isn't n
 ## How it works
 
 - **Just talk.** The menu-bar icon shows whether tacit is listening and when it hears speech. There is nothing to press.
-- **Notes build up on their own.** Everything you say becomes a note with a title, category, keywords, and a short summary. Browse them by day and search them from the menu-bar icon.
+- **Notes build up on their own.** Everything you say becomes a note with a title, keywords, and a short summary. Browse them by day and search them from the menu-bar icon.
 - **Your AI can use them.** Ask Claude Code about something you said last week and it finds the note.
 
 ## Use with Claude
@@ -44,7 +44,7 @@ Notes saved with `/tacit.memorize` are found by `/tacit.knowledge` like anything
 
 - Speech is transcribed on your Mac. Audio never leaves it.
 - To organize notes, tacit sends the transcribed **text** to the model you choose: Ollama runs locally and sends nothing anywhere, while Claude receives the text.
-- Notes are plain Markdown files under `~/.tacit/<category>/`. Read, edit, move, or delete them with any tool.
+- Notes are plain Markdown files under `~/.tacit/`. Read, edit, move, or delete them with any tool.
 
 ## Settings
 

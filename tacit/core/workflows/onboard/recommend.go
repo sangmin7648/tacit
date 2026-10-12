@@ -99,9 +99,9 @@ func (r *Recommendation) recommendClassifier(ramBytes int64) {
 		r.Reasons[ReasonProvider] = "Ollama was not found. It keeps summaries on this Mac: install it from ollama.com, then look again."
 	}
 	if r.Ollama.Running && HasOllamaModel(r.Ollama.Models, DefaultOllamaModel) {
-		r.Reasons[ReasonModel] = DefaultOllamaModel + " is already installed. It gave the best titles and categories in our testing."
+		r.Reasons[ReasonModel] = DefaultOllamaModel + " is already installed. It gave the best titles in our testing."
 	} else {
-		r.Reasons[ReasonModel] = DefaultOllamaModel + " gave the best titles and categories in our testing."
+		r.Reasons[ReasonModel] = DefaultOllamaModel + " gave the best titles in our testing."
 		if r.Ollama.Running {
 			r.Reasons[ReasonModel] += " It is not installed yet; download it below."
 		}

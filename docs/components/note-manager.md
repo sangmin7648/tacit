@@ -1,10 +1,10 @@
 ---
 source: [tacit/core/internal/components/note-manager]
-verified: 4b3ae33
+verified: 9a2b7a0
 ---
 
 # note-manager
 
-Writes, reads, lists and searches the Markdown notes, and lists their categories. The format and its rules are in [knowledge-entry](../concepts/knowledge-entry.md); search is in [search](../concepts/search.md).
+Writes, reads, lists and searches the Markdown notes. The format and its rules are in [knowledge-entry](../concepts/knowledge-entry.md); search is in [search](../concepts/search.md).
 
-Writing validates the category and title and refuses path traversal; reading rejects files that are not valid entries. Search uses an embedded ripgrep, fetched at build time for macOS.
+Writing validates the title and never overwrites an existing note; reading rejects files that are not valid entries. Search uses an embedded ripgrep, fetched at build time for macOS.

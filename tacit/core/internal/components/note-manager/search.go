@@ -161,7 +161,6 @@ func Search(baseDir, pattern string, since time.Time) ([]*SearchResult, error) {
 		}
 
 		score := len(re.FindAllString(entry.Title, -1)) * 10
-		score += len(re.FindAllString(entry.Category, -1)) * 5
 		score += len(re.FindAllString(entry.Summary, -1)) * 3
 		score += len(re.FindAllString(entry.Content, -1)) * 1
 

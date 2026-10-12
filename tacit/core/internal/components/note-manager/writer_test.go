@@ -2,6 +2,7 @@ package notemanager
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,6 @@ func TestWrite_CreatesFileWithCorrectPath(t *testing.T) {
 
 	entry := &KnowledgeEntry{
 		Title:     "Test Title",
-		Category:  "dev",
 		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, time.FixedZone("KST", 9*3600)),
 		Summary:   "Summary text.",
 		Content:   "Content text.",
@@ -23,14 +23,8 @@ func TestWrite_CreatesFileWithCorrectPath(t *testing.T) {
 		t.Fatalf("Write() error: %v", err)
 	}
 
-	// Verify path contains category
-	if !strings.Contains(path, "dev") {
-		t.Errorf("path should contain category directory, got %s", path)
-	}
-
-	// Verify filename format
-	if !strings.HasSuffix(path, "20260328-143052.md") {
-		t.Errorf("path should end with timestamp filename, got %s", path)
+	if want := filepath.Join(baseDir, "20260328-143052.md"); path != want {
+		t.Errorf("path = %s, want %s", path, want)
 	}
 
 	// Verify file exists
@@ -39,32 +33,11 @@ func TestWrite_CreatesFileWithCorrectPath(t *testing.T) {
 	}
 }
 
-func TestWrite_InvalidCategory_WithSlash(t *testing.T) {
-	baseDir := t.TempDir()
-
-	entry := &KnowledgeEntry{
-		Title:     "Test Title",
-		Category:  "a/b",
-		CreatedAt: time.Now(),
-		Summary:   "Summary.",
-		Content:   "Content.",
-	}
-
-	_, err := Write(baseDir, entry)
-	if err == nil {
-		t.Fatal("Write() should return error for category with slash")
-	}
-	if !strings.Contains(err.Error(), "no slash allowed") {
-		t.Errorf("error should mention no slash allowed, got: %v", err)
-	}
-}
-
 func TestWrite_EmptyTitle(t *testing.T) {
 	baseDir := t.TempDir()
 
 	entry := &KnowledgeEntry{
 		Title:     "",
-		Category:  "dev",
 		CreatedAt: time.Now(),
 		Summary:   "Summary.",
 		Content:   "Content.",
@@ -85,7 +58,6 @@ func TestWrite_LongTitle(t *testing.T) {
 	longTitle := strings.Repeat("a", 101)
 	entry := &KnowledgeEntry{
 		Title:     longTitle,
-		Category:  "dev",
 		CreatedAt: time.Now(),
 		Summary:   "Summary.",
 		Content:   "Content.",
@@ -100,53 +72,57 @@ func TestWrite_LongTitle(t *testing.T) {
 	}
 }
 
-func TestWrite_PathTraversal(t *testing.T) {
+func TestWrite_SameSecondKeepsBothNotes(t *testing.T) {
 	baseDir := t.TempDir()
+	at := time.Date(2026, 3, 28, 14, 30, 52, 0, time.UTC)
 
-	entry := &KnowledgeEntry{
-		Title:     "Test",
-		Category:  "../escape",
-		CreatedAt: time.Now(),
-		Summary:   "Summary.",
-		Content:   "Content.",
+	first, err := Write(baseDir, &KnowledgeEntry{Title: "first", CreatedAt: at, Content: "one"})
+	if err != nil {
+		t.Fatalf("Write() error: %v", err)
 	}
-
-	_, err := Write(baseDir, entry)
-	if err == nil {
-		t.Fatal("Write() should return error for path traversal in category")
+	second, err := Write(baseDir, &KnowledgeEntry{Title: "second", CreatedAt: at, Content: "two"})
+	if err != nil {
+		t.Fatalf("Write() error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "path traversal") {
-		t.Errorf("error should mention path traversal, got: %v", err)
+	if first == second {
+		t.Fatalf("second note overwrote the first at %s", first)
+	}
+	for path, title := range map[string]string{first: "first", second: "second"} {
+		got, err := Read(path)
+		if err != nil || got.Title != title {
+			t.Errorf("Read(%s) = %+v, %v; want title %q", path, got, err, title)
+		}
 	}
 }
 
-func TestWrite_SingleLevelCategory(t *testing.T) {
+func TestUpdate_RewritesInPlace(t *testing.T) {
 	baseDir := t.TempDir()
-
-	entry := &KnowledgeEntry{
-		Title:     "Test",
-		Category:  "dev",
-		CreatedAt: time.Now(),
-		Summary:   "Summary.",
-		Content:   "Content.",
-	}
-
+	entry := &KnowledgeEntry{Title: "before", CreatedAt: time.Now(), Content: "one"}
 	path, err := Write(baseDir, entry)
 	if err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 
-	if !strings.Contains(path, "dev") {
-		t.Errorf("path should contain category, got %s", path)
+	entry.Title = "after"
+	if err := Update(path, entry); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+
+	got, err := Read(path)
+	if err != nil || got.Title != "after" {
+		t.Errorf("Read after Update = %+v, %v; want title after", got, err)
+	}
+	files, _ := filepath.Glob(filepath.Join(baseDir, "*.md"))
+	if len(files) != 1 {
+		t.Errorf("Update left %d files, want 1", len(files))
 	}
 }
 
-func TestWrite_KoreanCategory(t *testing.T) {
+func TestWrite_KoreanTitle(t *testing.T) {
 	baseDir := t.TempDir()
 
 	entry := &KnowledgeEntry{
 		Title:     "Go 에러 핸들링에서 sentinel error 패턴 사용",
-		Category:  "개발",
 		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, time.FixedZone("KST", 9*3600)),
 		Summary:   "Summary text here.",
 		Content:   "Content text here.",
@@ -156,8 +132,8 @@ func TestWrite_KoreanCategory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
-
-	if !strings.Contains(path, "개발") {
-		t.Errorf("path should contain Korean category directory, got %s", path)
+	got, err := Read(path)
+	if err != nil || got.Title != entry.Title {
+		t.Errorf("Read() = %+v, %v; want title %q", got, err, entry.Title)
 	}
 }

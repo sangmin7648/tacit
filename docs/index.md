@@ -45,3 +45,4 @@ The folders mirror `tacit/`. See [0011](decisions/0011-app-workflows-components.
 | [0011](decisions/0011-app-workflows-components.md) | Arrange the code as apps, workflows and components | accepted |
 | [0012](decisions/0012-continuation-decided-by-the-classifier.md) | Continuation is decided by the classifier | accepted |
 | [0013](decisions/0013-onboarding-recommends-from-the-environment.md) | Onboarding recommends from the environment | accepted |
+| [0014](decisions/0014-no-categories.md) | Notes have no categories | accepted |

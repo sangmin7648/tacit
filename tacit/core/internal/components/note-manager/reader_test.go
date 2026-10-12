@@ -3,7 +3,6 @@ package notemanager
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -14,7 +13,6 @@ func TestWriteAndRead_RoundTrip(t *testing.T) {
 
 	original := &KnowledgeEntry{
 		Title:     "Go 에러 핸들링에서 sentinel error 패턴 사용",
-		Category:  "개발",
 		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, loc),
 		Summary:   "Summary text here.",
 		Content:   "Content text here.",
@@ -26,11 +24,6 @@ func TestWriteAndRead_RoundTrip(t *testing.T) {
 		t.Fatalf("Write() error: %v", err)
 	}
 
-	// Verify path contains category
-	if !strings.Contains(path, "개발") {
-		t.Errorf("path should contain category, got %s", path)
-	}
-
 	// Read back
 	result, err := Read(path)
 	if err != nil {
@@ -40,9 +33,6 @@ func TestWriteAndRead_RoundTrip(t *testing.T) {
 	// Compare fields
 	if result.Title != original.Title {
 		t.Errorf("Title: got %q, want %q", result.Title, original.Title)
-	}
-	if result.Category != original.Category {
-		t.Errorf("Category: got %q, want %q", result.Category, original.Category)
 	}
 	if !result.CreatedAt.Equal(original.CreatedAt) {
 		t.Errorf("CreatedAt: got %v, want %v", result.CreatedAt, original.CreatedAt)
@@ -64,7 +54,6 @@ func TestWriteAndRead_Keywords_RoundTrip(t *testing.T) {
 
 	original := &KnowledgeEntry{
 		Title:     "파이썬 데코레이터 활용",
-		Category:  "개발",
 		CreatedAt: time.Date(2026, 3, 28, 14, 30, 52, 0, loc),
 		Keywords:  []string{"데코레이터", "decorator", "functools.wraps", "파이썬", "python"},
 		Summary:   "Summary text here.",
@@ -96,7 +85,6 @@ func TestWriteAndRead_NoKeywords_RoundTrip(t *testing.T) {
 
 	original := &KnowledgeEntry{
 		Title:     "No Keywords Entry",
-		Category:  "개발",
 		CreatedAt: time.Now(),
 		Summary:   "Summary.",
 		Content:   "Content.",
@@ -117,6 +105,8 @@ func TestWriteAndRead_NoKeywords_RoundTrip(t *testing.T) {
 	}
 }
 
+// The category line is what notes written before categories were removed still
+// carry; it must be ignored, not rejected.
 func TestRead_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "test.md")
@@ -144,9 +134,6 @@ This is the content section.
 
 	if entry.Title != "Test Entry" {
 		t.Errorf("Title: got %q, want %q", entry.Title, "Test Entry")
-	}
-	if entry.Category != "dev" {
-		t.Errorf("Category: got %q, want %q", entry.Category, "dev")
 	}
 	if entry.Summary != "This is the summary section." {
 		t.Errorf("Summary: got %q, want %q", entry.Summary, "This is the summary section.")

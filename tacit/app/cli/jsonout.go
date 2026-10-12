@@ -13,7 +13,7 @@ import (
 // jsonVersion is stamped on every --json document. Bump it for any change a
 // consumer could trip over — a renamed or retyped field. Adding a field is not
 // such a change: consumers are expected to ignore keys they don't know.
-const jsonVersion = 1
+const jsonVersion = 2
 
 // The --json documents. Each is an object rather than a bare array so fields
 // can be added later without breaking a consumer.

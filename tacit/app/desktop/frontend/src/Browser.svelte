@@ -12,7 +12,6 @@
 
   let query = $state('')
   let days = $state(7)
-  let category = $state('') // '' = all
   let entries = $state([])
   let loading = $state(true)
   let error = $state('')
@@ -20,9 +19,7 @@
   let detail = $state(null)
   let detailError = $state('')
 
-  const categories = $derived([...new Set(entries.map((e) => e.category))].sort())
-  const shown = $derived(category ? entries.filter((e) => e.category === category) : entries)
-  const groups = $derived(groupByDay(shown))
+  const groups = $derived(groupByDay(entries))
   let searchEl
 
   function dayLabel(d) {
@@ -73,9 +70,9 @@
   }
 
   function move(step) {
-    if (!shown.length) return
-    const i = shown.findIndex((e) => e.path === selectedPath)
-    const next = shown[Math.min(shown.length - 1, Math.max(0, i + step))]
+    if (!entries.length) return
+    const i = entries.findIndex((e) => e.path === selectedPath)
+    const next = entries[Math.min(entries.length - 1, Math.max(0, i + step))]
     select(next.path)
     document.querySelector(`[data-path="${CSS.escape(next.path)}"]`)?.scrollIntoView({ block: 'nearest' })
   }
@@ -98,7 +95,6 @@
       const result = await knowledge.search(query, days)
       if (mine !== seq) return
       entries = result
-      if (category && !result.some((e) => e.category === category)) category = ''
       const gone = !result.some((e) => e.path === selectedPath)
       if (result.length && (!selectedPath || (query.trim() && gone))) select(result[0].path)
     } catch (e) {
@@ -167,19 +163,13 @@
           <button class:on={days === r.days} onclick={() => { days = r.days; load() }}>{r.label}</button>
         {/each}
       </div>
-      {#if categories.length > 1}
-        <select bind:value={category} aria-label="Category">
-          <option value="">All categories</option>
-          {#each categories as c}<option value={c}>{c}</option>{/each}
-        </select>
-      {/if}
     </div>
 
     {#if error}
       <pre class="error pad">{error}</pre>
     {:else if loading && !entries.length}
       <p class="muted pad">Loading…</p>
-    {:else if shown.length === 0}
+    {:else if entries.length === 0}
       <div class="empty">
         <p><strong>{query ? 'No notes match' : 'Nothing here yet'}</strong></p>
         <p class="muted">
@@ -201,7 +191,6 @@
                   {#each marks(e.match_lines[0] ?? e.summary) as m}{#if m.hit}<mark>{m.text}</mark>{:else}{m.text}{/if}{/each}
                 </span>
                 <span class="meta">
-                  <span class="tag">{e.category}</span>
                   <span>{timeOf(e.created_at)}</span>
                 </span>
               </button>
@@ -219,7 +208,6 @@
       <div class="page">
         <header>
           <p class="kicker">
-            <span class="tag">{detail.category}</span>
             <span class="muted">{when(detail.created_at)}</span>
           </p>
           <h1>{detail.title}</h1>
@@ -249,7 +237,7 @@
           </div>
         {/if}
       </div>
-    {:else if !loading && shown.length}
+    {:else if !loading && entries.length}
       <p class="muted blank">Select a note.</p>
     {/if}
   </article>
@@ -323,15 +311,6 @@
   }
   .item.selected .snippet, .item.selected .meta { color: inherit; opacity: 0.85; }
   .meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .tag {
-    padding: 0 7px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--muted);
-    background: color-mix(in srgb, var(--text) 8%, transparent);
-  }
-  .item.selected .tag { background: rgba(255, 255, 255, 0.25); color: inherit; }
   mark { background: color-mix(in srgb, #ffcc00 55%, transparent); color: inherit; border-radius: 2px; }
   .item.selected mark { background: rgba(255, 255, 255, 0.3); }
 

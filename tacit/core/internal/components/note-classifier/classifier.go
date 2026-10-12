@@ -9,7 +9,6 @@ import (
 type ClassifyResult struct {
 	Title    string   `json:"title"`
 	Summary  string   `json:"summary"`
-	Category string   `json:"category"`
 	Keywords []string `json:"keywords,omitempty"`
 	Skip     bool     `json:"skip,omitempty"`
 	// Continues is the model's verdict that the text carries on the PreviousNote
@@ -30,11 +29,11 @@ type PreviousNote struct {
 // entry. A result that is not usable and not a skip means classification
 // failed, not that the transcript was worthless.
 func (r *ClassifyResult) Usable() bool {
-	return r != nil && (r.Title != "" || r.Summary != "" || r.Category != "")
+	return r != nil && (r.Title != "" || r.Summary != "")
 }
 
 // Classifier is the strategy interface for LLM-based text classification.
 type Classifier interface {
-	Classify(ctx context.Context, sttText string, existingCategories []string, previous *PreviousNote) (*ClassifyResult, error)
-	ClassifyBatch(ctx context.Context, texts []string, existingCategories []string) ([]*ClassifyResult, error)
+	Classify(ctx context.Context, sttText string, previous *PreviousNote) (*ClassifyResult, error)
+	ClassifyBatch(ctx context.Context, texts []string) ([]*ClassifyResult, error)
 }

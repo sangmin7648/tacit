@@ -2,15 +2,18 @@ package notemanager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// Write writes a KnowledgeEntry to a Markdown file with YAML frontmatter.
-// It creates the category directory structure under baseDir and returns the
-// absolute file path of the written file.
+// Write writes a KnowledgeEntry to a new Markdown file with YAML frontmatter.
+// The file goes directly under baseDir, named after CreatedAt, and its absolute
+// path is returned. A name already taken is never overwritten: a numeric suffix
+// is added instead, so two notes starting in the same second both survive.
 func Write(baseDir string, entry *KnowledgeEntry) (string, error) {
 	if err := validateEntry(entry); err != nil {
 		return "", err
@@ -20,25 +23,45 @@ func Write(baseDir string, entry *KnowledgeEntry) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving base directory: %w", err)
 	}
-
-	// Build category directory path
-	catDir := filepath.Join(absBase, filepath.FromSlash(entry.Category))
-	if err := os.MkdirAll(catDir, 0o755); err != nil {
-		return "", fmt.Errorf("creating category directory: %w", err)
+	if err := os.MkdirAll(absBase, 0o755); err != nil {
+		return "", fmt.Errorf("creating base directory: %w", err)
 	}
 
-	// Generate filename from CreatedAt
-	filename := entry.CreatedAt.Format("20060102-150405") + ".md"
-	filePath := filepath.Join(catDir, filename)
-
-	// Build file content
-	content := buildFileContent(entry)
-
-	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
-		return "", fmt.Errorf("writing file: %w", err)
+	stem := entry.CreatedAt.Format("20060102-150405")
+	content := []byte(buildFileContent(entry))
+	for n := 1; ; n++ {
+		name := stem + ".md"
+		if n > 1 {
+			name = fmt.Sprintf("%s-%d.md", stem, n)
+		}
+		filePath := filepath.Join(absBase, name)
+		f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("writing file: %w", err)
+		}
+		_, werr := f.Write(content)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return "", fmt.Errorf("writing file: %w", werr)
+		}
+		return filePath, nil
 	}
+}
 
-	return filePath, nil
+// Update rewrites the existing entry file at filePath in place.
+func Update(filePath string, entry *KnowledgeEntry) error {
+	if err := validateEntry(entry); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filePath, []byte(buildFileContent(entry)), 0o644); err != nil {
+		return fmt.Errorf("writing file: %w", err)
+	}
+	return nil
 }
 
 func validateEntry(entry *KnowledgeEntry) error {
@@ -55,20 +78,6 @@ func validateEntry(entry *KnowledgeEntry) error {
 		return fmt.Errorf("title must not exceed 100 characters")
 	}
 
-	// Category validation
-	category := strings.TrimSpace(entry.Category)
-	if category == "" {
-		return fmt.Errorf("category must not be empty")
-	}
-	if strings.Contains(category, "..") {
-		return fmt.Errorf("category must not contain path traversal (..)")
-	}
-
-	// Enforce single level: no slashes allowed
-	if strings.Contains(category, "/") {
-		return fmt.Errorf("category must be a single level (no slash allowed)")
-	}
-
 	return nil
 }
 
@@ -78,7 +87,6 @@ func buildFileContent(entry *KnowledgeEntry) string {
 	// YAML frontmatter
 	b.WriteString("---\n")
 	b.WriteString(fmt.Sprintf("title: %q\n", entry.Title))
-	b.WriteString(fmt.Sprintf("category: %q\n", entry.Category))
 	b.WriteString(fmt.Sprintf("created_at: %q\n", entry.CreatedAt.Format("2006-01-02T15:04:05-07:00")))
 	if len(entry.Keywords) > 0 {
 		kwJSON, _ := json.Marshal(entry.Keywords)

@@ -24,18 +24,18 @@ func seedNotes(t *testing.T, notes ...browse.Note) []string {
 	return paths
 }
 
-func note(title, category string, age time.Duration, content string) browse.Note {
+func note(title string, age time.Duration, content string) browse.Note {
 	return browse.Note{
-		Title: title, Category: category, CreatedAt: time.Now().Add(-age).Truncate(time.Second),
+		Title: title, CreatedAt: time.Now().Add(-age).Truncate(time.Second),
 		Summary: title + " summary", Content: content,
 	}
 }
 
 func TestList_RangeAndOrder(t *testing.T) {
 	seedNotes(t,
-		note("old", "work", 40*24*time.Hour, "x"),
-		note("recent", "work", 2*24*time.Hour, "x"),
-		note("today", "idea", time.Hour, "a long transcript"),
+		note("old", 40*24*time.Hour, "x"),
+		note("recent", 2*24*time.Hour, "x"),
+		note("today", time.Hour, "a long transcript"),
 	)
 	k := &KnowledgeService{}
 
@@ -62,7 +62,7 @@ func TestList_RangeAndOrder(t *testing.T) {
 
 // The list carries no transcript; opening an entry fetches it.
 func TestListOmitsTranscript_GetReturnsIt(t *testing.T) {
-	paths := seedNotes(t, note("today", "idea", time.Hour, "a long transcript"))
+	paths := seedNotes(t, note("today", time.Hour, "a long transcript"))
 	k := &KnowledgeService{}
 
 	es, _ := k.List(1)
@@ -80,9 +80,9 @@ func TestListOmitsTranscript_GetReturnsIt(t *testing.T) {
 
 func TestSearch(t *testing.T) {
 	seedNotes(t,
-		note("ranking meeting", "work", time.Hour, "we will try click-through reranking first"),
-		note("lunch", "daily", 2*time.Hour, "kimchi stew or convenience store"),
-		note("old reranking idea", "idea", 20*24*time.Hour, "reranking with bandits"),
+		note("ranking meeting", time.Hour, "we will try click-through reranking first"),
+		note("lunch", 2*time.Hour, "kimchi stew or convenience store"),
+		note("old reranking idea", 20*24*time.Hour, "reranking with bandits"),
 	)
 	k := &KnowledgeService{}
 
@@ -111,7 +111,7 @@ func TestSearch(t *testing.T) {
 // Every path the window hands back is checked: it must be a note inside the
 // knowledge base, whatever the window sends.
 func TestPathsConfinedToKnowledgeBase(t *testing.T) {
-	paths := seedNotes(t, note("today", "idea", time.Hour, "x"))
+	paths := seedNotes(t, note("today", time.Hour, "x"))
 	k := &KnowledgeService{}
 	base := configure.Dir()
 
@@ -144,13 +144,13 @@ func TestPathsConfinedToKnowledgeBase(t *testing.T) {
 // only through the browse workflow, which does not write them.
 func writeNote(t *testing.T, n *browse.Note) string {
 	t.Helper()
-	dir := filepath.Join(browse.Dir(), n.Category)
+	dir := browse.Dir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, n.CreatedAt.Format("20060102-150405")+".md")
-	body := fmt.Sprintf("---\ntitle: %q\ncategory: %q\ncreated_at: %q\n---\n\n%s\n\n---\n\n%s\n",
-		n.Title, n.Category, n.CreatedAt.Format(time.RFC3339), n.Summary, n.Content)
+	body := fmt.Sprintf("---\ntitle: %q\ncreated_at: %q\n---\n\n%s\n\n---\n\n%s\n",
+		n.Title, n.CreatedAt.Format(time.RFC3339), n.Summary, n.Content)
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
