@@ -2,8 +2,6 @@
   <img src=".github/assets/icon.png" width="96" align="absmiddle" alt="tacit app icon"> tacit
 </h1>
 
-<p align="center"><em>Never take notes again.</em></p>
-
 <p align="center">
   <a href="https://github.com/sangmin7648/tacit/releases"><img src="https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple" alt="macOS"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
@@ -11,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src=".github/assets/demo.gif" width="720" alt="Animation: click the tacit icon in the menu bar and choose Start Listening, say a sentence about moving a launch date, then ask Claude Code about it and get the answer from the saved note">
+  <img src=".github/assets/demo.gif" width="720" height="432" alt="Never take notes again. Animation: click the tacit icon in the menu bar and choose Start Listening, say a sentence about moving a launch date, then ask Claude Code about it and get the answer from the saved note">
 </p>
 
 tacit is a macOS menu-bar app that listens as you talk and turns it into notes your AI can search.
