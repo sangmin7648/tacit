@@ -1,195 +1,70 @@
 # tacit
 
-> Harness your tacit knowledge into AI agent context — on-device, always-on transcription.
+> What you say disappears. tacit remembers it.
+
+tacit is a macOS menu-bar app that listens to your microphone, writes down what you say, sorts it into notes, and makes those notes available to your AI conversations.
 
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](https://github.com/sangmin7648/tacit/releases)
-[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/sangmin7648/tacit)](https://github.com/sangmin7648/tacit/releases/latest)
 
+## Install
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sangmin7648/tacit/main/install.sh | sh
-tacit setup
-tacit listen   # start capturing
+open ~/Applications/Tacit.app
 ```
 
-This installs the menu-bar app, **Tacit.app**, into `~/Applications`, and links `~/.local/bin/tacit` to the CLI inside it, so the terminal and the app always run the same version. Use either: `open ~/Applications/Tacit.app` walks you through setup in a window, or run `tacit setup` in a terminal.
+The first launch walks you through choosing your language, a speech model, and how notes are organized, and asks for microphone access. After that, tacit sits in your menu bar and starts listening.
 
-`tacit update` (or running the install command again) updates both. Tacit.app isn't notarized, so install it this way rather than from a browser download; after an update macOS asks for the microphone again.
-
----
-
-Spoken ideas disappear. tacit transcribes them on-device, classifies them with a local Ollama model or Claude, and surfaces them as live context in any AI conversation — automatically.
-
----
+Install with the command above rather than a browser download: Tacit.app isn't notarized. To update, choose **Check for Updates** from the menu-bar icon, or run the command again. macOS asks for microphone access again after an update.
 
 ## How it works
 
-```
-speak → capture → VAD → STT → classify → store → retrieve
-```
+- **Just talk.** The menu-bar icon shows whether tacit is listening and when it hears speech. There is nothing to press.
+- **Notes build up on their own.** Everything you say becomes a note with a title, category, keywords, and a short summary. Browse them by day and search them from the menu-bar icon.
+- **Your AI can use them.** Ask Claude Code about something you said last week and it finds the note.
 
-1. **Capture** — Records the microphone in real time
-2. **Process** — Voice Activity Detection filters silence; Whisper transcribes speech on-device
-3. **Classify** — Ollama (default) or Claude extracts title, category, keywords, and summary from the transcript
-4. **Store** — Saves a structured Markdown entry to `~/.tacit/<category>/`
-5. **Retrieve** — `/tacit.knowledge` searches your knowledge base from inside any Claude conversation
+## Use with Claude
 
----
-
-## Features
-
-- **Fully automatic** — speak naturally; tacit handles transcription, classification, and storage without any manual steps
-- **On-device STT** — powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp); no audio ever leaves your machine
-- **Language-agnostic** — Whisper auto-detects language; works with Korean, English, or mixed conversation
-- **AI-native retrieval** — first-class [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) skill integration for in-conversation search
-
----
-
-## Use with AI
-
-After `tacit setup`, two skills are available inside Claude Code conversations:
-
-### `/tacit.knowledge` — search your spoken history
+tacit adds two commands to [Claude Code](https://docs.anthropic.com/en/docs/claude-code):
 
 ```
 /tacit.knowledge summarize the search ranking discussion from earlier
 /tacit.knowledge find the API design we talked about last week
 /tacit.knowledge any ideas about the onboarding flow from last month?
+
+/tacit.memorize                       # save the current conversation as a note
+/tacit.memorize skill development     # optional hint for how to file it
 ```
 
-### `/tacit.memorize` — save the current conversation
+Notes saved with `/tacit.memorize` are found by `/tacit.knowledge` like anything you said aloud.
 
-```
-/tacit.memorize
-/tacit.memorize skill development   # optional hint guides categorization
-```
+## Privacy
 
-Analyzes the current Claude conversation thread and saves it as a structured knowledge entry — automatically available to future `/tacit.knowledge` queries.
+- Speech is transcribed on your Mac. Audio never leaves it.
+- To organize notes, tacit sends the transcribed **text** to the model you choose: Ollama runs locally and sends nothing anywhere, while Claude receives the text.
+- Notes are plain Markdown files under `~/.tacit/<category>/`. Read, edit, move, or delete them with any tool.
 
----
+## Settings
 
-## Configuration
+Open **Settings** from the menu-bar icon. The ones most people change:
 
-Run `tacit setup` to generate two files in `~/.tacit/`:
-
-- **`config.yaml`** — a generated reference listing every field and its current default. Regenerated by `tacit setup`; do not edit it.
-- **`config-override.yaml`** — where your own settings go. Only the fields you uncomment here override the defaults.
-
-`tacit config view` prints the merged result, tagging each field `[default]` or `[override]`. `tacit config edit` opens the override file.
-
-### Transcription
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `whisper_model` | string | `large-v3-turbo` | Whisper model name, resolved as `ggml-<name>.bin` against the [whisper.cpp model repo](https://huggingface.co/ggerganov/whisper.cpp) and downloaded on first use — e.g. `base`, `small`, `medium`, `large-v3`, `large-v3-turbo`. Larger = more accurate, slower. |
-| `language` | string | `auto` | Transcription language code (`auto`, `en`, `ko`, …). Pinning it to the language you actually speak markedly reduces wrong-language transcriptions. |
-| `initial_prompt` | string | `""` | Vocabulary hint biasing decoding — useful for names, jargon, and acronyms Whisper keeps getting wrong. |
-| `transcript_denylist` | list | `[]` | Extra phrases to strip from transcripts, added to a built-in list of stock sentences Whisper hallucinates over silence (video outros and the like). A sentence is dropped only when a listed phrase makes up most of it; matching ignores case, spacing and punctuation. |
-| `dedup_window` | duration | `3h` | Drops a transcript whose text has already been stored several times within this rolling window — the fingerprint of a stock hallucination, which recurs verbatim far more than real speech does. The first two occurrences per window are always kept, so a genuinely repeated remark survives. `0` disables. |
-| `min_char_rate` | float | `0.2` | Drops a live transcript carrying too few characters for the length of audio it came from (letters and digits per second) — what is left when Whisper transcribes a stock phrase over a stretch it otherwise read as silence. Set low, so only unambiguous cases are caught. `0` disables. |
-
-### Segmentation
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `min_speech_duration` | duration | `2s` | Minimum segment length to process. Shorter segments are discarded. |
-| `silence_duration` | duration | `10s` | Silence required to end a speech segment. |
-| `max_segment_duration` | duration | `30s` | Caps a single segment sent to Whisper. Longer speech is split and transcribed as it goes, keeping memory bounded. `0` disables the cap. |
-| `max_session_duration` | duration | `5m` | Caps how long transcribed text accumulates before it is classified. Continuous speech never triggers the silence-based flush, so this keeps a long meeting from becoming one giant entry. With `max_segment_duration` at `0` this doubles as the split boundary, since text only accumulates at a split. `0` disables the cap. |
-| `speech_threshold` | float | `0.5` | VAD confidence threshold (0–1). Higher = more conservative. |
-| `energy_threshold` | int | `200` | Audio energy gate. Frames below this value are rejected before VAD. |
-
-### Classification
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `llm_provider` | string | `ollama` | Classification backend: `ollama` or `claude`. |
-| `llm_model` | string | `qwen3.5` | Model used for classification. For `claude`, a Claude Code CLI model name such as `haiku`. |
-| `skill_agent` | string | `claude` | Agent the `/tacit.*` skills are installed for. |
-
-A transcript that reaches classification is always stored. If the classifier errors out, returns nothing usable, or fills in only some of the fields, the entry is repaired — a missing title is taken from its opening words, a missing category becomes `unsorted` — rather than being dropped, so nothing you actually said goes missing from `tacit list`.
-
-The one exception is a deliberate skip: the classifier still discards a transcript it judges to carry nothing worth keeping (filler sounds, bare acknowledgements, call-connection chatter), and logs the text it dropped.
-
----
-
-## Architecture
-
-```mermaid
-graph LR
-    MIC[Microphone\n16kHz mono] --> CAP[Capture\nmalgo]
-    CAP --> VAD[VAD\nten-vad / Silero]
-    VAD --> BUF[Segment Buffer]
-    BUF --> STT[STT\nwhisper.cpp]
-    STT --> CLS[Classify\nOllama / Claude]
-    CLS --> KB[Knowledge Base\n~/.tacit/]
-```
-
-**Storage format** — each entry is a plain Markdown file:
-
-```markdown
----
-title: "Search ranking discussion"
-category: "dev"
-created_at: "2026-04-14T15:30:45+09:00"
-keywords: ["search", "ranking", "BM25", "lexical", "recall"]
----
-
-One-sentence AI-generated summary.
-
----
-
-Raw transcribed text from speech.
-```
-
-Entries are stored under `~/.tacit/<category>/YYYYMMDD-HHMMSS.md` — plain files, no proprietary database, fully editable.
-
----
+- **Language**: pin it to the language you speak. It makes transcription noticeably more accurate than auto-detect.
+- **Speech model**: larger is more accurate but slower.
+- **Note organizer**: Ollama (local) or Claude.
+- **Vocabulary hint**: names and jargon that get misheard.
 
 ## Requirements
 
 - macOS 13 or later, Apple Silicon
-- A classifier: [Ollama](https://ollama.com) (the default) or the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
-- To use the `/tacit.*` skills: the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), the only agent supported today
+- [Ollama](https://ollama.com) or the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) to organize notes
+- The Claude Code CLI to use `/tacit.knowledge` and `/tacit.memorize` (the only agent supported today)
 
----
+## Contributing
 
-<details>
-<summary>Build from source</summary>
+Issues and pull requests are welcome. Open an issue first for significant changes. See [CONTRIBUTING.md](CONTRIBUTING.md) to build from source, and [docs/](docs/index.md) for how the system fits together.
 
-**Requirements:** Go 1.23+, CMake, macOS
+## License
 
-```bash
-git clone --recursive https://github.com/sangmin7648/tacit.git
-cd tacit/tacit
-make build
-make install   # installs to ~/.local/bin/tacit
-```
-
-> If `~/.local/bin` is not in your `PATH`:
-> ```bash
-> export PATH="$HOME/.local/bin:$PATH"
-> ```
-
-Run the end-to-end test to verify the full pipeline:
-
-```bash
-make e2e-test
-```
-
-</details>
-
-<details>
-<summary>Contributing</summary>
-
-Issues and pull requests are welcome. Please open an issue first for significant changes. How the system fits together, and why, is in [`docs/`](docs/index.md).
-
-```bash
-make test       # run unit tests
-make e2e-test   # build + play a test recording through the full pipeline
-```
-
-> **Note:** Do not run `go build ./...` directly — the transcriber uses CGo against whisper.cpp and requires `make build` to compile first.
-
-</details>
+[MIT](LICENSE)
