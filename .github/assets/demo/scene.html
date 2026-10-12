@@ -37,6 +37,7 @@
   .it { height: 28px; line-height: 28px; padding: 0 12px; font-size: 16px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .it.dis { color: #8a8a8e; }
   .it.hl { background: #0a60ff; color: #fff; }
+  .rest { opacity: .38; }
   .sep { height: 1px; background: rgba(0, 0, 0, .1); margin: 5px 8px; }
 
   #term {
@@ -66,7 +67,9 @@
   #sub .w { opacity: .34; }
   #sub .w.on { opacity: 1; }
 
-  #veil { position: absolute; inset: 0; z-index: 90; background: #dfe1f4; opacity: 1; pointer-events: none; }
+  #veil { position: absolute; inset: 0; z-index: 90; background: #fff; opacity: 1; pointer-events: none; }
+  #intro { position: absolute; inset: 0; z-index: 95; background: #fff; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  #intro p { font-size: 56px; line-height: 1.1; font-weight: 700; letter-spacing: -.035em; color: #1d1d1f; }
 </style>
 
 <div id="world">
@@ -85,13 +88,15 @@
     <div id="menu">
       <div class="it dis" id="status">Not listening</div>
       <div class="it" id="ss">Start Listening</div>
-      <div class="sep"></div>
-      <div class="it dis">Recent</div>
-      <div class="it">Caterer quote for the offsite</div>
-      <div class="it">One-on-one with Daniel</div>
-      <div class="sep"></div>
-      <div class="it">Browse Notes…</div>
-      <div class="it">Quit Tacit</div>
+      <div class="rest">
+        <div class="sep"></div>
+        <div class="it dis">Recent</div>
+        <div class="it">Caterer quote for the offsite</div>
+        <div class="it">One-on-one with Daniel</div>
+        <div class="sep"></div>
+        <div class="it">Browse Notes…</div>
+        <div class="it">Quit Tacit</div>
+      </div>
     </div>
 
     <div id="term">
@@ -116,6 +121,7 @@
   </div>
 </div>
 <div id="veil"></div>
+<div id="intro"><p>Never take notes again</p></div>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -175,7 +181,7 @@
 
   const WORDS_EL = SAY.split(" ").map(w => { const e = document.createElement("span"); e.className = "w"; e.textContent = w + " "; $("say").appendChild(e); return e; });
 
-  function render(t) {
+  function renderScene(t) {
     if (!G) measure();
     const [cx, cy, s] = camAt(t); S = s;
     $("world").style.transform = `translate(${400 - cx * s}px, ${240 - cy * s}px) scale(${s})`;
@@ -233,7 +239,15 @@
 
     $("veil").style.opacity = clamp(1 - seg(t, 0, .3) + seg(t, DURATION - .45, DURATION));
   }
+  const INTRO = 3;
+  function render(T) {
+    renderScene(Math.max(0, T - INTRO));
+    const text = seg(T, .2, .8) * (1 - seg(T, INTRO - .45, INTRO));
+    $("intro").firstElementChild.style.opacity = text;
+    $("intro").firstElementChild.style.transform = `translateY(${(1 - seg(T, .2, .8)) * 10}px)`;
+    $("intro").style.opacity = 1 - seg(T, INTRO - .1, INTRO + .4);
+  }
   window.render = render;
-  window.DURATION = DURATION;
+  window.DURATION = INTRO + DURATION;
   render(0);
 </script>
