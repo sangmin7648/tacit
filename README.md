@@ -1,12 +1,18 @@
-# tacit
+<p align="center">
+  <img src=".github/assets/icon.png" width="128" alt="tacit app icon">
+</p>
 
-> What you say disappears. tacit remembers it.
+<h1 align="center">tacit</h1>
 
-tacit is a macOS menu-bar app that listens to your microphone, writes down what you say, sorts it into notes, and makes those notes available to your AI conversations.
+<p align="center"><em>Never take notes again.</em></p>
 
-[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](https://github.com/sangmin7648/tacit/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/sangmin7648/tacit)](https://github.com/sangmin7648/tacit/releases/latest)
+<p align="center">
+  <a href="https://github.com/sangmin7648/tacit/releases"><img src="https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple" alt="macOS"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
+  <a href="https://github.com/sangmin7648/tacit/releases/latest"><img src="https://img.shields.io/github/v/release/sangmin7648/tacit" alt="Latest Release"></a>
+</p>
+
+tacit is a macOS menu-bar app that listens as you talk and turns it into notes your AI can search.
 
 ## Install
 
