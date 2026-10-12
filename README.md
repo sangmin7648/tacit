@@ -14,8 +14,6 @@ tacit is a macOS menu-bar app that listens as you talk and turns it into notes y
 
 <p align="center">
   <img src=".github/assets/demo.gif" width="720" alt="Animation: click the tacit icon in the menu bar and choose Start Listening, say a sentence about moving a launch date, then ask Claude Code about it and get the answer from the saved note">
-  <br>
-  <sub>Illustration of the flow; not a screen recording.</sub>
 </p>
 
 ## Install
