@@ -1,0 +1,7 @@
+{
+  "name": "tacit-demo",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node render.mjs" },
+  "dependencies": { "playwright-core": "^1.64.0" }
+}
