@@ -14,7 +14,7 @@
   <img src=".github/assets/demo.gif" width="720" height="432" alt="Animation: click the tacit icon in the menu bar and choose Start Listening, say a sentence about moving a launch date, then ask Claude Code about it and get the answer from the saved note">
 </p>
 
-tacit is a `Free, On Device/Local` macOS menu-bar app that listens as you talk and turns it into notes your AI can search.
+tacit is a `Free, On Device/Local` macOS app that listens as you talk and turns it into notes your AI can search.
 
 ## Install
 
