@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1280px;height:640px}
+  body{display:flex;align-items:center;justify-content:center;gap:40px;padding:0 104px;
+    font-family:-apple-system,"SF Pro Display",Helvetica,Arial,sans-serif;background:#fff;color:#1d1d1f}
+  /* The icon PNG has about 10% transparent margin; the negative margin trims it so the
+     artwork, not the file, sets the size and spacing. */
+  img{width:410px;height:410px;flex:none;margin:-40px}
+  .txt{display:flex;flex-direction:column;gap:22px}
+  h1,.tag{display:inline-block;white-space:nowrap}
+  h1{font-weight:800;letter-spacing:-.045em;line-height:.9}
+  .tag{font-weight:700;letter-spacing:-.035em;line-height:1.05;color:#312e81}
+</style>
+<body>
+  <img src="../icon.png" alt="">
+  <div class="txt"><h1 id="name">tacit</h1><p class="tag" id="tag">Never take notes again</p></div>
+<script>
+  // Both lines get the largest size that fits the column to the right of the icon.
+  const W = 1280 - 2 * 104 - 40 - (410 - 80);
+  const fit = (el, cap) => {
+    let fs = 20; el.style.fontSize = fs + 'px';
+    while (el.getBoundingClientRect().width <= W && fs < cap) { fs++; el.style.fontSize = fs + 'px' }
+    el.style.fontSize = (fs - 1) + 'px';
+  };
+  fit(document.getElementById('tag'), 260);
+  fit(document.getElementById('name'), 230);
+</script>
+</body>
