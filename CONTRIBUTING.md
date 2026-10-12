@@ -64,4 +64,4 @@ Settings live in `~/.tacit/`. Put your own values in `config-override.yaml`; `ta
 | `llm_model` | `qwen3.5` | Model for organizing notes. For `claude`, a Claude Code model name such as `haiku`. |
 | `skill_agent` | `claude` | The AI agent that gets the `/tacit.*` commands. |
 
-Anything you say is kept. If the organizer fails or returns only part of an answer, the note is still saved, with a title taken from your first words and the category `unsorted`. The one exception is speech the organizer judges to be nothing worth keeping, such as filler sounds or "hello, can you hear me?" call chatter.
+Anything you say is kept. If the organizer fails or returns only part of an answer, the note is still saved, with a title taken from your first words. The one exception is speech the organizer judges to be nothing worth keeping, such as filler sounds or "hello, can you hear me?" call chatter.

@@ -425,20 +425,18 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 			}
 		}
 
-		existingCategories := notemanager.ListCategories(p.baseDir)
-
 		// Only a single classify call can carry the previous note, so a backlog
 		// batch peels its first item off to be judged against it.
 		if len(batch) > 1 && p.previousNote() != nil {
 			p.emit(statusreporter.Event{Kind: statusreporter.KindClassifying, Source: batch[0].source})
-			p.classifyAndStore(ctx, batch[0], existingCategories)
+			p.classifyAndStore(ctx, batch[0])
 			batch = batch[1:]
 		}
 
 		if len(batch) == 1 {
 			log.Printf("Classifying 1 segment...")
 			p.emit(statusreporter.Event{Kind: statusreporter.KindClassifying, Source: batch[0].source})
-			p.classifyAndStore(ctx, batch[0], existingCategories)
+			p.classifyAndStore(ctx, batch[0])
 			continue
 		}
 
@@ -448,7 +446,7 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 		for i, b := range batch {
 			texts[i] = b.text
 		}
-		results, err := p.classifier.ClassifyBatch(ctx, texts, existingCategories)
+		results, err := p.classifier.ClassifyBatch(ctx, texts)
 		if err != nil {
 			log.Printf("Batch classify error, falling back to individual: %v", err)
 			results = nil
@@ -463,7 +461,7 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 				p.dispatch(b, results[i])
 				continue
 			}
-			p.classifyAndStore(ctx, b, existingCategories)
+			p.classifyAndStore(ctx, b)
 		}
 	}
 }
@@ -472,12 +470,12 @@ func (p *Pipeline) classifyLoop(ctx context.Context, ch <-chan classifyItem) {
 // outcome. A transcript is never discarded because classification failed: if
 // the classifier errors out or answers with nothing usable, the entry is stored
 // unclassified so it still turns up in `tacit list`.
-func (p *Pipeline) classifyAndStore(ctx context.Context, item classifyItem, existingCategories []string) {
+func (p *Pipeline) classifyAndStore(ctx context.Context, item classifyItem) {
 	previous := p.previousNote()
-	classified, err := p.classifier.Classify(ctx, item.text, existingCategories, previous)
+	classified, err := p.classifier.Classify(ctx, item.text, previous)
 	if err != nil && ctx.Err() == nil {
 		log.Printf("Classify error (%v); retrying once", err)
-		classified, err = p.classifier.Classify(ctx, item.text, existingCategories, previous)
+		classified, err = p.classifier.Classify(ctx, item.text, previous)
 	}
 	if err != nil {
 		log.Printf("Classify failed (%v); storing unclassified: %s", err, TruncateForLog(item.text))
@@ -566,11 +564,11 @@ func (p *Pipeline) appendToLast(classified *noteclassifier.ClassifyResult, item 
 		note.Keywords = final.Keywords
 	}
 	note.Content = strings.TrimSpace(note.Content + "\n\n" + item.text)
-	filePath, err := notemanager.Write(p.baseDir, note)
-	if err != nil {
+	if err := notemanager.Update(p.last.path, note); err != nil {
 		log.Printf("Cannot continue previous note (%v); storing a new one", err)
 		return false
 	}
+	filePath := p.last.path
 	log.Printf("Knowledge entry extended: %s", filePath)
 	p.last = &lastNote{path: filePath, title: note.Title, summary: note.Summary, tail: speechTail(item.text), updated: time.Now()}
 	return true
@@ -579,13 +577,12 @@ func (p *Pipeline) appendToLast(classified *noteclassifier.ClassifyResult, item 
 // newKnowledgeEntry builds the entry to write. It runs the classification
 // through noteclassifier.Finalize first: this is the single point every stored entry
 // passes through, and a result that Usable() accepted can still be rejected by
-// notemanager.Write (empty title, empty or multi-level category), which would drop
+// notemanager.Write (an empty or over-long title), which would drop
 // a successfully transcribed segment for the same reason issue #12 did.
 func newKnowledgeEntry(classified *noteclassifier.ClassifyResult, content string, ts time.Time) *notemanager.KnowledgeEntry {
 	final := noteclassifier.Finalize(classified, content)
 	return &notemanager.KnowledgeEntry{
 		Title:     final.Title,
-		Category:  final.Category,
 		CreatedAt: ts,
 		Keywords:  final.Keywords,
 		Summary:   final.Summary,

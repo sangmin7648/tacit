@@ -20,9 +20,6 @@ func TestFallbackResult_IsStorable(t *testing.T) {
 		if n := len([]rune(r.Title)); n > 100 {
 			t.Errorf("title too long for notemanager.Write: %d runes", n)
 		}
-		if r.Category != UnsortedCategory {
-			t.Errorf("category = %q, want %q", r.Category, UnsortedCategory)
-		}
 		if !r.Usable() {
 			t.Errorf("fallback result must be usable")
 		}
@@ -42,20 +39,6 @@ func TestSanitizeResult_DoesNotInventSkip(t *testing.T) {
 	}
 }
 
-func TestSanitizeResult_StillCleansCategory(t *testing.T) {
-	r := &ClassifyResult{Title: "t", Category: "dev/backend"}
-	sanitizeResult(r)
-	if r.Category != "dev" {
-		t.Errorf("category = %q, want %q", r.Category, "dev")
-	}
-
-	r = &ClassifyResult{Title: "t", Category: "chat"}
-	sanitizeResult(r)
-	if r.Category != "daily" {
-		t.Errorf("category = %q, want %q", r.Category, "daily")
-	}
-}
-
 func TestUsable(t *testing.T) {
 	tests := []struct {
 		name string
@@ -65,7 +48,6 @@ func TestUsable(t *testing.T) {
 		{"nil", nil, false},
 		{"empty", &ClassifyResult{}, false},
 		{"title only", &ClassifyResult{Title: "t"}, true},
-		{"category only", &ClassifyResult{Category: "dev"}, true},
 		{"summary only", &ClassifyResult{Summary: "s"}, true},
 	}
 	for _, tt := range tests {
@@ -80,20 +62,15 @@ func TestUsable(t *testing.T) {
 func TestFinalize_AlwaysStorable(t *testing.T) {
 	const text = "태그 롤백 논의를 했고 CDC 파이프라인부터 다시 봐야 한다"
 	tests := []struct {
-		name         string
-		in           *ClassifyResult
-		wantCategory string
-		wantTitle    string
+		name      string
+		in        *ClassifyResult
+		wantTitle string
 	}{
-		{"nil", nil, UnsortedCategory, ""},
-		{"empty", &ClassifyResult{}, UnsortedCategory, ""},
-		{"empty title keeps category", &ClassifyResult{Category: "daily", Summary: "s"}, "daily", ""},
-		{"whitespace title", &ClassifyResult{Title: "   ", Category: "daily"}, "daily", ""},
-		{"empty category", &ClassifyResult{Title: "제목"}, UnsortedCategory, "제목"},
-		{"slash category", &ClassifyResult{Title: "제목", Category: "dev/backend"}, "dev", "제목"},
-		{"backslash category", &ClassifyResult{Title: "제목", Category: `dev\backend`}, "dev", "제목"},
-		{"traversal category", &ClassifyResult{Title: "제목", Category: "../../etc"}, UnsortedCategory, "제목"},
-		{"chat alias", &ClassifyResult{Title: "제목", Category: "chat"}, "daily", "제목"},
+		{"nil", nil, ""},
+		{"empty", &ClassifyResult{}, ""},
+		{"empty title", &ClassifyResult{Summary: "s"}, ""},
+		{"whitespace title", &ClassifyResult{Title: "   ", Summary: "s"}, ""},
+		{"good title", &ClassifyResult{Title: "제목"}, "제목"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,9 +81,6 @@ func TestFinalize_AlwaysStorable(t *testing.T) {
 			if n := len([]rune(got.Title)); n > 100 {
 				t.Errorf("title is %d runes; notemanager.Write rejects over 100", n)
 			}
-			if got.Category != tt.wantCategory {
-				t.Errorf("category = %q, want %q", got.Category, tt.wantCategory)
-			}
 			if tt.wantTitle != "" && got.Title != tt.wantTitle {
 				t.Errorf("title = %q, want %q", got.Title, tt.wantTitle)
 			}
@@ -116,7 +90,7 @@ func TestFinalize_AlwaysStorable(t *testing.T) {
 
 func TestFinalize_TruncatesOverlongTitle(t *testing.T) {
 	long := strings.Repeat("아", 400)
-	got := Finalize(&ClassifyResult{Title: long, Category: "work"}, "본문")
+	got := Finalize(&ClassifyResult{Title: long}, "본문")
 	if n := len([]rune(got.Title)); n != 100 {
 		t.Errorf("title = %d runes, want exactly the 100-rune limit", n)
 	}
@@ -127,12 +101,12 @@ func TestFinalize_TruncatesOverlongTitle(t *testing.T) {
 
 // Finalize must not overwrite a perfectly good classification.
 func TestFinalize_LeavesGoodResultAlone(t *testing.T) {
-	in := &ClassifyResult{Title: "제목", Summary: "요약", Category: "work", Keywords: []string{"a"}}
+	in := &ClassifyResult{Title: "제목", Summary: "요약", Keywords: []string{"a"}}
 	got := Finalize(in, "본문")
-	if got.Title != "제목" || got.Summary != "요약" || got.Category != "work" || len(got.Keywords) != 1 {
+	if got.Title != "제목" || got.Summary != "요약" || len(got.Keywords) != 1 {
 		t.Errorf("Finalize altered a valid result: %+v", got)
 	}
-	if in.Title != "제목" || in.Category != "work" {
+	if in.Title != "제목" {
 		t.Errorf("Finalize mutated its argument: %+v", in)
 	}
 }

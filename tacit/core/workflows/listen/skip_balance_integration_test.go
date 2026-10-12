@@ -24,13 +24,11 @@ func TestClassifier_SkipBalance_Ollama(t *testing.T) {
 		t.Skipf("ollama unavailable: %v", err)
 	}
 
-	categories := []string{"dev", "work", "daily"}
-
 	for _, c := range corpusKeep {
 		// The pipeline strips hallucinated boilerplate before classifying, so
 		// the classifier sees what it would see in production.
 		cleaned := transcriber.FilterHallucinations(c.text, nil)
-		r, err := o.Classify(ctx, cleaned, categories, nil)
+		r, err := o.Classify(ctx, cleaned, nil)
 		if err != nil {
 			t.Fatalf("classify %q: %v", cleaned, err)
 		}
@@ -38,8 +36,8 @@ func TestClassifier_SkipBalance_Ollama(t *testing.T) {
 		switch {
 		case r.Skip:
 			t.Errorf("real speech was skipped: %q", c.text)
-		case final.Title == "" || final.Category == "":
-			t.Errorf("result is not storable for %q: title=%q category=%q", c.text, final.Title, final.Category)
+		case final.Title == "":
+			t.Errorf("result is not storable for %q: title=%q", c.text, final.Title)
 		}
 	}
 
@@ -47,12 +45,12 @@ func TestClassifier_SkipBalance_Ollama(t *testing.T) {
 		if transcriber.IsFiller(text) {
 			continue // the Go gate already catches it; the model is never asked
 		}
-		r, err := o.Classify(ctx, text, categories, nil)
+		r, err := o.Classify(ctx, text, nil)
 		if err != nil {
 			t.Fatalf("classify %q: %v", text, err)
 		}
 		if !r.Skip {
-			t.Errorf("worthless transcript was kept: %q -> title=%q category=%q", text, r.Title, r.Category)
+			t.Errorf("worthless transcript was kept: %q -> title=%q", text, r.Title)
 		}
 	}
 }

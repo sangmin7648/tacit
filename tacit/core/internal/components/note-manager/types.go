@@ -10,7 +10,6 @@ import "time"
 // alongside a bump of the CLI's JSON version.
 type KnowledgeEntry struct {
 	Title     string    `yaml:"title" json:"title"`
-	Category  string    `yaml:"category" json:"category"`
 	CreatedAt time.Time `yaml:"created_at" json:"created_at"`
 	Keywords  []string  `yaml:"keywords,omitempty" json:"keywords"`
 	Summary   string    `json:"summary"` // Body first section (before ---)

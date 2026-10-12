@@ -679,7 +679,7 @@ func cmdList() {
 
 	fmt.Printf("Found %d entries in the last %s:\n\n", len(entries), durStr)
 	for _, e := range entries {
-		fmt.Printf("[%s] %s / %s\n", e.CreatedAt.Format("2006-01-02 15:04:05"), e.Category, e.Title)
+		fmt.Printf("[%s] %s\n", e.CreatedAt.Format("2006-01-02 15:04:05"), e.Title)
 		fmt.Printf("  File:    %s\n", e.FilePath)
 		if e.Summary != "" {
 			// Print first line of summary
@@ -762,7 +762,7 @@ func cmdSearch() {
 		fmt.Printf("Found %d result(s) for %q:\n\n", len(results), pattern)
 	}
 	for _, r := range results {
-		fmt.Printf("[%s] %s / %s\n", r.CreatedAt.Format("2006-01-02 15:04:05"), r.Category, r.Title)
+		fmt.Printf("[%s] %s\n", r.CreatedAt.Format("2006-01-02 15:04:05"), r.Title)
 		fmt.Printf("  File:  %s\n", r.FilePath)
 		for _, line := range r.MatchLines {
 			fmt.Printf("  Match: %s\n", line)
@@ -808,10 +808,9 @@ func cmdGet() {
 			continue
 		}
 
-		fmt.Printf("Title:    %s\n", entry.Title)
-		fmt.Printf("Category: %s\n", entry.Category)
-		fmt.Printf("Created:  %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("File:     %s\n", entry.FilePath)
+		fmt.Printf("Title:   %s\n", entry.Title)
+		fmt.Printf("Created: %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("File:    %s\n", entry.FilePath)
 		fmt.Println()
 		if entry.Summary != "" {
 			fmt.Println("## Summary")

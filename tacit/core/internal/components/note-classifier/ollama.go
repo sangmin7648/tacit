@@ -86,12 +86,12 @@ func HasOllamaModel(models []string, model string) bool {
 	return false
 }
 
-func (o *OllamaClassifier) Classify(ctx context.Context, sttText string, existingCategories []string, previous *PreviousNote) (*ClassifyResult, error) {
+func (o *OllamaClassifier) Classify(ctx context.Context, sttText string, previous *PreviousNote) (*ClassifyResult, error) {
 	if sttText == "" {
 		return nil, fmt.Errorf("empty STT text")
 	}
 
-	output, err := o.runOllama(ctx, singleSystemPrompt, buildPrompt(sttText, existingCategories, previous), classifySchema)
+	output, err := o.runOllama(ctx, singleSystemPrompt, buildPrompt(sttText, previous), classifySchema)
 	if err != nil {
 		return nil, err
 	}
@@ -104,19 +104,19 @@ func (o *OllamaClassifier) Classify(ctx context.Context, sttText string, existin
 	return &result, nil
 }
 
-func (o *OllamaClassifier) ClassifyBatch(ctx context.Context, texts []string, existingCategories []string) ([]*ClassifyResult, error) {
+func (o *OllamaClassifier) ClassifyBatch(ctx context.Context, texts []string) ([]*ClassifyResult, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("empty texts")
 	}
 	if len(texts) == 1 {
-		r, err := o.Classify(ctx, texts[0], existingCategories, nil)
+		r, err := o.Classify(ctx, texts[0], nil)
 		if err != nil {
 			return nil, err
 		}
 		return []*ClassifyResult{r}, nil
 	}
 
-	output, err := o.runOllama(ctx, batchSystemPrompt, buildBatchPrompt(texts, existingCategories), batchClassifySchema)
+	output, err := o.runOllama(ctx, batchSystemPrompt, buildBatchPrompt(texts), batchClassifySchema)
 	if err != nil {
 		return nil, err
 	}
@@ -169,13 +169,12 @@ type ollamaGenerateRequest struct {
 // always skipping when it was tried on #12.
 var classifySchema = json.RawMessage(`{
   "type": "object",
-  "required": ["skip", "continues", "title", "summary", "category", "keywords"],
+  "required": ["skip", "continues", "title", "summary", "keywords"],
   "properties": {
     "skip":      {"type": "boolean"},
     "continues": {"type": "boolean"},
     "title":     {"type": "string"},
     "summary":   {"type": "string"},
-    "category":  {"type": "string"},
     "keywords":  {"type": "array", "items": {"type": "string"}}
   }
 }`)
@@ -192,12 +191,11 @@ var batchClassifySchema = json.RawMessage(`{
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["skip", "title", "summary", "category", "keywords"],
+        "required": ["skip", "title", "summary", "keywords"],
         "properties": {
           "skip":     {"type": "boolean"},
           "title":    {"type": "string"},
           "summary":  {"type": "string"},
-          "category": {"type": "string"},
           "keywords": {"type": "array", "items": {"type": "string"}}
         }
       }

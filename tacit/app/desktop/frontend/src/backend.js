@@ -85,7 +85,7 @@ function makeFake() {
         },
         reasons: {
           llm_provider: 'Ollama is running here, so summaries stay on this Mac.',
-          llm_model: 'qwen3.5 gave the best titles and categories in our testing. It is not installed yet; download it below.',
+          llm_model: 'qwen3.5 gave the best titles in our testing. It is not installed yet; download it below.',
           skill_agent: 'Claude Code is installed, so your notes can be searched from it.',
           language: 'Your Mac lists en and ko, so Tacit detects the language as you speak. Pick one if you only speak that.',
           whisper_model: 'This Mac has 32 GB of RAM. large-v3-turbo uses about 2.1 GB of RAM while transcribing and is the most accurate choice that fits.',

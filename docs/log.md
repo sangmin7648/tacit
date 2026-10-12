@@ -16,3 +16,4 @@ Append-only. One line per change: date, what, why.
 - 2026-10-11: Onboarding offers three speech models (base, small, large-v3-turbo), skips the download step when the model is present, and shows a waiting state while the microphone prompt is open. Updated desktop; checked against 6e2c3cd.
 - 2026-10-11: Menu-bar icon drops the working spinner: transcribing and classifying show as listening. Updated desktop; checked against bf2e54a.
 - 2026-10-11: Removed the `experimental` setting: non-speech token suppression and the 192 ms pre-roll are always on, and setup no longer asks. Updated segmentation and onboard; checked against 831cd18.
+- 2026-10-12: Removed categories: the classifier no longer assigns one, notes are stored flat in the knowledge base, same-second notes get a numeric suffix, and `--json` output drops `category` (version 2). Added 0014; updated glossary, classification, knowledge-entry, search, note-manager and note-classifier; checked against 9a2b7a0.

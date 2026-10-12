@@ -29,7 +29,7 @@ When the user invokes `/tacit.knowledge <prompt>`, extract the time window from 
 tacit list <duration>
 ```
 - Use the time window from the prompt if specified; otherwise use `1h`
-- Parse the output: each entry has `[datetime] category / title`, `File: <path>`, and optionally `Summary: <first line>`
+- Parse the output: each entry has `[datetime] title`, `File: <path>`, and optionally `Summary: <first line>`
 - Collect all file paths from the output
 
 **Search agent** — finds topically relevant entries:
@@ -38,7 +38,7 @@ tacit list <duration>
 3. Collect all unique file paths from results
 4. Deduplicate across keywords
 
-Each agent returns: a list of `{ file_path, title, category, created_at, summary_snippet }` objects.
+Each agent returns: a list of `{ file_path, title, created_at, summary_snippet }` objects.
 
 ### Step 2 — Merge results
 

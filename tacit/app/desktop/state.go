@@ -162,8 +162,5 @@ func entryLabel(e *browse.Note) string {
 		r := []rune(title)
 		title = string(r[:max-1]) + "…"
 	}
-	if e.Category != "" {
-		return e.Category + " · " + title
-	}
 	return title
 }

@@ -30,7 +30,7 @@ type fakeClassifier struct {
 
 var _ noteclassifier.Classifier = (*fakeClassifier)(nil)
 
-func (f *fakeClassifier) Classify(ctx context.Context, text string, cats []string, previous *noteclassifier.PreviousNote) (*noteclassifier.ClassifyResult, error) {
+func (f *fakeClassifier) Classify(ctx context.Context, text string, previous *noteclassifier.PreviousNote) (*noteclassifier.ClassifyResult, error) {
 	f.mu.Lock()
 	f.previous = append(f.previous, previous)
 	f.singleCalls++
@@ -39,12 +39,12 @@ func (f *fakeClassifier) Classify(ctx context.Context, text string, cats []strin
 	fn := f.singleFn
 	f.mu.Unlock()
 	if fn == nil {
-		return &noteclassifier.ClassifyResult{Title: "t", Summary: "s", Category: "dev"}, nil
+		return &noteclassifier.ClassifyResult{Title: "t", Summary: "s"}, nil
 	}
 	return fn(call, text)
 }
 
-func (f *fakeClassifier) ClassifyBatch(ctx context.Context, texts []string, cats []string) ([]*noteclassifier.ClassifyResult, error) {
+func (f *fakeClassifier) ClassifyBatch(ctx context.Context, texts []string) ([]*noteclassifier.ClassifyResult, error) {
 	f.mu.Lock()
 	f.batchCalls++
 	call := f.batchCalls
@@ -53,7 +53,7 @@ func (f *fakeClassifier) ClassifyBatch(ctx context.Context, texts []string, cats
 	if fn == nil {
 		out := make([]*noteclassifier.ClassifyResult, len(texts))
 		for i := range out {
-			out[i] = &noteclassifier.ClassifyResult{Title: "t", Summary: "s", Category: "dev"}
+			out[i] = &noteclassifier.ClassifyResult{Title: "t", Summary: "s"}
 		}
 		return out, nil
 	}
@@ -152,9 +152,6 @@ func TestClassifyLoop_EmptyResultIsStoredNotDropped(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("transcript was dropped: stored %d entries, want 1", len(got))
 	}
-	if _, err := os.Stat(filepath.Join(p.baseDir, noteclassifier.UnsortedCategory)); err != nil {
-		t.Errorf("expected entry under %q: %v", noteclassifier.UnsortedCategory, err)
-	}
 }
 
 // A classifier error must not delete the transcript either — it is retried once
@@ -184,7 +181,7 @@ func TestClassifyLoop_RetrySucceeds(t *testing.T) {
 			if call == 1 {
 				return nil, fmt.Errorf("transient")
 			}
-			return &noteclassifier.ClassifyResult{Title: "복구된 항목", Summary: "s", Category: "work"}, nil
+			return &noteclassifier.ClassifyResult{Title: "복구된 항목", Summary: "s"}, nil
 		},
 	}
 	p := newTestPipeline(t, fake)
@@ -198,9 +195,6 @@ func TestClassifyLoop_RetrySucceeds(t *testing.T) {
 	if !strings.Contains(got[0], "복구된 항목") {
 		t.Errorf("title = %s, want the retried classification", got[0])
 	}
-	if _, err := os.Stat(filepath.Join(p.baseDir, "work")); err != nil {
-		t.Errorf("expected entry under \"work\": %v", err)
-	}
 }
 
 // A batch response shorter than the batch used to leave the trailing segments
@@ -210,12 +204,12 @@ func TestClassifyLoop_ShortBatchFallsBackPerItem(t *testing.T) {
 		batchFn: func(call int, texts []string) ([]*noteclassifier.ClassifyResult, error) {
 			// Two results for five inputs.
 			return []*noteclassifier.ClassifyResult{
-				{Title: "첫번째", Summary: "s", Category: "work"},
-				{Title: "두번째", Summary: "s", Category: "work"},
+				{Title: "첫번째", Summary: "s"},
+				{Title: "두번째", Summary: "s"},
 			}, nil
 		},
 		singleFn: func(call int, text string) (*noteclassifier.ClassifyResult, error) {
-			return &noteclassifier.ClassifyResult{Title: "개별 " + text, Summary: "s", Category: "dev"}, nil
+			return &noteclassifier.ClassifyResult{Title: "개별 " + text, Summary: "s"}, nil
 		},
 	}
 	p := newTestPipeline(t, fake)
@@ -236,12 +230,12 @@ func TestClassifyLoop_NilBatchEntryFallsBack(t *testing.T) {
 	fake := &fakeClassifier{
 		batchFn: func(call int, texts []string) ([]*noteclassifier.ClassifyResult, error) {
 			return []*noteclassifier.ClassifyResult{
-				{Title: "있음", Summary: "s", Category: "work"},
+				{Title: "있음", Summary: "s"},
 				nil,
 			}, nil
 		},
 		singleFn: func(call int, text string) (*noteclassifier.ClassifyResult, error) {
-			return &noteclassifier.ClassifyResult{Title: "폴백", Summary: "s", Category: "dev"}, nil
+			return &noteclassifier.ClassifyResult{Title: "폴백", Summary: "s"}, nil
 		},
 	}
 	p := newTestPipeline(t, fake)
@@ -357,20 +351,16 @@ func TestClassifyLoop_ExplicitSkipIsHonoured(t *testing.T) {
 }
 
 // A result that Usable() accepts can still be rejected by notemanager.Write. The
-// real qwen3.5 returns exactly this — a category with an empty title — and it
+// real qwen3.5 returns exactly this — a summary with an empty title — and it
 // used to die at the write with only a "Write error" line, losing the
 // transcript the same way issue #12 did.
 func TestClassifyLoop_PartialResultIsRepairedNotDropped(t *testing.T) {
 	tests := []struct {
-		name         string
-		result       noteclassifier.ClassifyResult
-		wantCategory string
+		name   string
+		result noteclassifier.ClassifyResult
 	}{
-		{"empty title", noteclassifier.ClassifyResult{Summary: "요약", Category: "daily"}, "daily"},
-		{"empty category", noteclassifier.ClassifyResult{Title: "제목", Summary: "요약"}, noteclassifier.UnsortedCategory},
-		{"multi-level category", noteclassifier.ClassifyResult{Title: "제목", Category: "dev/backend"}, "dev"},
-		{"path traversal category", noteclassifier.ClassifyResult{Title: "제목", Category: ".."}, noteclassifier.UnsortedCategory},
-		{"overlong title", noteclassifier.ClassifyResult{Title: strings.Repeat("아주긴제목", 40), Category: "work"}, "work"},
+		{"empty title", noteclassifier.ClassifyResult{Summary: "요약"}},
+		{"overlong title", noteclassifier.ClassifyResult{Title: strings.Repeat("아주긴제목", 40)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -385,16 +375,13 @@ func TestClassifyLoop_PartialResultIsRepairedNotDropped(t *testing.T) {
 			if got := storedEntries(t, p); len(got) != 1 {
 				t.Fatalf("transcript was dropped at the write: stored %d entries, want 1", len(got))
 			}
-			if _, err := os.Stat(filepath.Join(p.baseDir, tt.wantCategory)); err != nil {
-				t.Errorf("expected entry under %q: %v", tt.wantCategory, err)
-			}
 		})
 	}
 }
 
 func continuing(title string) func(int, string) (*noteclassifier.ClassifyResult, error) {
 	return func(call int, text string) (*noteclassifier.ClassifyResult, error) {
-		return &noteclassifier.ClassifyResult{Title: title, Summary: "s", Category: "dev", Continues: call > 1}, nil
+		return &noteclassifier.ClassifyResult{Title: title, Summary: "s", Continues: call > 1}, nil
 	}
 }
 
@@ -461,7 +448,7 @@ func TestClassifyLoop_FallbackNoteIsNotContinued(t *testing.T) {
 		if call <= 2 {
 			return nil, fmt.Errorf("boom")
 		}
-		return &noteclassifier.ClassifyResult{Title: "t", Summary: "s", Category: "dev", Continues: true}, nil
+		return &noteclassifier.ClassifyResult{Title: "t", Summary: "s", Continues: true}, nil
 	}}
 	p := newTestPipeline(t, fake)
 

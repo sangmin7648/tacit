@@ -96,8 +96,8 @@ func TestEntryLabel(t *testing.T) {
 		e    *browse.Note
 		want string
 	}{
-		{&browse.Note{Title: "검색 랭킹 논의", Category: "work"}, "work · 검색 랭킹 논의"},
-		{&browse.Note{FilePath: "/x/daily/20260927-161254.md"}, "20260927-161254.md"},
+		{&browse.Note{Title: "검색 랭킹 논의"}, "검색 랭킹 논의"},
+		{&browse.Note{FilePath: "/x/20260927-161254.md"}, "20260927-161254.md"},
 		{&browse.Note{Title: strings.Repeat("가", 60)}, strings.Repeat("가", 47) + "…"},
 	}
 	for _, c := range cases {

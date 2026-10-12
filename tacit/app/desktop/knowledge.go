@@ -41,7 +41,6 @@ type KnowledgeService struct {
 // opened.
 type EntrySummary struct {
 	Title     string    `json:"title"`
-	Category  string    `json:"category"`
 	CreatedAt time.Time `json:"created_at"`
 	Keywords  []string  `json:"keywords"`
 	Summary   string    `json:"summary"`
@@ -59,7 +58,7 @@ func summarize(e *browse.Note, matches []string) EntrySummary {
 		matches = []string{}
 	}
 	return EntrySummary{
-		Title: e.Title, Category: e.Category, CreatedAt: e.CreatedAt,
+		Title: e.Title, CreatedAt: e.CreatedAt,
 		Keywords: kw, Summary: e.Summary, Path: e.FilePath, MatchLines: matches,
 	}
 }

@@ -1,15 +1,13 @@
 ---
 source: [tacit/core, tacit/app, tacit/core/internal/components/skill-installer]
-verified: a6db5d7
+verified: 9a2b7a0
 ---
 
 # Glossary
 
 **Knowledge base**: the directory `~/.tacit/` of Markdown entries tacit writes and agents read. Plain files, no database. See [knowledge-entry](concepts/knowledge-entry.md).
 
-**Entry**: one Markdown file holding a title, category, keywords, a summary, and the raw transcript.
-
-**Category**: a single-level directory name under the knowledge base that groups entries (`dev`, `meeting`, ...). Chosen by the classifier; `unsorted` when it could not choose.
+**Entry**: one Markdown file holding a title, keywords, a summary, and the raw transcript.
 
 **Segment**: a contiguous stretch of speech cut out of the audio stream by VAD, sent to Whisper as one unit.
 
@@ -25,13 +23,11 @@ verified: a6db5d7
 
 **Stock repeat**: a transcript that recurs verbatim many times inside the dedup window. The fingerprint of a hallucination.
 
-**Classify**: asking an LLM to give a transcript a title, category, keywords, and summary, or to skip it as meaningless. See [classification](concepts/classification.md).
+**Classify**: asking an LLM to give a transcript a title, keywords, and summary, or to skip it as meaningless. See [classification](concepts/classification.md).
 
 **Skip**: the classifier's deliberate verdict that a transcript carries nothing worth keeping. The one path that intentionally discards speech.
 
 **Discard**: speech dropped *before* classification by a deterministic gate (filler, hallucination, too sparse, stock repeat).
-
-**Unsorted**: the category given to a transcript the classifier failed on. Stored, never dropped.
 
 **Source**: where audio comes from. Today only the microphone.
 

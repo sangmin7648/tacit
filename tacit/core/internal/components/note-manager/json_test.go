@@ -14,12 +14,11 @@ import (
 func TestKnowledgeEntry_JSONKeys(t *testing.T) {
 	e := &KnowledgeEntry{
 		Title:     "t",
-		Category:  "work",
 		CreatedAt: time.Date(2026, 9, 21, 9, 16, 42, 0, time.UTC),
 		Keywords:  []string{"a"},
 		Summary:   "s",
 		Content:   "c",
-		FilePath:  "/x/work/20260921-091642.md",
+		FilePath:  "/x/20260921-091642.md",
 	}
 	raw, err := json.Marshal(e)
 	if err != nil {
@@ -34,7 +33,7 @@ func TestKnowledgeEntry_JSONKeys(t *testing.T) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	want := "category,content,created_at,keywords,path,summary,title"
+	want := "content,created_at,keywords,path,summary,title"
 	if got := strings.Join(keys, ","); got != want {
 		t.Errorf("json keys = %s, want %s", got, want)
 	}

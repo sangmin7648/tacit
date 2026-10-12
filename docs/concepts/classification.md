@@ -1,11 +1,11 @@
 ---
 source: [tacit/core/internal/components/note-classifier, tacit/core/internal/components/transcriber, tacit/core/workflows/listen, tacit/core/internal/components/note-manager]
-verified: 4b3ae33
+verified: 9a2b7a0
 ---
 
 # Classification
 
-Classification asks an LLM to turn a raw transcript into a note: a title, one category, keywords, and a one-sentence summary. It may instead answer **skip**.
+Classification asks an LLM to turn a raw transcript into a note: a title, keywords, and a one-sentence summary. It may instead answer **skip**.
 
 ## Providers
 
@@ -13,15 +13,13 @@ Two interchangeable backends sit behind one interface: a local Ollama model, or 
 
 ## What the classifier is given
 
-The transcript, plus the categories that already exist in the knowledge base, so it reuses them instead of inventing near-duplicates.
-
-It is also shown the most recently stored note (title, summary, how long ago it was written) when that note is recent enough, and says whether the transcript **continues** it. See [0012](../decisions/0012-continuation-decided-by-the-classifier.md).
+The transcript. It is also shown the most recently stored note (title, summary, how long ago it was written) when that note is recent enough, and says whether the transcript **continues** it. See [0012](../decisions/0012-continuation-decided-by-the-classifier.md).
 
 ## Three outcomes
 
 1. **Usable result**: stored as an entry.
 2. **Skip**: the model judged the text meaningless (filler, bare acknowledgements, call-connection chatter). The one deliberate discard; the dropped text is logged so it can be audited.
-3. **Failure or partial result**: the model errored, returned nothing usable, or filled only some fields. The entry is repaired and stored. A missing title is taken from the opening words, a missing category becomes `unsorted`.
+3. **Failure or partial result**: the model errored, returned nothing usable, or filled only some fields. The entry is repaired and stored. A missing title is taken from the opening words.
 
 ## Continuing a note
 
@@ -38,4 +36,4 @@ When several items are queued the worker classifies them in one call. If the bat
 
 ## One gate before storage
 
-Every result passes through one normalisation step before it is written. A result that looked usable can still be refused by storage (empty title, multi-level category); doing the repair in one place keeps that from losing a transcript. See [0003](../decisions/0003-never-drop-a-transcript.md).
+Every result passes through one normalisation step before it is written. A result that looked usable can still be refused by storage (an empty or over-long title); doing the repair in one place keeps that from losing a transcript. See [0003](../decisions/0003-never-drop-a-transcript.md).

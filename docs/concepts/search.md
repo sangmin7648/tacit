@@ -1,6 +1,6 @@
 ---
 source: [tacit/core/internal/components/note-manager, tacit/app/cli]
-verified: a6db5d7
+verified: 9a2b7a0
 ---
 
 # Searching the knowledge base
@@ -9,7 +9,7 @@ Three read operations exist: **list** entries from a time window, **search** by 
 
 ## Search is lexical
 
-A pattern (a case-insensitive regular expression) is matched against the whole entry file. Results are ranked by a weighted count of matches: title counts most, then category, then summary, then the transcript body. Results can be limited to a recent window.
+A pattern (a case-insensitive regular expression) is matched against the whole entry file. Results are ranked by a weighted count of matches: title counts most, then summary, then the transcript body. Results can be limited to a recent window.
 
 The engine is ripgrep, embedded in the binary and unpacked on first use, so the user installs nothing. Front-matter lines are not shown as matches, since the structured fields are already displayed.
 

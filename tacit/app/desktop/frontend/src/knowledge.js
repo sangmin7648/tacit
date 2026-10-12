@@ -26,17 +26,17 @@ function makeFake() {
   const day = 86_400_000
   const now = Date.now()
   const samples = [
-    ['work', '검색 랭킹 개선 회의', '클릭률 기반 재정렬을 먼저 실험하고 오프라인 지표는 NDCG로 본다.', ['검색', '랭킹', 'NDCG']],
-    ['dev', 'Go에서 goroutine leak 방지', 'context 취소 전파와 defer cancel, done 채널 닫기를 함께 쓴다.', ['Go', 'goroutine', 'context']],
-    ['daily', '점심 메뉴 고민', '김치찌개와 편의점 사이에서 결정을 못 했다.', ['점심']],
-    ['learning', '다익스트라 알고리즘', '우선순위 큐로 O(E log V). 음수 가중치면 벨만-포드.', ['알고리즘', '그래프']],
-    ['work', 'Payment module sprint goals', 'API design by me, frontend integration by Kim, PRs due Thursday.', ['sprint', 'payments']],
-    ['journal', '발표 회고', '준비가 부족했다. 다음에는 리허설을 두 번 한다.', ['발표', '회고']],
+    ['검색 랭킹 개선 회의', '클릭률 기반 재정렬을 먼저 실험하고 오프라인 지표는 NDCG로 본다.', ['검색', '랭킹', 'NDCG']],
+    ['Go에서 goroutine leak 방지', 'context 취소 전파와 defer cancel, done 채널 닫기를 함께 쓴다.', ['Go', 'goroutine', 'context']],
+    ['점심 메뉴 고민', '김치찌개와 편의점 사이에서 결정을 못 했다.', ['점심']],
+    ['다익스트라 알고리즘', '우선순위 큐로 O(E log V). 음수 가중치면 벨만-포드.', ['알고리즘', '그래프']],
+    ['Payment module sprint goals', 'API design by me, frontend integration by Kim, PRs due Thursday.', ['sprint', 'payments']],
+    ['발표 회고', '준비가 부족했다. 다음에는 리허설을 두 번 한다.', ['발표', '회고']],
   ]
-  const entries = samples.map(([category, title, summary, keywords], i) => ({
-    title, category, summary, keywords,
+  const entries = samples.map(([title, summary, keywords], i) => ({
+    title, summary, keywords,
     created_at: new Date(now - i * day * 1.7).toISOString(),
-    path: `/Users/me/.tacit/${category}/2026092${i}-10${i}000.md`,
+    path: `/Users/me/.tacit/2026092${i}-10${i}000.md`,
     match_lines: [],
   }))
   let storedFn = () => {}
@@ -64,7 +64,7 @@ function makeFake() {
       storedFn = fn
       // Simulate the daemon storing a note while the window is open.
       window.__fakeStore = () => {
-        const e = { title: 'Live note from the daemon', category: 'idea', summary: 'Just stored.', keywords: [], created_at: new Date().toISOString(), path: '/Users/me/.tacit/idea/live.md', match_lines: [] }
+        const e = { title: 'Live note from the daemon', summary: 'Just stored.', keywords: [], created_at: new Date().toISOString(), path: '/Users/me/.tacit/live.md', match_lines: [] }
         entries.unshift(e)
         storedFn(e)
       }
