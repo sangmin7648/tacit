@@ -1,0 +1,239 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 800px; height: 480px; overflow: hidden; }
+  body {
+    position: relative; color: #1d1d1f;
+    font: 13px/1.2 -apple-system, "SF Pro Text", Helvetica, Arial, sans-serif;
+    background: #dfe1f4;
+  }
+  #world { position: absolute; left: 0; top: 0; width: 800px; height: 480px; transform-origin: 0 0; }
+  #bezel { position: absolute; left: -12px; top: -12px; width: 824px; height: 504px; background: #14141b; border-radius: 22px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .4); }
+  #screen {
+    position: absolute; left: 0; top: 0; width: 800px; height: 480px; overflow: hidden; border-radius: 12px;
+    background: #e9e8f3;
+  }
+
+  #bar {
+    position: absolute; left: 0; right: 0; top: 0; height: 26px; z-index: 5;
+    background: rgba(255, 255, 255, .72); border-bottom: 1px solid rgba(0, 0, 0, .06);
+    display: flex; align-items: center; padding: 0 14px; gap: 18px; font-size: 13px; color: #3a3a3c;
+  }
+  #bar .l b { font-weight: 700; color: #1d1d1f; }
+  #right { margin-left: auto; display: flex; align-items: center; gap: 15px; color: #1d1d1f; }
+  #tray { position: relative; width: 22px; height: 22px; border-radius: 5px; }
+  #tray img { position: absolute; inset: 0; width: 22px; height: 22px; opacity: 0; }
+  #tray img.on { opacity: 1; }
+  #tray.open { background: rgba(0, 0, 0, .14); }
+  #right svg { display: block; }
+
+  #menu {
+    position: absolute; top: 30px; width: 300px; padding: 5px; z-index: 6; opacity: 0;
+    background: rgba(247, 247, 249, .97); border-radius: 10px; transform-origin: 85% 0;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .25), 0 0 0 .5px rgba(0, 0, 0, .22);
+  }
+  .it { height: 28px; line-height: 28px; padding: 0 12px; font-size: 16px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .it.dis { color: #8a8a8e; }
+  .it.hl { background: #0a60ff; color: #fff; }
+  .sep { height: 1px; background: rgba(0, 0, 0, .1); margin: 5px 8px; }
+
+  #term {
+    position: absolute; left: 40px; top: 100px; width: 720px; height: 310px; z-index: 4;
+    background: #17171f; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, .35), 0 0 0 1px rgba(0, 0, 0, .5);
+  }
+  #term .tb { height: 32px; display: flex; align-items: center; padding: 0 12px; gap: 7px; background: #23232d; }
+  #term .tb i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  #tc { padding: 20px 22px; font: 19px/1.6 ui-monospace, "SF Mono", Menlo, monospace; color: #e8e8f0; }
+  #tc .pr { color: #a5b4fc; }
+  #tc .dim { color: #8d8d9a; }
+  #tc .hi { color: #a5b4fc; font-weight: 600; }
+  #tc .ln { opacity: 0; }
+  #caret { display: inline-block; width: 11px; height: 22px; background: #e8e8f0; vertical-align: -3px; }
+
+  #cur { position: absolute; left: 0; top: 0; z-index: 20; pointer-events: none; }
+
+  #hud { position: absolute; inset: 0; z-index: 40; pointer-events: none; opacity: 0; }
+  #sub {
+    position: absolute; left: 50%; bottom: 30px; transform: translateX(-50%); width: 744px; padding: 18px 28px 20px 24px;
+    display: flex; gap: 16px; align-items: flex-start;
+    background: rgba(16, 16, 24, .82); border-radius: 18px; box-shadow: 0 14px 40px rgba(16, 16, 40, .35);
+    font-size: 29px; line-height: 1.38; font-weight: 500; letter-spacing: -.012em; color: #fff;
+  }
+  #sub svg { flex: none; margin-top: 6px; width: 28px; height: 33px; }
+  #sub .w { opacity: .34; }
+  #sub .w.on { opacity: 1; }
+
+  #veil { position: absolute; inset: 0; z-index: 90; background: #dfe1f4; opacity: 1; pointer-events: none; }
+</style>
+
+<div id="world">
+  <div id="bezel"></div>
+  <div id="screen">
+    <div id="bar">
+      <span class="l"><b>Finder</b></span><span class="l">File</span><span class="l">Edit</span><span class="l">View</span>
+      <div id="right">
+        <div id="tray"></div>
+        <svg width="17" height="13" viewBox="0 0 17 13"><path d="M8.5 11.6a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zM3.9 7.4a6.5 6.5 0 0 1 9.2 0l-1.1 1.1a5 5 0 0 0-7 0zM1 4.5a10.6 10.6 0 0 1 15 0l-1.1 1.1a9 9 0 0 0-12.8 0z" fill="#1d1d1f"/></svg>
+        <svg width="26" height="13" viewBox="0 0 26 13"><rect x=".5" y=".5" width="22" height="12" rx="3.5" fill="none" stroke="#1d1d1f" opacity=".5"/><rect x="2" y="2" width="16" height="9" rx="2" fill="#1d1d1f"/><rect x="23.5" y="4.5" width="2" height="4" rx="1" fill="#1d1d1f" opacity=".5"/></svg>
+        <span>Tue 9:12 AM</span>
+      </div>
+    </div>
+
+    <div id="menu">
+      <div class="it dis" id="status">Not listening</div>
+      <div class="it" id="ss">Start Listening</div>
+      <div class="sep"></div>
+      <div class="it dis">Recent</div>
+      <div class="it">Caterer quote for the offsite</div>
+      <div class="it">One-on-one with Daniel</div>
+      <div class="sep"></div>
+      <div class="it">Browse Notes…</div>
+      <div class="it">Quit Tacit</div>
+    </div>
+
+    <div id="term">
+      <div class="tb"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+      <div id="tc">
+        <div><span class="pr">&gt;</span> <span id="ask"></span><span id="caret"></span></div>
+        <div id="l0" class="ln dim" style="margin-top:12px">Searching your notes…</div>
+        <div id="l1" class="ln" style="margin-top:8px">Found a note from today, 9:12 AM: <span class="hi">Launch moved to the 22nd</span></div>
+        <div id="l2" class="ln" style="margin-top:8px">• The launch moves from the 15th to the 22nd.</div>
+        <div id="l3" class="ln">• Sara will let the partners know.</div>
+      </div>
+    </div>
+
+    <svg id="cur" width="20" height="26" viewBox="0 0 20 26"><path d="M2 1.5v18.2l4.4-4.3 3.1 7 3.2-1.4-3.1-6.9h6.2z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="sub">
+    <svg width="22" height="26" viewBox="0 0 22 26" fill="none" stroke="#a5b4fc" stroke-width="2.2" stroke-linecap="round"><rect x="7" y="1.5" width="8" height="14" rx="4"/><path d="M3 12.5a8 8 0 0 0 16 0M11 20.5v4"/></svg>
+    <div id="say"></div>
+  </div>
+</div>
+<div id="veil"></div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const ease = x => x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const win = (t, a, b, fi = .12, fo = .1) => seg(t, a, a + fi) * (1 - seg(t, b, b + fo));
+
+  const SAY = "We agreed to move the launch from the 15th to the 22nd, and Sara will let the partners know.";
+  const ASK = "/tacit.knowledge when is the launch now, and who tells the partners?";
+  const WORDS = SAY.split(" ");
+  const ICONS = ["off", "listening", "hearing-0", "hearing-1", "hearing-2", "hearing-3", "hearing-4", "hearing-5", "error"];
+  const HEAR = [1, 3, 5, 2, 4, 1, 5, 3, 0, 4, 2, 5];
+
+  const KEYS = [
+    [0, "W", 1], [.8, "W", 1], [1.8, "T", 2.7], [2.2, "T", 2.7], [3.1, "M", 1.8], [4.0, "M", 1.8],
+    [4.9, "T", 2.7], [9.5, "T", 2.7],
+    [10.7, "TERM", 1.04], [18.9, "TERM", 1.04], [19.5, "TERM", 1.08],
+  ];
+  const DURATION = 20.1;
+  let G = null;
+  const FOCUS = () => ({
+    W: [400, 240], T: G.tray, TERM: [400, 258],
+    M: [(Math.min(G.menu.l, G.tray[0] - 11) + Math.max(G.menu.l + G.menu.w, G.tray[0] + 11)) / 2, 118],
+  });
+  function camAt(t) {
+    const F = FOCUS();
+    const at = k => ({ x: F[k[1]][0], y: F[k[1]][1], s: k[2] });
+    for (let i = 0; i < KEYS.length - 1; i++) {
+      const a = KEYS[i], b = KEYS[i + 1];
+      if (t >= a[0] && t < b[0]) {
+        const e = ease(seg(t, a[0], b[0])), A = at(a), B = at(b);
+        const pp = Math.pow(e, .55), zz = Math.pow(e, 1.5);
+        return [A.x + (B.x - A.x) * pp, A.y + (B.y - A.y) * pp, A.s + (B.s - A.s) * zz];
+      }
+    }
+    const L = at(KEYS[KEYS.length - 1]); return [L.x, L.y, L.s];
+  }
+
+  for (const n of ICONS) { const i = document.createElement("img"); i.src = `../../../tacit/app/desktop/icons/${n}.png`; i.dataset.n = n; $("tray").appendChild(i); }
+  const trayImgs = [...$("tray").children];
+
+  let S = 1;
+  const rel = el => {
+    const r = el.getBoundingClientRect(), o = $("screen").getBoundingClientRect();
+    return { left: (r.left - o.left) / S, top: (r.top - o.top) / S, width: r.width / S, height: r.height / S };
+  };
+  const mid = r => [r.left + r.width / 2, r.top + r.height / 2];
+
+  function measure() {
+    $("world").style.transform = "none";
+    const tr = rel($("tray"));
+    $("menu").style.left = Math.min(800 - 300 - 8, tr.left - 60) + "px";
+    const m = rel($("menu"));
+    G = { tray: mid(tr), menu: { l: m.left, t: m.top, w: m.width, h: m.height }, ss: mid(rel($("ss"))) };
+  }
+
+  const WORDS_EL = SAY.split(" ").map(w => { const e = document.createElement("span"); e.className = "w"; e.textContent = w + " "; $("say").appendChild(e); return e; });
+
+  function render(t) {
+    if (!G) measure();
+    const [cx, cy, s] = camAt(t); S = s;
+    $("world").style.transform = `translate(${400 - cx * s}px, ${240 - cy * s}px) scale(${s})`;
+
+    const menuA = win(t, 2.25, 4.0);
+    const listening = t >= 4.05;
+    $("status").textContent = listening ? "Listening (PID 4821)" : "Not listening";
+    $("ss").textContent = listening ? "Stop Listening" : "Start Listening";
+    $("ss").classList.toggle("hl", t >= 3.3 && t < 3.98);
+
+    const tray = $("tray");
+    tray.classList.toggle("open", menuA > .5);
+    const hearing = t >= 5.4 && t < 9.0;
+    const name = t < 4.05 ? "off" : hearing ? "hearing-" + HEAR[Math.floor((t - 5.4) * 9) % HEAR.length] : "listening";
+    trayImgs.forEach(i => i.classList.toggle("on", i.dataset.n === name));
+
+    const m = $("menu");
+    m.style.opacity = menuA;
+    m.style.transform = `scale(${.96 + .04 * menuA})`;
+
+    const sp = win(t, 5.0, 9.5, .35, .4);
+    $("hud").style.opacity = sp;
+    $("hud").style.transform = `translateY(${(1 - sp) * 12}px)`;
+    const n = Math.floor(seg(t, 5.5, 8.7) * WORDS_EL.length + .0001);
+    WORDS_EL.forEach((e, i) => e.classList.toggle("on", i < n));
+
+    const ty = 340 * (1 - ease(seg(t, 10.0, 11.0)));
+    $("term").style.transform = `translateY(${ty}px)`;
+    $("term").style.opacity = seg(t, 10.0, 10.25);
+    const k = Math.floor(seg(t, 11.4, 13.8) * ASK.length + .0001);
+    $("ask").textContent = ASK.slice(0, k);
+    $("caret").style.opacity = t < 14.6 ? (Math.floor(t * 2.4) % 2 ? 0 : 1) : 0;
+    const dots = ".".repeat(1 + Math.floor((t * 3) % 3));
+    $("l0").textContent = "Searching your notes" + dots;
+    $("l0").style.opacity = win(t, 14.0, 14.7, .15, .12);
+    $("l1").style.opacity = seg(t, 14.8, 15.1);
+    $("l2").style.opacity = seg(t, 16.0, 16.3);
+    $("l3").style.opacity = seg(t, 17.1, 17.4);
+
+    const T = G.tray, SS = G.ss;
+    const TC = [T[0] + 7, T[1] + 9];
+    const pts = [[0, [470, 360]], [2.0, TC], [2.35, TC], [3.15, [SS[0] + 50, SS[1]]], [4.0, [SS[0] + 50, SS[1]]], [4.7, [560, 330]]];
+    let x = pts[pts.length - 1][1][0], y = pts[pts.length - 1][1][1];
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (t >= pts[i][0] && t < pts[i + 1][0]) {
+        const p = ease(seg(t, pts[i][0], pts[i + 1][0]));
+        x = pts[i][1][0] + (pts[i + 1][1][0] - pts[i][1][0]) * p;
+        y = pts[i][1][1] + (pts[i + 1][1][1] - pts[i][1][1]) * p;
+        break;
+      }
+    }
+    const press = [2.15, 3.85].some(c => t >= c && t < c + .14) ? .86 : 1;
+    $("cur").style.transform = `translate(${x - 2}px,${y - 1.5}px) scale(${press})`;
+    $("cur").style.opacity = 1 - seg(t, 4.1, 4.6);
+
+    $("veil").style.opacity = clamp(1 - seg(t, 0, .3) + seg(t, DURATION - .45, DURATION));
+  }
+  window.render = render;
+  window.DURATION = DURATION;
+  render(0);
+</script>
