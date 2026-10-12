@@ -22,6 +22,7 @@ type ClassifyResult struct {
 type PreviousNote struct {
 	Title   string
 	Summary string
+	Tail    string        // end of the latest speech stored in the note
 	Ago     time.Duration // since the note was last written
 }
 

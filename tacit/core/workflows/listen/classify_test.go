@@ -430,6 +430,9 @@ func TestClassifyLoop_ContinuationAppendsToPreviousNote(t *testing.T) {
 	if fake.previous[0] != nil || fake.previous[1] == nil {
 		t.Errorf("only the second call should see a previous note: %v", fake.previous)
 	}
+	if got := fake.previous[1].Tail; got != "first part" {
+		t.Errorf("previous note tail = %q, want the latest speech", got)
+	}
 }
 
 func TestClassifyLoop_NotContinuingStartsNewNote(t *testing.T) {
