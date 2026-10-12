@@ -10,6 +10,8 @@
 	<string>io.github.sangmin7648.tacit</string>
 	<key>CFBundleExecutable</key>
 	<string>Tacit</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

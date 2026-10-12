@@ -9,6 +9,7 @@
 #   Contents/MacOS/Tacit                    menu-bar app, frontend embedded
 #   Contents/Helpers/tacit                  the CLI
 #   Contents/Frameworks/ten_vad.framework
+#   Contents/Resources/AppIcon.icns         the app icon shown in Finder and permission prompts
 #
 # The CLI is in Helpers, not beside the app in MacOS: the default macOS
 # filesystem is case-insensitive, so MacOS/tacit would overwrite MacOS/Tacit.
@@ -37,12 +38,13 @@ plist_version=$(echo "$version" | sed -nE 's/^v?([0-9]+\.[0-9]+\.[0-9]+).*/\1/p'
 plist_version=${plist_version:-0.0.0}
 
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Frameworks"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Frameworks" "$app/Contents/Resources"
 cp "$desktop" "$app/Contents/MacOS/Tacit"
 cp "$cli" "$app/Contents/Helpers/tacit"
 install_name_tool -add_rpath @executable_path/../Frameworks "$app/Contents/Helpers/tacit"
 cp -R "$framework" "$app/Contents/Frameworks/"
 cp "$here/Info.plist" "$app/Contents/Info.plist"
+cp "$here/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 plutil -replace CFBundleShortVersionString -string "$plist_version" "$app/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$plist_version" "$app/Contents/Info.plist"
 
