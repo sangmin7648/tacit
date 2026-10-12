@@ -1,8 +1,6 @@
-<p align="center">
-  <img src=".github/assets/icon.png" width="128" alt="tacit app icon">
-</p>
-
-<h1 align="center">tacit</h1>
+<h1 align="center">
+  <img src=".github/assets/icon.png" width="96" align="absmiddle" alt="tacit app icon"> tacit
+</h1>
 
 <p align="center"><em>Never take notes again.</em></p>
 
