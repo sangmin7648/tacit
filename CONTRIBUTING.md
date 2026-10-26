@@ -1,6 +1,6 @@
 # Contributing
 
-Issues and pull requests are welcome. Please open an issue first for significant changes. How the system fits together, and why, is in [`docs/`](docs/index.md).
+Issues are welcome: bug reports, feature requests, and ideas. Pull requests are not accepted, for security reasons. The build and test notes below are for running tacit from source. How the system fits together, and why, is in [`docs/`](docs/index.md).
 
 ## Build from source
 

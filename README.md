@@ -71,7 +71,7 @@ Open **Settings** from the menu-bar icon. The ones most people change:
 
 ## Contributing
 
-Issues and pull requests are welcome. Open an issue first for significant changes. See [CONTRIBUTING.md](CONTRIBUTING.md) to build from source, and [docs/](docs/index.md) for how the system fits together.
+Issues are welcome. Pull requests are not accepted, for security reasons. See [CONTRIBUTING.md](CONTRIBUTING.md) to build from source, and [docs/](docs/index.md) for how the system fits together.
 
 ## AI Disclosure
 
